@@ -1,23 +1,36 @@
 {
   "expo": {
-    "name": "GoogleAIRaiser",
-    "slug": "GoogleAIRaiser",
+    "name": "Findora",
+    "slug": "findora",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "googleairaiser",
-    "userInterfaceStyle": "automatic",
+    "scheme": "findora",
+    "userInterfaceStyle": "light",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "supportsTablet": true,
+      "bundleIdentifier": "vn.edu.hcmute.findora",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Findora cần quyền truy cập Camera để chụp ảnh đồ thất lạc.",
+        "NSPhotoLibraryUsageDescription": "Findora cần quyền truy cập thư viện ảnh để đính kèm hình ảnh đồ vật.",
+        "NSLocationWhenInUseUsageDescription": "Findora sử dụng vị trí của bạn để hiển thị và ghép đôi các bài đăng gần bạn."
+      }
     },
     "android": {
+      "package": "hcmute.edu.vn.findora",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#00A896",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
     },
     "web": {
       "output": "static",
@@ -28,15 +41,32 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#00A896",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "imageWidth": 120
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Findora cần quyền truy cập Camera để chụp ảnh đồ thất lạc."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Findora cần quyền truy cập thư viện ảnh để chọn hình bài đăng."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Findora sử dụng vị trí của bạn để hiển thị các bài đăng xung quanh."
         }
       ]
     ],
     "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
+      "typedRoutes": true
     }
   }
 }
