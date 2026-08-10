@@ -48,12 +48,15 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* App Header Bar */}
+      {/* App Header */}
       <View style={styles.header}>
         <View style={styles.brandRow}>
-          <Ionicons name="search-circle" size={32} color={COLORS.primary} />
+          <View style={styles.logoIconCircle}>
+            <Ionicons name="search" size={20} color="#FFFFFF" />
+          </View>
           <Text style={styles.brandTitle}>Findora</Text>
         </View>
+
         <TouchableOpacity 
           style={styles.aiButton} 
           onPress={() => router.push('/(tabs)/matches')}
@@ -66,48 +69,57 @@ export default function HomeScreen() {
 
       {/* Search Input Box */}
       <View style={styles.searchContainer}>
-        <Ionicons name="search" size={20} color={COLORS.textMuted} style={styles.searchIcon} />
+        <Ionicons name="search" size={18} color="#94A3B8" style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
           placeholder="Tìm theo từ khóa (mèo, chìa khóa, ví, điện thoại...)"
-          placeholderTextColor={COLORS.textMuted}
+          placeholderTextColor="#94A3B8"
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
         {searchQuery ? (
           <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <Ionicons name="close-circle" size={18} color={COLORS.textMuted} />
+            <Ionicons name="close-circle" size={18} color="#94A3B8" />
           </TouchableOpacity>
         ) : null}
       </View>
 
-      {/* Chip Filters */}
+      {/* Filter Chips & Settings Row */}
       <View style={styles.filterRow}>
-        <TouchableOpacity
-          style={[styles.chip, typeFilter === 'all' && styles.chipActive]}
-          onPress={() => setTypeFilter('all')}
-        >
-          <Text style={[styles.chipText, typeFilter === 'all' && styles.chipTextActive]}>
-            Tất cả
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.chipsGroup}>
+          <TouchableOpacity
+            style={[styles.chip, typeFilter === 'all' && styles.chipActive]}
+            onPress={() => setTypeFilter('all')}
+          >
+            <Text style={[styles.chipText, typeFilter === 'all' && styles.chipTextActive]}>
+              Tất cả
+            </Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.chip, typeFilter === 'lost' && styles.chipActiveLost]}
-          onPress={() => setTypeFilter('lost')}
-        >
-          <Text style={[styles.chipText, typeFilter === 'lost' && styles.chipTextActiveLost]}>
-            🔴 Mất đồ
-          </Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.chip, typeFilter === 'lost' && styles.chipActiveLost]}
+            onPress={() => setTypeFilter('lost')}
+          >
+            <Text style={[styles.chipText, typeFilter === 'lost' && styles.chipTextActiveLost]}>
+              🔴 Mất đồ
+            </Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.chip, typeFilter === 'found' && styles.chipActiveFound]}
-          onPress={() => setTypeFilter('found')}
+          <TouchableOpacity
+            style={[styles.chip, typeFilter === 'found' && styles.chipActiveFound]}
+            onPress={() => setTypeFilter('found')}
+          >
+            <Text style={[styles.chipText, typeFilter === 'found' && styles.chipTextActiveFound]}>
+              🟢 Nhặt được
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity 
+          style={styles.settingsBtn} 
+          onPress={() => router.push('/(tabs)/profile')}
         >
-          <Text style={[styles.chipText, typeFilter === 'found' && styles.chipTextActiveFound]}>
-            🟢 Nhặt được
-          </Text>
+          <Ionicons name="settings" size={22} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
 
@@ -133,7 +145,7 @@ export default function HomeScreen() {
           }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <Ionicons name="search-outline" size={56} color={COLORS.textMuted} />
+              <Ionicons name="search-outline" size={56} color="#94A3B8" />
               <Text style={styles.emptyTitle}>Chưa có bài đăng nào</Text>
               <Text style={styles.emptySubtitle}>Hãy là người đầu tiên tạo bài đăng tìm đồ hoặc báo nhặt được!</Text>
             </View>
@@ -147,7 +159,7 @@ export default function HomeScreen() {
         onPress={() => router.push('/post/create')}
         activeOpacity={0.85}
       >
-        <Ionicons name="add" size={28} color="#FFFFFF" />
+        <Ionicons name="add" size={24} color="#FFFFFF" />
         <Text style={styles.fabText}>Đăng Bài</Text>
       </TouchableOpacity>
     </SafeAreaView>
@@ -157,7 +169,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background
+    backgroundColor: '#FAFAFA'
   },
   header: {
     flexDirection: 'row',
@@ -165,30 +177,39 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
-    backgroundColor: COLORS.card,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border
+    borderBottomColor: '#F1F5F9'
   },
   brandRow: {
     flexDirection: 'row',
     alignItems: 'center'
   },
+  logoIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#00A896',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8
+  },
   brandTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '900',
-    color: COLORS.primaryDark,
-    marginLeft: 6
+    color: '#00A896',
+    letterSpacing: -0.5
   },
   aiButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    backgroundColor: '#00A896',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 20
   },
   aiButtonText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
     color: '#FFFFFF',
     marginLeft: 4
@@ -196,38 +217,44 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.card,
+    backgroundColor: '#FFFFFF',
     marginHorizontal: SPACING.md,
     marginTop: SPACING.sm,
     marginBottom: SPACING.xs,
     paddingHorizontal: SPACING.md,
-    height: 44,
-    borderRadius: 12,
+    height: 48,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: COLORS.border
+    borderColor: '#E2E8F0'
   },
   searchIcon: {
     marginRight: SPACING.xs
   },
   searchInput: {
     flex: 1,
-    fontSize: 13,
-    color: COLORS.text
+    fontSize: 14,
+    color: '#0F172A'
   },
   filterRow: {
     flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.xs,
+    paddingVertical: SPACING.xs
+  },
+  chipsGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 8
   },
   chip: {
     paddingHorizontal: 14,
-    paddingVertical: 6,
+    paddingVertical: 7,
     borderRadius: 20,
     backgroundColor: '#E2E8F0'
   },
   chipActive: {
-    backgroundColor: COLORS.text
+    backgroundColor: '#0F172A'
   },
   chipActiveLost: {
     backgroundColor: '#EF4444'
@@ -236,9 +263,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#10B981'
   },
   chipText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
-    color: COLORS.textMuted
+    color: '#475569'
   },
   chipTextActive: {
     color: '#FFFFFF'
@@ -249,9 +276,22 @@ const styles = StyleSheet.create({
   chipTextActiveFound: {
     color: '#FFFFFF'
   },
+  settingsBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#0288D1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3
+  },
   listContent: {
     padding: SPACING.md,
-    paddingBottom: 80
+    paddingBottom: 90
   },
   centerLoading: {
     flex: 1,
@@ -260,7 +300,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
-    color: COLORS.textMuted,
+    color: '#64748B',
     marginTop: SPACING.sm
   },
   emptyContainer: {
@@ -271,29 +311,29 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: COLORS.text,
+    color: '#0F172A',
     marginTop: SPACING.md
   },
   emptySubtitle: {
     fontSize: 13,
-    color: COLORS.textMuted,
+    color: '#64748B',
     textAlign: 'center',
     marginTop: 4,
     paddingHorizontal: SPACING.lg
   },
   fab: {
     position: 'absolute',
-    bottom: 20,
+    bottom: 24,
     right: 20,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 18,
+    backgroundColor: '#00A896',
+    paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 30,
-    shadowColor: '#000',
+    shadowColor: '#00A896',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 6
   },
@@ -301,6 +341,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
     color: '#FFFFFF',
-    marginLeft: 4
+    marginLeft: 6
   }
 });
