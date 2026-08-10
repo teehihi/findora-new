@@ -22,7 +22,7 @@
       "googleServicesFile": "./google-services.json",
       "config": {
         "googleMaps": {
-          "apiKey": "AIzaSyYOUR_GOOGLE_MAPS_API_KEY_HERE"
+          "apiKey": "AIzaSyCt5kh9H1vwiIyGaCZzzBb9sUf5yJOkK5s"
         }
       },
       "adaptiveIcon": {
