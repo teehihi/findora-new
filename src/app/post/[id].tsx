@@ -9,24 +9,27 @@ import {
   TextInput, 
   ActivityIndicator, 
   SafeAreaView, 
-  Linking, 
-  Modal 
+  Linking 
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { fetchPostById, subscribeComments, addComment, fetchPosts } from '../../services/firebaseService';
+import { fetchPostById, subscribeComments, addComment, fetchPosts, getPosterDetails, toggleLikePost } from '../../services/firebaseService';
 import { findMatches } from '../../services/aiMatching';
 import { Post, Comment, MatchResult } from '../../models/types';
 import { HeaderBar } from '../../components/HeaderBar';
 import { ResolveModal } from '../../components/ResolveModal';
 import { MatchCard } from '../../components/MatchCard';
+import { ImageViewerModal } from '../../components/ImageViewerModal';
 import { auth } from '../../config/firebase';
 import { COLORS, SPACING, SHADOWS } from '../../constants/theme';
 
 export default function PostDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const currentUser = auth.currentUser;
+
   const [post, setPost] = useState<Post | null>(null);
+  const [poster, setPoster] = useState<{ name: string; avatarUrl: string }>({ name: 'Người dùng', avatarUrl: '' });
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [loading, setLoading] = useState(true);
@@ -36,12 +39,24 @@ export default function PostDetailScreen() {
   const [resolveModalVisible, setResolveModalVisible] = useState(false);
   const [fullImageVisible, setFullImageVisible] = useState(false);
 
+  const [isLiked, setIsLiked] = useState<boolean>(false);
+  const [likeCount, setLikeCount] = useState<number>(0);
+
   useEffect(() => {
     if (!id) return;
     fetchPostById(id).then((data) => {
       setPost(data);
       setLoading(false);
       if (data) {
+        if (currentUser) {
+          setIsLiked((data.likes || []).includes(currentUser.uid));
+        }
+        setLikeCount(data.likes?.length || 0);
+
+        if (data.userId) {
+          getPosterDetails(data.userId).then(setPoster);
+        }
+
         fetchPosts('all').then((all) => {
           const matches = findMatches(data, all);
           setRelatedMatches(matches.slice(0, 3));
@@ -52,6 +67,19 @@ export default function PostDetailScreen() {
     const unsubscribe = subscribeComments(id, setComments);
     return () => unsubscribe();
   }, [id]);
+
+  const handleToggleLike = async () => {
+    if (!currentUser || !post?.id) return;
+    const newIsLiked = !isLiked;
+    setIsLiked(newIsLiked);
+    setLikeCount((prev) => (newIsLiked ? prev + 1 : Math.max(0, prev - 1)));
+
+    try {
+      await toggleLikePost(post.id, currentUser.uid, isLiked);
+    } catch (e) {
+      console.error('Like toggle error:', e);
+    }
+  };
 
   const handleAddComment = async () => {
     if (!newComment.trim() || !id) return;
@@ -108,12 +136,24 @@ export default function PostDetailScreen() {
   const isOwner = auth.currentUser?.uid === post.userId;
   const isLost = post.type === 'lost';
 
+  const getRelativeTimeString = (dateObj?: any): string => {
+    if (!dateObj) return 'Vừa xong';
+    const d = dateObj.toDate ? dateObj.toDate() : new Date();
+    const diffSeconds = Math.floor((new Date().getTime() - d.getTime()) / 1000);
+    if (diffSeconds < 60) return 'Vừa xong';
+    if (diffSeconds < 3600) return `${Math.floor(diffSeconds / 60)} phút trước`;
+    if (diffSeconds < 86400) return `${Math.floor(diffSeconds / 3600)} giờ trước`;
+    return `${d.getDate()} tháng ${d.getMonth() + 1}`;
+  };
+
+  const formattedDate = getRelativeTimeString(post.createdAt);
+
   return (
     <SafeAreaView style={styles.container}>
       <HeaderBar title="Chi Tiết Bài Đăng" showBack />
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Post Image */}
+        {/* Post Image with Click to Zoom Modal */}
         {post.imageUrl ? (
           <TouchableOpacity onPress={() => setFullImageVisible(true)} activeOpacity={0.9}>
             <Image source={{ uri: post.imageUrl }} style={styles.image} resizeMode="cover" />
@@ -256,17 +296,22 @@ export default function PostDetailScreen() {
         }}
       />
 
-      {/* Full Screen Image Modal */}
-      <Modal visible={fullImageVisible} transparent animationType="fade">
-        <View style={styles.fullImageOverlay}>
-          <TouchableOpacity style={styles.fullImageClose} onPress={() => setFullImageVisible(false)}>
-            <Ionicons name="close" size={32} color="#FFFFFF" />
-          </TouchableOpacity>
-          {post.imageUrl && (
-            <Image source={{ uri: post.imageUrl }} style={styles.fullImage} resizeMode="contain" />
-          )}
-        </View>
-      </Modal>
+      {/* Full Screen Facebook-Style Photo Viewer Modal with Zoom */}
+      {post.imageUrl ? (
+        <ImageViewerModal
+          visible={fullImageVisible}
+          imageUrl={post.imageUrl}
+          post={post}
+          posterName={poster.name}
+          posterAvatar={poster.avatarUrl}
+          formattedDate={formattedDate}
+          likeCount={likeCount}
+          isLiked={isLiked}
+          commentCount={comments.length}
+          onToggleLike={handleToggleLike}
+          onClose={() => setFullImageVisible(false)}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -307,10 +352,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: SPACING.xs
+    marginBottom: SPACING.sm
   },
   typeBadge: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 8
   },
@@ -321,44 +366,43 @@ const styles = StyleSheet.create({
     backgroundColor: '#D1FAE5'
   },
   typeBadgeText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '800',
     color: COLORS.text
   },
   resolvedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#6366F1',
-    paddingHorizontal: 8,
+    backgroundColor: '#10B981',
+    paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8
   },
   resolvedText: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#FFFFFF',
     marginLeft: 4
   },
   title: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
     color: COLORS.text,
-    marginVertical: SPACING.xs
+    marginBottom: SPACING.xs
   },
   description: {
     fontSize: 15,
     color: COLORS.textMuted,
     lineHeight: 22,
-    marginBottom: SPACING.sm
+    marginBottom: SPACING.md
   },
   aiTag: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.primaryLight,
-    paddingHorizontal: 10,
+    paddingHorizontal: SPACING.sm,
     paddingVertical: 6,
     borderRadius: 8,
-    alignSelf: 'flex-start',
     marginBottom: SPACING.sm
   },
   aiTagText: {
@@ -380,19 +424,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FEF3C7',
-    padding: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
     borderRadius: 12,
     marginTop: SPACING.xs
   },
   rewardText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#B45309',
-    marginLeft: 8
+    color: '#92400E',
+    marginLeft: SPACING.xs
   },
   actionRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
     marginBottom: SPACING.md
   },
   chatBtn: {
@@ -401,32 +446,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: COLORS.primary,
-    paddingVertical: 14,
-    borderRadius: 14
+    paddingVertical: 12,
+    borderRadius: 12
   },
   callBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#10B981',
-    paddingVertical: 14,
-    borderRadius: 14
+    backgroundColor: '#3B82F6',
+    paddingVertical: 12,
+    borderRadius: 12
   },
   resolveBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#6366F1',
-    paddingVertical: 14,
-    borderRadius: 14
+    backgroundColor: '#8B5CF6',
+    paddingVertical: 12,
+    borderRadius: 12
   },
   actionBtnText: {
     fontSize: 14,
     fontWeight: '700',
     color: '#FFFFFF',
-    marginLeft: 6
+    marginLeft: 8
   },
   section: {
     backgroundColor: COLORS.card,
@@ -445,23 +490,24 @@ const styles = StyleSheet.create({
   addCommentRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
     marginBottom: SPACING.md
   },
   commentInput: {
     flex: 1,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: COLORS.border,
     borderRadius: 12,
     paddingHorizontal: SPACING.md,
-    height: 44,
+    paddingVertical: 10,
     fontSize: 14,
-    color: COLORS.text
+    marginRight: 8
   },
   sendCommentBtn: {
+    backgroundColor: COLORS.primary,
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -470,9 +516,9 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm
   },
   commentAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: COLORS.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
@@ -480,39 +526,23 @@ const styles = StyleSheet.create({
   },
   avatarText: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '800',
     color: COLORS.primaryDark
   },
   commentContent: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    padding: SPACING.sm
+    backgroundColor: COLORS.background,
+    padding: SPACING.sm,
+    borderRadius: 12
   },
   commentUser: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
-    color: COLORS.text
+    color: COLORS.text,
+    marginBottom: 2
   },
   commentText: {
     fontSize: 13,
-    color: COLORS.textMuted,
-    marginTop: 2
-  },
-  fullImageOverlay: {
-    flex: 1,
-    backgroundColor: '#000000',
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-  fullImageClose: {
-    position: 'absolute',
-    top: 50,
-    right: 20,
-    zIndex: 10
-  },
-  fullImage: {
-    width: '100%',
-    height: '80%'
+    color: COLORS.textMuted
   }
 });

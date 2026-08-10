@@ -4,6 +4,7 @@ import { Ionicons, Feather } from '@expo/vector-icons';
 import { Post } from '../models/types';
 import { auth, firebaseConfig } from '../config/firebase';
 import { toggleLikePost, getPosterDetails, getPostCommentCount } from '../services/firebaseService';
+import { ImageViewerModal } from './ImageViewerModal';
 
 interface PostCardProps {
   post: Post;
@@ -19,6 +20,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, onPress }) => {
     avatarUrl: ''
   });
   const [commentCount, setCommentCount] = useState<number>(0);
+  const [isImageViewerVisible, setIsImageViewerVisible] = useState<boolean>(false);
 
   const [isLiked, setIsLiked] = useState<boolean>(
     currentUser ? (post.likes || []).includes(currentUser.uid) : false
@@ -56,18 +58,6 @@ export const PostCard: React.FC<PostCardProps> = ({ post, onPress }) => {
   const rawImageUrl = post.imageUrl || '';
   const imageUrlString = getSanitizedImageUrl(rawImageUrl);
   const hasImage = Boolean(imageUrlString.length > 0);
-
-  // Log runtime diagnostics for image loading
-  if (hasImage) {
-    console.log(`[PostCard Diagnostics - ${post.id}]`, {
-      originalUrl: rawImageUrl,
-      finalUrlPassedToImage: imageUrlString,
-      projectId: firebaseConfig.projectId,
-      storageBucket: firebaseConfig.storageBucket,
-      userUid: currentUser?.uid || null,
-      isAuthenticated: Boolean(currentUser)
-    });
-  }
 
   // Relative Time formatting exactly matching native PostAdapter.java getRelativeTime
   const getRelativeTimeString = (dateObj: Date): string => {
@@ -110,20 +100,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, onPress }) => {
               source={{ uri: getSanitizedImageUrl(poster.avatarUrl) }} 
               style={styles.avatarImage} 
               resizeMode="cover"
-              onLoad={(event) => {
-                console.log(`[Avatar Image Load SUCCESS - User ${post.userId}]`, event.nativeEvent);
-              }}
-              onError={(error) => {
-                console.error(`[Avatar Image Load ERROR - User ${post.userId}]`, {
-                  error: error.nativeEvent?.error || error,
-                  originalUrl: poster.avatarUrl,
-                  projectId: firebaseConfig.projectId,
-                  storageBucket: firebaseConfig.storageBucket,
-                  userUid: currentUser?.uid || null,
-                  isAuthenticated: Boolean(currentUser)
-                });
-              }}
-          />
+            />
           ) : (
             <View style={styles.avatarPlaceholder}>
               <Text style={styles.avatarInitial}>{poster.name.charAt(0).toUpperCase()}</Text>
@@ -152,49 +129,39 @@ export const PostCard: React.FC<PostCardProps> = ({ post, onPress }) => {
       <TouchableOpacity onPress={onPress} activeOpacity={0.9}>
         <Text style={styles.postTitle} numberOfLines={2}>{post.title}</Text>
         <Text style={styles.postDescription} numberOfLines={3}>{post.description}</Text>
+      </TouchableOpacity>
 
-        {/* 3. Image Container with Top-Left Type Badge & Bottom Location Overlay */}
-        {hasImage ? (
-          <View style={styles.imageContainer}>
-            <Image 
-              source={{ uri: imageUrlString }} 
-              style={styles.postImage} 
-              resizeMode="cover"
-              onLoad={(event) => {
-                console.log(`[Post Image Load SUCCESS - Post ${post.id}]`, event.nativeEvent);
-              }}
-              onError={(error) => {
-                console.error(`[Post Image Load ERROR - Post ${post.id}]`, {
-                  error: error.nativeEvent?.error || error,
-                  originalUrl: rawImageUrl,
-                  finalUrl: imageUrlString,
-                  projectId: firebaseConfig.projectId,
-                  storageBucket: firebaseConfig.storageBucket,
-                  userUid: currentUser?.uid || null,
-                  isAuthenticated: Boolean(currentUser)
-                });
-              }}
-            />
+      {/* 3. Image Container with Click-to-Open Fullscreen Facebook Viewer */}
+      {hasImage ? (
+        <TouchableOpacity 
+          style={styles.imageContainer} 
+          onPress={() => setIsImageViewerVisible(true)}
+          activeOpacity={0.95}
+        >
+          <Image 
+            source={{ uri: imageUrlString }} 
+            style={styles.postImage} 
+            resizeMode="cover"
+          />
 
-            {/* Type Badge (THẤT LẠC / TÌM THẤY) */}
-            <View style={[styles.typeBadge, isLost ? styles.lostBadge : styles.foundBadge]}>
-              <Text style={styles.typeBadgeText}>
-                {isLost ? 'THẤT LẠC' : 'TÌM THẤY'}
+          {/* Type Badge (THẤT LẠC / TÌM THẤT) */}
+          <View style={[styles.typeBadge, isLost ? styles.lostBadge : styles.foundBadge]}>
+            <Text style={styles.typeBadgeText}>
+              {isLost ? 'THẤT LẠC' : 'TÌM THẤY'}
+            </Text>
+          </View>
+
+          {/* Location Overlay Bar */}
+          {post.address ? (
+            <View style={styles.locationOverlay}>
+              <Ionicons name="location" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+              <Text style={styles.locationOverlayText} numberOfLines={1}>
+                {post.address}
               </Text>
             </View>
-
-            {/* Location Overlay Bar */}
-            {post.address ? (
-              <View style={styles.locationOverlay}>
-                <Ionicons name="location" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
-                <Text style={styles.locationOverlayText} numberOfLines={1}>
-                  {post.address}
-                </Text>
-              </View>
-            ) : null}
-          </View>
-        ) : null}
-      </TouchableOpacity>
+          ) : null}
+        </TouchableOpacity>
+      ) : null}
 
       {/* 4. Bottom Action Bar: Genuine Facebook-style Like & Circle Comment Icons */}
       <View style={styles.actionsRow}>
@@ -225,6 +192,22 @@ export const PostCard: React.FC<PostCardProps> = ({ post, onPress }) => {
 
       {/* Card Divider */}
       <View style={styles.bottomDivider} />
+
+      {/* 5. Fullscreen Facebook-Style Photo Viewer Modal with Zoom */}
+      <ImageViewerModal
+        visible={isImageViewerVisible}
+        imageUrl={imageUrlString}
+        post={post}
+        posterName={poster.name}
+        posterAvatar={poster.avatarUrl}
+        formattedDate={formattedDate}
+        likeCount={likeCount}
+        isLiked={isLiked}
+        commentCount={commentCount}
+        onToggleLike={handleToggleLike}
+        onClose={() => setIsImageViewerVisible(false)}
+        onCommentPress={onPress}
+      />
     </View>
   );
 };
