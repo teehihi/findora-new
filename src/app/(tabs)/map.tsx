@@ -99,7 +99,7 @@ export default function MapScreen() {
     return true;
   });
 
-  // Dynamic zoom check: If map is zoomed far out (latitudeDelta > 0.16), show compact default pins
+  // Dynamic zoom check: If map is zoomed far out (latitudeDelta > 0.16), show compact pins
   const isZoomedOut = region.latitudeDelta > 0.16;
 
   return (
@@ -116,10 +116,36 @@ export default function MapScreen() {
             const themeColor = isLost ? '#EF4444' : '#10B981';
 
             if (isZoomedOut) {
-              // Compact custom dot pin when zoomed far out (No native pinColor prop to avoid Android crashes)
+              if (Platform.OS === 'ios') {
+                // Native Apple Maps animated drop pin on iOS when zoomed out
+                return (
+                  <Marker
+                    key={`${post.id}_ios_pin`}
+                    coordinate={{
+                      latitude: post.lat!,
+                      longitude: post.lng!,
+                    }}
+                    pinColor={themeColor}
+                  >
+                    <Callout onPress={() => router.push(`/post/${post.id}`)}>
+                      <View style={styles.calloutContainer}>
+                        <Text style={styles.calloutTitle} numberOfLines={1}>{post.title}</Text>
+                        <Text style={styles.calloutType}>
+                          {isLost ? '🔴 Báo Mất' : '🟢 Nhặt Được'}
+                        </Text>
+                        {post.address ? (
+                          <Text style={styles.calloutAddress} numberOfLines={1}>{post.address}</Text>
+                        ) : null}
+                      </View>
+                    </Callout>
+                  </Marker>
+                );
+              }
+
+              // Compact custom dot pin on Android when zoomed out
               return (
                 <Marker
-                  key={post.id}
+                  key={`${post.id}_android_dot`}
                   coordinate={{
                     latitude: post.lat!,
                     longitude: post.lng!,
@@ -130,7 +156,7 @@ export default function MapScreen() {
                     <View style={styles.compactDotInner} />
                   </View>
 
-                  <Callout tooltip={Platform.OS === 'android'} onPress={() => router.push(`/post/${post.id}`)}>
+                  <Callout tooltip onPress={() => router.push(`/post/${post.id}`)}>
                     <View style={styles.calloutContainer}>
                       <Text style={styles.calloutTitle} numberOfLines={1}>{post.title}</Text>
                       <Text style={styles.calloutType}>
@@ -148,7 +174,7 @@ export default function MapScreen() {
             // Custom Avatar Image Pin Marker when zoomed in
             return (
               <Marker
-                key={post.id}
+                key={`${post.id}_custom_avatar`}
                 coordinate={{
                   latitude: post.lat!,
                   longitude: post.lng!,
