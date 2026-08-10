@@ -13,6 +13,7 @@ import {
   Image,
   NativeModules
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { 
   signInWithEmailAndPassword, 
@@ -162,117 +163,119 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      {/* Futuristic Modern Loader Component */}
-      <ModernLoader
-        visible={googleLoading || loading}
-        title={googleLoading ? 'Đang kết nối với Google' : 'Đang xác thực tài khoản'}
-        subtitle="Vui lòng chờ trong giây lát"
-        accentColor="#00A896"
-      />
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView 
+        style={{ flex: 1 }} 
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        {/* Futuristic Modern Loader Component */}
+        <ModernLoader
+          visible={googleLoading || loading}
+          title={googleLoading ? 'Đang kết nối với Google' : 'Đang xác thực tài khoản'}
+          subtitle="Vui lòng chờ trong giây lát"
+          accentColor="#00A896"
+        />
 
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        {/* Genuine Brand Logo */}
-        <View style={styles.brandContainer}>
-          <Image
-            source={require('../../../assets/images/Logo_noBG.png')}
-            style={styles.logoImage}
-            resizeMode="contain"
-          />
-          <Text style={styles.tagline}>Nền tảng tìm đồ thất lạc AI thông minh</Text>
-        </View>
-
-        {/* Login Form */}
-        <View style={styles.formContainer}>
-          <Text style={styles.formTitle}>Đăng Nhập</Text>
-
-          <View style={styles.inputGroup}>
-            <Ionicons name="mail-outline" size={20} color={COLORS.textMuted} style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Email của bạn"
-              placeholderTextColor={COLORS.textMuted}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              value={email}
-              onChangeText={setEmail}
+        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+          {/* Genuine Brand Logo */}
+          <View style={styles.brandContainer}>
+            <Image
+              source={require('../../../assets/images/Logo_noBG.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
             />
+            <Text style={styles.tagline}>Nền tảng tìm đồ thất lạc AI thông minh</Text>
           </View>
 
-          <View style={styles.inputGroup}>
-            <Ionicons name="lock-closed-outline" size={20} color={COLORS.textMuted} style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Mật khẩu"
-              placeholderTextColor={COLORS.textMuted}
-              secureTextEntry={!showPassword}
-              value={password}
-              onChangeText={setPassword}
-            />
-            <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-              <Ionicons 
-                name={showPassword ? 'eye-off-outline' : 'eye-outline'} 
-                size={20} 
-                color={COLORS.textMuted} 
+          {/* Login Form */}
+          <View style={styles.formContainer}>
+            <Text style={styles.formTitle}>Đăng Nhập</Text>
+
+            <View style={styles.inputGroup}>
+              <Ionicons name="mail-outline" size={20} color={COLORS.textMuted} style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Email của bạn"
+                placeholderTextColor={COLORS.textMuted}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                value={email}
+                onChangeText={setEmail}
               />
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity 
-            style={styles.forgotBtn} 
-            onPress={() => router.push('/(auth)/forgot-password')}
-          >
-            <Text style={styles.forgotText}>Quên mật khẩu?</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.loginBtn} 
-            onPress={handleEmailLogin}
-            disabled={loading || googleLoading}
-            activeOpacity={0.8}
-          >
-            {loading ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={styles.loginBtnText}>Đăng Nhập</Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Social Sign-In Divider */}
-          <View style={styles.dividerRow}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>HOẶC ĐĂNG NHẬP VỚI</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          {/* Official Multi-Color Google Sign-In Button */}
-          <TouchableOpacity 
-            style={styles.googleBtn} 
-            onPress={handleGoogleBtnPress}
-            disabled={googleLoading || loading}
-            activeOpacity={0.8}
-          >
-            <View style={styles.googleBtnContent}>
-              <View style={styles.googleLogoBox}>
-                <GoogleLogo size={22} />
-              </View>
-              <Text style={styles.googleBtnText}>Tiếp tục với Google</Text>
             </View>
-          </TouchableOpacity>
 
-          {/* Register Link */}
-          <View style={styles.registerRow}>
-            <Text style={styles.registerLabel}>Chưa có tài khoản? </Text>
-            <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
-              <Text style={styles.registerLink}>Đăng ký ngay</Text>
+            <View style={styles.inputGroup}>
+              <Ionicons name="lock-closed-outline" size={20} color={COLORS.textMuted} style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Mật khẩu"
+                placeholderTextColor={COLORS.textMuted}
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={setPassword}
+              />
+              <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                <Ionicons 
+                  name={showPassword ? 'eye-off-outline' : 'eye-outline'} 
+                  size={20} 
+                  color={COLORS.textMuted} 
+                />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity 
+              style={styles.forgotBtn} 
+              onPress={() => router.push('/(auth)/forgot-password')}
+            >
+              <Text style={styles.forgotText}>Quên mật khẩu?</Text>
             </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.loginBtn} 
+              onPress={handleEmailLogin}
+              disabled={loading || googleLoading}
+              activeOpacity={0.8}
+            >
+              {loading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.loginBtnText}>Đăng Nhập</Text>
+              )}
+            </TouchableOpacity>
+
+            {/* Social Sign-In Divider */}
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>HOẶC ĐĂNG NHẬP VỚI</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            {/* Official Multi-Color Google Sign-In Button */}
+            <TouchableOpacity 
+              style={styles.googleBtn} 
+              onPress={handleGoogleBtnPress}
+              disabled={googleLoading || loading}
+              activeOpacity={0.8}
+            >
+              <View style={styles.googleBtnContent}>
+                <View style={styles.googleLogoBox}>
+                  <GoogleLogo size={22} />
+                </View>
+                <Text style={styles.googleBtnText}>Tiếp tục với Google</Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Register Link */}
+            <View style={styles.registerRow}>
+              <Text style={styles.registerLabel}>Chưa có tài khoản? </Text>
+              <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
+                <Text style={styles.registerLink}>Đăng ký ngay</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 

@@ -8,9 +8,9 @@ import {
   TouchableOpacity, 
   TextInput, 
   ActivityIndicator, 
-  SafeAreaView, 
   Linking 
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { fetchPostById, subscribeComments, addComment, fetchPosts, getPosterDetails, toggleLikePost } from '../../services/firebaseService';

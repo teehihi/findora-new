@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, SafeAreaView, TouchableOpacity, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { auth } from '../../config/firebase';
@@ -116,7 +117,8 @@ const styles = StyleSheet.create({
     marginLeft: SPACING.xs
   },
   listContent: {
-    padding: SPACING.md
+    padding: SPACING.md,
+    paddingBottom: 100
   },
   centerLoading: {
     flex: 1,

@@ -11,6 +11,7 @@ import {
   Platform,
   NativeModules
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { 
   createUserWithEmailAndPassword, 
@@ -171,137 +172,139 @@ export default function RegisterScreen() {
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      {/* Futuristic iOS Modern Loader Component */}
-      <ModernLoader
-        visible={googleLoading || loading}
-        title={googleLoading ? 'Đang kết nối với Google' : 'Đang khởi tạo tài khoản'}
-        subtitle="Vui lòng chờ trong giây lát"
-        accentColor="#00C853"
-      />
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView 
+        style={{ flex: 1 }} 
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        {/* Futuristic iOS Modern Loader Component */}
+        <ModernLoader
+          visible={googleLoading || loading}
+          title={googleLoading ? 'Đang kết nối với Google' : 'Đang khởi tạo tài khoản'}
+          subtitle="Vui lòng chờ trong giây lát"
+          accentColor="#00C853"
+        />
 
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        {/* Header Back Button */}
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={26} color="#111111" />
-        </TouchableOpacity>
+        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+          {/* Header Back Button */}
+          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+            <Ionicons name="chevron-back" size={26} color="#111111" />
+          </TouchableOpacity>
 
-        {/* Title Section */}
-        <View style={styles.headerSection}>
-          <Text style={styles.title}>Tạo tài khoản</Text>
-          <Text style={styles.subtitle}>Vui lòng nhập đầy đủ thông tin</Text>
-        </View>
-
-        {/* Form Container */}
-        <View style={styles.formContainer}>
-          {/* Field 1: Họ và tên */}
-          <View style={styles.fieldBlock}>
-            <Text style={styles.label}>Họ và tên</Text>
-            <View style={styles.inputGroup}>
-              <Ionicons name="person-outline" size={20} color="#8E8E93" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Nguyễn Văn A"
-                placeholderTextColor="#A0A0A5"
-                value={name}
-                onChangeText={setName}
-              />
-            </View>
+          {/* Title Section */}
+          <View style={styles.headerSection}>
+            <Text style={styles.title}>Tạo tài khoản</Text>
+            <Text style={styles.subtitle}>Vui lòng nhập đầy đủ thông tin</Text>
           </View>
 
-          {/* Field 2: Số điện thoại */}
-          <View style={styles.fieldBlock}>
-            <Text style={styles.label}>Số điện thoại</Text>
-            <View style={styles.inputGroup}>
-              <Ionicons name="call-outline" size={20} color="#8E8E93" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="0931652105"
-                placeholderTextColor="#A0A0A5"
-                keyboardType="phone-pad"
-                value={phone}
-                onChangeText={setPhone}
-              />
-            </View>
-          </View>
-
-          {/* Field 3: Địa chỉ Email */}
-          <View style={styles.fieldBlock}>
-            <Text style={styles.label}>Địa chỉ Email</Text>
-            <View style={styles.inputGroup}>
-              <Ionicons name="mail-outline" size={20} color="#8E8E93" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="example@findora.com"
-                placeholderTextColor="#A0A0A5"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                value={email}
-                onChangeText={setEmail}
-              />
-            </View>
-          </View>
-
-          {/* Field 4: Mật khẩu */}
-          <View style={styles.fieldBlock}>
-            <Text style={styles.label}>Mật khẩu</Text>
-            <View style={styles.inputGroup}>
-              <Ionicons name="lock-closed-outline" size={20} color="#8E8E93" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="........."
-                placeholderTextColor="#A0A0A5"
-                secureTextEntry={!showPassword}
-                value={password}
-                onChangeText={setPassword}
-              />
-              <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                <Ionicons 
-                  name={showPassword ? 'eye-off-outline' : 'eye-outline'} 
-                  size={20} 
-                  color="#8E8E93" 
+          {/* Form Container */}
+          <View style={styles.formContainer}>
+            {/* Field 1: Họ và tên */}
+            <View style={styles.fieldBlock}>
+              <Text style={styles.label}>Họ và tên</Text>
+              <View style={styles.inputGroup}>
+                <Ionicons name="person-outline" size={20} color="#8E8E93" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Nguyễn Văn A"
+                  placeholderTextColor="#A0A0A5"
+                  value={name}
+                  onChangeText={setName}
                 />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Vibrant Green Submit Button */}
-          <TouchableOpacity 
-            style={styles.registerBtn} 
-            onPress={handleRegister}
-            disabled={loading || googleLoading}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.registerBtnText}>Đăng ký</Text>
-          </TouchableOpacity>
-
-          {/* Divider */}
-          <View style={styles.dividerRow}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>HOẶC TIẾP TỤC VỚI</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          {/* Social Google Sign-In Button */}
-          <TouchableOpacity 
-            style={styles.googleBtn} 
-            onPress={handleGoogleBtnPress}
-            disabled={googleLoading || loading}
-            activeOpacity={0.85}
-          >
-            <View style={styles.googleBtnContent}>
-              <View style={styles.googleLogoBox}>
-                <GoogleLogo size={22} />
               </View>
-              <Text style={styles.googleBtnText}>Tiếp tục với Google</Text>
             </View>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+
+            {/* Field 2: Số điện thoại */}
+            <View style={styles.fieldBlock}>
+              <Text style={styles.label}>Số điện thoại</Text>
+              <View style={styles.inputGroup}>
+                <Ionicons name="call-outline" size={20} color="#8E8E93" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="0931652105"
+                  placeholderTextColor="#A0A0A5"
+                  keyboardType="phone-pad"
+                  value={phone}
+                  onChangeText={setPhone}
+                />
+              </View>
+            </View>
+
+            {/* Field 3: Địa chỉ Email */}
+            <View style={styles.fieldBlock}>
+              <Text style={styles.label}>Địa chỉ Email</Text>
+              <View style={styles.inputGroup}>
+                <Ionicons name="mail-outline" size={20} color="#8E8E93" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="example@findora.com"
+                  placeholderTextColor="#A0A0A5"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  value={email}
+                  onChangeText={setEmail}
+                />
+              </View>
+            </View>
+
+            {/* Field 4: Mật khẩu */}
+            <View style={styles.fieldBlock}>
+              <Text style={styles.label}>Mật khẩu</Text>
+              <View style={styles.inputGroup}>
+                <Ionicons name="lock-closed-outline" size={20} color="#8E8E93" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="........."
+                  placeholderTextColor="#A0A0A5"
+                  secureTextEntry={!showPassword}
+                  value={password}
+                  onChangeText={setPassword}
+                />
+                <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                  <Ionicons 
+                    name={showPassword ? 'eye-off-outline' : 'eye-outline'} 
+                    size={20} 
+                    color="#8E8E93" 
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Vibrant Green Submit Button */}
+            <TouchableOpacity 
+              style={styles.registerBtn} 
+              onPress={handleRegister}
+              disabled={loading || googleLoading}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.registerBtnText}>Đăng ký</Text>
+            </TouchableOpacity>
+
+            {/* Divider */}
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>HOẶC TIẾP TỤC VỚI</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            {/* Social Google Sign-In Button */}
+            <TouchableOpacity 
+              style={styles.googleBtn} 
+              onPress={handleGoogleBtnPress}
+              disabled={googleLoading || loading}
+              activeOpacity={0.85}
+            >
+              <View style={styles.googleBtnContent}>
+                <View style={styles.googleLogoBox}>
+                  <GoogleLogo size={22} />
+                </View>
+                <Text style={styles.googleBtnText}>Tiếp tục với Google</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
@@ -313,7 +316,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: SPACING.lg,
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingTop: SPACING.md,
     paddingBottom: SPACING.xl
   },
   backBtn: {

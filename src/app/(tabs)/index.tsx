@@ -8,9 +8,9 @@ import {
   TouchableOpacity, 
   ActivityIndicator, 
   RefreshControl,
-  SafeAreaView,
   Platform
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { fetchPosts, getCurrentAddressFromGPS, subscribeUnreadNotificationCount } from '../../services/firebaseService';
@@ -269,7 +269,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF'
   },
   listContent: {
-    paddingBottom: 30
+    paddingBottom: 100
   },
   topHeaderRow: {
     flexDirection: 'row',

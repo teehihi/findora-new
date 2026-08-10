@@ -3,7 +3,6 @@ import {
   View, 
   Text, 
   StyleSheet, 
-  SafeAreaView, 
   Image, 
   TouchableOpacity, 
   ScrollView, 
@@ -14,6 +13,7 @@ import {
   Animated,
   Easing
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { signOut } from 'firebase/auth';
 import { doc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
@@ -518,7 +518,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF'
   },
   scrollContent: {
-    paddingBottom: 40
+    paddingBottom: 110
   },
   heroSection: {
     alignItems: 'center',

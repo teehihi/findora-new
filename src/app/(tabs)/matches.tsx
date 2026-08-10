@@ -5,9 +5,9 @@ import {
   StyleSheet, 
   FlatList, 
   ActivityIndicator, 
-  SafeAreaView, 
   RefreshControl 
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { fetchPosts } from '../../services/firebaseService';
@@ -144,7 +144,8 @@ const styles = StyleSheet.create({
     lineHeight: 18
   },
   listContent: {
-    padding: SPACING.md
+    padding: SPACING.md,
+    paddingBottom: 100
   },
   centerLoading: {
     flex: 1,
