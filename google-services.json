@@ -1,0 +1,107 @@
+{
+  "project_info": {
+    "project_number": "32712775834",
+    "firebase_url": "https://findora-138a7-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "findora-138a7",
+    "storage_bucket": "findora-138a7.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:32712775834:android:707163f7d1832d72c82723",
+        "android_client_info": {
+          "package_name": "hcmute.edu.vn.findora"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "32712775834-2cf02a6qtip9ter0jlft4c6rs5741elf.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "hcmute.edu.vn.findora",
+            "certificate_hash": "5a075c1c1366b38e29c4b254427b8ea5e9b80196"
+          }
+        },
+        {
+          "client_id": "32712775834-cnmgvqs2tja9mn8m0cterpq3ra8at6rh.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "hcmute.edu.vn.findora",
+            "certificate_hash": "b6065bb5d27749194afd2ff6894ebc5eda7a5132"
+          }
+        },
+        {
+          "client_id": "32712775834-at73e6qgmgo8shir419fks3v8daj8pjn.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCt5kh9H1vwiIyGaCZzzBb9sUf5yJOkK5s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "32712775834-at73e6qgmgo8shir419fks3v8daj8pjn.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "32712775834-jvbe5dqn6vjvlj1cv9ot8qrmijjp8r3t.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "vn.edu.hcmute.findora"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:32712775834:android:f6083188748409b0c82723",
+        "android_client_info": {
+          "package_name": "vn.edu.hcmute.findora"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "32712775834-a8uu8ipa39ogtk0orbuj0etgfjl7vuck.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "vn.edu.hcmute.findora",
+            "certificate_hash": "5a075c1c1366b38e29c4b254427b8ea5e9b80196"
+          }
+        },
+        {
+          "client_id": "32712775834-at73e6qgmgo8shir419fks3v8daj8pjn.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCt5kh9H1vwiIyGaCZzzBb9sUf5yJOkK5s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "32712775834-at73e6qgmgo8shir419fks3v8daj8pjn.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "32712775834-jvbe5dqn6vjvlj1cv9ot8qrmijjp8r3t.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "vn.edu.hcmute.findora"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

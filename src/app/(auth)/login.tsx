@@ -10,24 +10,41 @@ import {
   KeyboardAvoidingView, 
   Platform,
   ScrollView,
-  Image
+  Image,
+  NativeModules
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { 
   signInWithEmailAndPassword, 
   GoogleAuthProvider, 
-  signInWithCredential 
+  signInWithCredential,
+  updateProfile
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import * as Google from 'expo-auth-session/providers/google';
-import { makeRedirectUri } from 'expo-auth-session';
-import * as WebBrowser from 'expo-web-browser';
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
 import { auth, db } from '../../config/firebase';
 import { GoogleLogo } from '../../components/GoogleLogo';
+import { ModernLoader } from '../../components/ModernLoader';
 import { COLORS, SPACING } from '../../constants/theme';
 
-WebBrowser.maybeCompleteAuthSession();
+// Safely resolve native GoogleSignin module for Expo Go / Dev Build compatibility
+let GoogleSigninModule: any = null;
+let statusCodesEnum: any = {};
+
+try {
+  const gSignin = require('@react-native-google-signin/google-signin');
+  if (NativeModules.RNGoogleSignin || gSignin.GoogleSignin) {
+    GoogleSigninModule = gSignin.GoogleSignin;
+    statusCodesEnum = gSignin.statusCodes || {};
+  }
+} catch (e) {
+  // Expo Go sandbox environment without native RNGoogleSignin binary
+  GoogleSigninModule = null;
+}
+
+// Official Credentials
+const GOOGLE_WEB_CLIENT_ID = '32712775834-at73e6qgmgo8shir419fks3v8daj8pjn.apps.googleusercontent.com';
+const GOOGLE_IOS_CLIENT_ID = '32712775834-jvbe5dqn6vjvlj1cv9ot8qrmijjp8r3t.apps.googleusercontent.com';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -37,65 +54,94 @@ export default function LoginScreen() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  // Configure Google Auth Session with clean redirectUri
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    clientId: '32712775834-at73e6qgmgo8shir419fks3v8daj8pjn.apps.googleusercontent.com',
-    webClientId: '32712775834-at73e6qgmgo8shir419fks3v8daj8pjn.apps.googleusercontent.com',
-    androidClientId: '32712775834-2cf02a6qtip9ter0jlft4c6rs5741elf.apps.googleusercontent.com',
-    iosClientId: '32712775834-at73e6qgmgo8shir419fks3v8daj8pjn.apps.googleusercontent.com',
-    scopes: ['profile', 'email'],
-    redirectUri: makeRedirectUri()
-  });
-
   useEffect(() => {
-    if (response?.type === 'success') {
-      const idToken = response.authentication?.idToken || response.params?.id_token;
-      if (idToken) {
-        handleGoogleSignInWithToken(idToken);
+    if (GoogleSigninModule) {
+      try {
+        GoogleSigninModule.configure({
+          webClientId: GOOGLE_WEB_CLIENT_ID,
+          iosClientId: GOOGLE_IOS_CLIENT_ID,
+          scopes: ['profile', 'email'],
+          offlineAccess: false
+        });
+      } catch (e) {
+        console.log('[GoogleSignin] Configuration notice:', e);
       }
     }
-  }, [response]);
+  }, []);
 
-  const handleGoogleSignInWithToken = async (idToken: string) => {
+  const handleGoogleBtnPress = async () => {
+    if (!GoogleSigninModule || !NativeModules.RNGoogleSignin) {
+      Alert.alert(
+        'Yêu cầu Expo Development Build 🚀',
+        'Đăng nhập Google Native yêu cầu bản Expo Development Build (npx expo run:ios --device).\n\nVui lòng sử dụng Đăng Nhập Email/Mật khẩu khi chạy trên ứng dụng Expo Go.'
+      );
+      return;
+    }
+
     try {
       setGoogleLoading(true);
-      const credential = GoogleAuthProvider.credential(idToken);
-      const userCredential = await signInWithCredential(auth, credential);
-      const user = userCredential.user;
+      await GoogleSigninModule.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      const response = await GoogleSigninModule.signIn();
+      
+      const googleUser = response.data?.user || (response as any).user;
+      const idToken = response.data?.idToken || (response as any).idToken || googleUser?.idToken;
 
-      // Check if user already exists in Firestore
-      const userDocRef = doc(db, 'users', user.uid);
-      const userSnap = await getDoc(userDocRef);
+      if (idToken) {
+        const credential = GoogleAuthProvider.credential(idToken);
+        const userCredential = await signInWithCredential(auth, credential);
+        const user = userCredential.user;
 
-      if (!userSnap.exists()) {
-        // Save new Google user to Firestore
-        await setDoc(userDocRef, {
-          uid: user.uid,
-          name: user.displayName || user.email?.split('@')[0] || 'User',
-          email: user.email || '',
-          avatarUrl: user.photoURL || '',
-          phone: '',
-          points: 100, // Initial bonus points
-          reputationScore: 100,
-          resolvedCount: 0,
-          authProvider: 'google',
-          createdAt: serverTimestamp()
-        });
+        const realName = googleUser?.name || user.displayName || user.email?.split('@')[0] || 'User';
+        const realAvatar = googleUser?.photo || user.photoURL || '';
+
+        // Update Firebase Auth profile if displayName is missing
+        if (!user.displayName && realName) {
+          await updateProfile(user, { displayName: realName, photoURL: realAvatar }).catch(() => {});
+        }
+
+        // Save/verify user profile in Firestore
+        const userDocRef = doc(db, 'users', user.uid);
+        const userSnap = await getDoc(userDocRef);
+
+        if (!userSnap.exists()) {
+          await setDoc(userDocRef, {
+            uid: user.uid,
+            name: realName,
+            email: user.email || '',
+            avatarUrl: realAvatar,
+            phone: '',
+            points: 100,
+            reputationScore: 100,
+            resolvedCount: 0,
+            authProvider: 'google',
+            createdAt: serverTimestamp()
+          });
+        } else {
+          // Always update Firestore with exact name and avatarUrl from Google
+          await updateDoc(userDocRef, {
+            name: realName,
+            avatarUrl: realAvatar
+          }).catch(() => {});
+        }
+
+        setGoogleLoading(false);
+        router.replace('/(tabs)');
+      } else {
+        setGoogleLoading(false);
+        Alert.alert('Đăng nhập Google thất bại', 'Không lấy được ID Token từ Google.');
       }
-
-      setGoogleLoading(false);
-      router.replace('/(tabs)');
     } catch (error: any) {
       setGoogleLoading(false);
-      Alert.alert('Đăng nhập Google thất bại', error.message || 'Không thể xác thực với Google.');
+      if (error.code === statusCodesEnum.SIGN_IN_CANCELLED) {
+        console.log('[GoogleSignin] User cancelled login flow.');
+      } else if (error.code === statusCodesEnum.IN_PROGRESS) {
+        console.log('[GoogleSignin] Sign-in already in progress.');
+      } else if (error.code === statusCodesEnum.PLAY_SERVICES_NOT_AVAILABLE) {
+        Alert.alert('Lỗi', 'Thiết bị không hỗ trợ Google Play Services.');
+      } else {
+        Alert.alert('Đăng nhập Google thất bại', error.message || 'Lỗi khi kết nối với Google.');
+      }
     }
-  };
-
-  const handleGoogleBtnPress = () => {
-    // preferEphemeralSession: true prevents Safari from remembering cached account session
-    promptAsync({
-      preferEphemeralSession: true
-    });
   };
 
   const handleEmailLogin = async () => {
@@ -120,6 +166,14 @@ export default function LoginScreen() {
       style={styles.container} 
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
+      {/* Futuristic Modern Loader Component */}
+      <ModernLoader
+        visible={googleLoading || loading}
+        title={googleLoading ? 'Đang kết nối với Google' : 'Đang xác thực tài khoản'}
+        subtitle="Vui lòng chờ trong giây lát"
+        accentColor="#00A896"
+      />
+
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         {/* Genuine Brand Logo */}
         <View style={styles.brandContainer}>
@@ -177,7 +231,7 @@ export default function LoginScreen() {
           <TouchableOpacity 
             style={styles.loginBtn} 
             onPress={handleEmailLogin}
-            disabled={loading}
+            disabled={loading || googleLoading}
             activeOpacity={0.8}
           >
             {loading ? (
@@ -198,19 +252,15 @@ export default function LoginScreen() {
           <TouchableOpacity 
             style={styles.googleBtn} 
             onPress={handleGoogleBtnPress}
-            disabled={googleLoading || !request}
+            disabled={googleLoading || loading}
             activeOpacity={0.8}
           >
-            {googleLoading ? (
-              <ActivityIndicator color="#1F1F1F" />
-            ) : (
-              <View style={styles.googleBtnContent}>
-                <View style={styles.googleLogoBox}>
-                  <GoogleLogo size={22} />
-                </View>
-                <Text style={styles.googleBtnText}>Tiếp tục với Google</Text>
+            <View style={styles.googleBtnContent}>
+              <View style={styles.googleLogoBox}>
+                <GoogleLogo size={22} />
               </View>
-            )}
+              <Text style={styles.googleBtnText}>Tiếp tục với Google</Text>
+            </View>
           </TouchableOpacity>
 
           {/* Register Link */}

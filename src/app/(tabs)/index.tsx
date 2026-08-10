@@ -9,22 +9,37 @@ import {
   ActivityIndicator, 
   RefreshControl,
   SafeAreaView,
-  Image
+  Platform
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { fetchPosts } from '../../services/firebaseService';
+import { fetchPosts, getCurrentAddressFromGPS, subscribeUnreadNotificationCount } from '../../services/firebaseService';
+import { auth } from '../../config/firebase';
 import { Post } from '../../models/types';
 import { PostCard } from '../../components/PostCard';
-import { COLORS, SPACING } from '../../constants/theme';
 
 export default function HomeScreen() {
   const router = useRouter();
+  const currentUser = auth.currentUser;
+
   const [posts, setPosts] = useState<Post[]>([]);
   const [typeFilter, setTypeFilter] = useState<'all' | 'lost' | 'found'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [userLocation, setUserLocation] = useState<string>('Thành phố Hồ Chí Minh');
+  const [unreadCount, setUnreadCount] = useState<number>(0);
+
+  const loadLocation = async () => {
+    try {
+      const address = await getCurrentAddressFromGPS();
+      if (address) {
+        setUserLocation(address);
+      }
+    } catch (e) {
+      console.error('Error fetching GPS location:', e);
+    }
+  };
 
   const loadPosts = async () => {
     try {
@@ -39,129 +54,176 @@ export default function HomeScreen() {
   };
 
   useEffect(() => {
+    loadLocation();
     loadPosts();
   }, [typeFilter, searchQuery]);
 
+  // Realtime unread notification listener matching native MainActivity.java line 745
+  useEffect(() => {
+    let unsubscribe = () => {};
+    if (currentUser?.uid) {
+      unsubscribe = subscribeUnreadNotificationCount(currentUser.uid, (count) => {
+        setUnreadCount(count);
+      });
+    } else {
+      setUnreadCount(0);
+    }
+    return () => {
+      unsubscribe();
+    };
+  }, [currentUser?.uid]);
+
   const onRefresh = () => {
     setRefreshing(true);
+    loadLocation();
     loadPosts();
   };
 
-  return (
-    <SafeAreaView style={styles.container}>
-      {/* App Header with genuine Findora Logo */}
-      <View style={styles.header}>
-        <Image
-          source={require('../../../assets/images/Logo_noBG.png')}
-          style={styles.headerLogo}
-          resizeMode="contain"
-        />
+  const renderHeader = () => (
+    <View>
+      {/* 1. Header: Real GPS Location Pin + Notification Bell Button */}
+      <View style={styles.topHeaderRow}>
+        <View style={styles.locationContainer}>
+          <Ionicons name="location" size={18} color="#00C853" style={{ marginRight: 6 }} />
+          <Text style={styles.locationText} numberOfLines={1}>
+            {userLocation}
+          </Text>
+        </View>
 
         <TouchableOpacity 
-          style={styles.aiButton} 
-          onPress={() => router.push('/(tabs)/matches')}
+          style={styles.bellBtnContainer} 
+          onPress={() => router.push('/(tabs)/notifications')}
           activeOpacity={0.8}
         >
-          <Ionicons name="sparkles" size={16} color="#FFFFFF" />
-          <Text style={styles.aiButtonText}>AI Matches</Text>
+          <Ionicons name="notifications-outline" size={24} color="#1F2937" />
+          {/* Notification Badge Count from Firestore */}
+          {unreadCount > 0 && (
+            <View style={styles.bellBadge}>
+              <Text style={styles.bellBadgeText}>
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
 
-      {/* Search Input Box */}
-      <View style={styles.searchContainer}>
-        <Ionicons name="search" size={18} color="#94A3B8" style={styles.searchIcon} />
+      {/* 2. Hero Headline Title */}
+      <View style={styles.heroTitleContainer}>
+        <Text style={styles.heroTitle}>
+          Hôm nay bạn <Text style={styles.heroTitleHighlight}>tìm</Text> gì?
+        </Text>
+      </View>
+
+      {/* 3. Search Bar */}
+      <View style={styles.searchBar}>
+        <Ionicons name="search-outline" size={20} color="#9CA3AF" style={{ marginRight: 10 }} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Tìm theo từ khóa (mèo, chìa khóa, ví, điện thoại...)"
-          placeholderTextColor="#94A3B8"
+          placeholder="Tìm ví, chìa khóa, thú cưng bị mất..."
+          placeholderTextColor="#9CA3AF"
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
         {searchQuery ? (
           <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <Ionicons name="close-circle" size={18} color="#94A3B8" />
+            <Ionicons name="close-circle" size={18} color="#9CA3AF" />
           </TouchableOpacity>
         ) : null}
       </View>
 
-      {/* Filter Chips & Settings Row */}
-      <View style={styles.filterRow}>
-        <View style={styles.chipsGroup}>
-          <TouchableOpacity
-            style={[styles.chip, typeFilter === 'all' && styles.chipActive]}
-            onPress={() => setTypeFilter('all')}
-          >
-            <Text style={[styles.chipText, typeFilter === 'all' && styles.chipTextActive]}>
-              Tất cả
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.chip, typeFilter === 'lost' && styles.chipActiveLost]}
-            onPress={() => setTypeFilter('lost')}
-          >
-            <Text style={[styles.chipText, typeFilter === 'lost' && styles.chipTextActiveLost]}>
-              🔴 Mất đồ
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.chip, typeFilter === 'found' && styles.chipActiveFound]}
-            onPress={() => setTypeFilter('found')}
-          >
-            <Text style={[styles.chipText, typeFilter === 'found' && styles.chipTextActiveFound]}>
-              🟢 Nhặt được
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity 
-          style={styles.settingsBtn} 
-          onPress={() => router.push('/(tabs)/profile')}
+      {/* 4. Filter Chips Row */}
+      <View style={styles.chipsRow}>
+        <TouchableOpacity
+          style={[styles.chipBtn, typeFilter === 'all' ? styles.chipActive : styles.chipInactive]}
+          onPress={() => setTypeFilter('all')}
+          activeOpacity={0.85}
         >
-          <Ionicons name="settings" size={22} color="#FFFFFF" />
+          <Text style={[styles.chipText, typeFilter === 'all' ? styles.chipTextActive : styles.chipTextInactive]}>
+            Tất cả
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.chipBtn, typeFilter === 'lost' ? styles.chipActive : styles.chipInactive]}
+          onPress={() => setTypeFilter('lost')}
+          activeOpacity={0.85}
+        >
+          <Text style={[styles.chipText, typeFilter === 'lost' ? styles.chipTextActive : styles.chipTextInactive]}>
+            Thất lạc
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.chipBtn, typeFilter === 'found' ? styles.chipActive : styles.chipInactive]}
+          onPress={() => setTypeFilter('found')}
+          activeOpacity={0.85}
+        >
+          <Text style={[styles.chipText, typeFilter === 'found' ? styles.chipTextActive : styles.chipTextInactive]}>
+            Tìm thấy
+          </Text>
         </TouchableOpacity>
       </View>
 
-      {/* Feed List */}
-      {loading ? (
-        <View style={styles.centerLoading}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Đang tải bài đăng Findora...</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={posts}
-          keyExtractor={(item) => item.id || Math.random().toString()}
-          renderItem={({ item }) => (
-            <PostCard 
-              post={item} 
-              onPress={() => router.push(`/post/${item.id}`)} 
-            />
-          )}
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Ionicons name="search-outline" size={56} color="#94A3B8" />
-              <Text style={styles.emptyTitle}>Chưa có bài đăng nào</Text>
-              <Text style={styles.emptySubtitle}>Hãy là người đầu tiên tạo bài đăng tìm đồ hoặc báo nhặt được!</Text>
-            </View>
-          }
-        />
-      )}
-
-      {/* Floating Create Post Button */}
+      {/* 5. AI Assistant Teaser Card */}
       <TouchableOpacity 
-        style={styles.fab} 
-        onPress={() => router.push('/post/create')}
-        activeOpacity={0.85}
+        style={styles.aiCard} 
+        onPress={() => router.push('/(tabs)/matches')}
+        activeOpacity={0.9}
       >
-        <Ionicons name="add" size={24} color="#FFFFFF" />
-        <Text style={styles.fabText}>Đăng Bài</Text>
+        <View style={styles.aiHeaderRow}>
+          <Text style={styles.aiTagText}>TRỢ LÝ AI THÔNG MINH</Text>
+        </View>
+        <Text style={styles.aiCardTitle}>Tìm thấy 2 gợi ý phù hợp</Text>
+        <Text style={styles.aiCardDesc}>
+          Mất: Thẻ sinh viên Nguyễn Thị Thuỳ Trang ĐH KHTN - Độ phù hợp 80%
+        </Text>
       </TouchableOpacity>
+
+      {/* 6. Section Header: Recent Reports */}
+      <View style={styles.sectionHeaderRow}>
+        <View>
+          <Text style={styles.sectionTitle}>Bài đăng gần đây</Text>
+          <Text style={styles.sectionSubtitle}>Cập nhật vừa xong</Text>
+        </View>
+
+        <TouchableOpacity onPress={() => setTypeFilter('all')}>
+          <Text style={styles.seeAllText}>Xem tất cả</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <FlatList
+        data={posts}
+        keyExtractor={(item) => item.id || Math.random().toString()}
+        ListHeaderComponent={renderHeader}
+        renderItem={({ item }) => (
+          <PostCard 
+            post={item} 
+            onPress={() => router.push(`/post/${item.id}`)} 
+          />
+        )}
+        contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#00C853']} />
+        }
+        ListEmptyComponent={
+          loading ? (
+            <View style={styles.centerLoading}>
+              <ActivityIndicator size="large" color="#00C853" />
+              <Text style={styles.loadingText}>Đang tải bài đăng Findora...</Text>
+            </View>
+          ) : (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="search-outline" size={56} color="#9CA3AF" />
+              <Text style={styles.emptyTitle}>Chưa có bài đăng nào</Text>
+              <Text style={styles.emptySubtitle}>Hãy tạo bài đăng mới để hỗ trợ tìm đồ thất lạc!</Text>
+            </View>
+          )
+        }
+      />
     </SafeAreaView>
   );
 }
@@ -169,163 +231,192 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FAFAFA'
+    backgroundColor: '#FFFFFF'
   },
-  header: {
+  listContent: {
+    paddingBottom: 30
+  },
+  topHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.xs,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9'
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 10 : 16,
+    paddingBottom: 12
   },
-  headerLogo: {
-    width: 130,
-    height: 40
-  },
-  aiButton: {
+  locationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#00A896',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20
+    flex: 1,
+    marginRight: 12
   },
-  aiButtonText: {
+  locationText: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginLeft: 4
+    color: '#374151',
+    fontWeight: '500',
+    flex: 1
   },
-  searchContainer: {
+  bellBtnContainer: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative'
+  },
+  bellBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    backgroundColor: '#EF4444',
+    paddingHorizontal: 5,
+    height: 18,
+    minWidth: 18,
+    borderRadius: 9,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  bellBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#FFFFFF'
+  },
+  heroTitleContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 16
+  },
+  heroTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#111111',
+    lineHeight: 36
+  },
+  heroTitleHighlight: {
+    color: '#00C853',
+    fontStyle: 'italic',
+    fontWeight: '800'
+  },
+  searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    marginHorizontal: SPACING.md,
-    marginTop: SPACING.sm,
-    marginBottom: SPACING.xs,
-    paddingHorizontal: SPACING.md,
+    backgroundColor: '#F3F4F6',
+    marginHorizontal: 20,
     height: 48,
     borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0'
-  },
-  searchIcon: {
-    marginRight: SPACING.xs
+    paddingHorizontal: 14,
+    marginBottom: 16
   },
   searchInput: {
     flex: 1,
     fontSize: 14,
-    color: '#0F172A'
+    color: '#111111'
   },
-  filterRow: {
+  chipsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.xs
+    paddingHorizontal: 20,
+    marginBottom: 16
   },
-  chipsGroup: {
-    flexDirection: 'row',
+  chipBtn: {
+    height: 38,
+    paddingHorizontal: 20,
+    borderRadius: 19,
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 8
-  },
-  chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-    backgroundColor: '#E2E8F0'
+    marginRight: 10
   },
   chipActive: {
-    backgroundColor: '#0F172A'
+    backgroundColor: '#00C853'
   },
-  chipActiveLost: {
-    backgroundColor: '#EF4444'
-  },
-  chipActiveFound: {
-    backgroundColor: '#10B981'
+  chipInactive: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#00C853'
   },
   chipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#475569'
+    fontSize: 14,
+    fontWeight: '700'
   },
   chipTextActive: {
     color: '#FFFFFF'
   },
-  chipTextActiveLost: {
-    color: '#FFFFFF'
+  chipTextInactive: {
+    color: '#00C853'
   },
-  chipTextActiveFound: {
-    color: '#FFFFFF'
-  },
-  settingsBtn: {
-    width: 40,
-    height: 40,
+  aiCard: {
+    backgroundColor: '#EFF6FF',
+    marginHorizontal: 20,
     borderRadius: 20,
-    backgroundColor: '#0288D1',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#DBEAFE'
   },
-  listContent: {
-    padding: SPACING.md,
-    paddingBottom: 90
+  aiHeaderRow: {
+    marginBottom: 6
+  },
+  aiTagText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#00C853',
+    letterSpacing: 0.6
+  },
+  aiCardTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#1E3A8A',
+    marginBottom: 4
+  },
+  aiCardDesc: {
+    fontSize: 13,
+    color: '#3B82F6',
+    lineHeight: 18
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingBottom: 14
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#111111'
+  },
+  sectionSubtitle: {
+    fontSize: 12,
+    color: '#71717A',
+    marginTop: 2
+  },
+  seeAllText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#00C853'
   },
   centerLoading: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center'
+    paddingVertical: 40,
+    alignItems: 'center'
   },
   loadingText: {
+    marginTop: 10,
     fontSize: 14,
-    color: '#64748B',
-    marginTop: SPACING.sm
+    color: '#6B7280'
   },
   emptyContainer: {
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: SPACING.xl * 2
+    paddingVertical: 50,
+    paddingHorizontal: 20
   },
   emptyTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
-    color: '#0F172A',
-    marginTop: SPACING.md
+    color: '#374151',
+    marginTop: 12
   },
   emptySubtitle: {
     fontSize: 13,
-    color: '#64748B',
+    color: '#9CA3AF',
     textAlign: 'center',
-    marginTop: 4,
-    paddingHorizontal: SPACING.lg
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 24,
-    right: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#00A896',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 30,
-    shadowColor: '#00A896',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6
-  },
-  fabText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    marginLeft: 6
+    marginTop: 4
   }
 });

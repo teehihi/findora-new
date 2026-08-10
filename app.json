@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Findora",
+    "name": "Findora RN",
     "slug": "findora",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -10,6 +10,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "vn.edu.hcmute.findora",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "NSCameraUsageDescription": "Findora cần quyền truy cập Camera để chụp ảnh đồ thất lạc.",
         "NSPhotoLibraryUsageDescription": "Findora cần quyền truy cập thư viện ảnh để đính kèm hình ảnh đồ vật.",
@@ -17,7 +18,8 @@
       }
     },
     "android": {
-      "package": "hcmute.edu.vn.findora",
+      "package": "vn.edu.hcmute.findora",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#00A896",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -62,6 +64,12 @@
         "expo-location",
         {
           "locationWhenInUsePermission": "Findora sử dụng vị trí của bạn để hiển thị các bài đăng xung quanh."
+        }
+      ],
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.32712775834-jvbe5dqn6vjvlj1cv9ot8qrmijjp8r3t"
         }
       ]
     ],

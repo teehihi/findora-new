@@ -8,6 +8,7 @@ import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getDatabase } from 'firebase/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
 export const firebaseConfig = {
   apiKey: "AIzaSyCt5kh9H1vwiIyGaCZzzBb9sUf5yJOkK5s",
@@ -15,7 +16,9 @@ export const firebaseConfig = {
   projectId: "findora-138a7",
   storageBucket: "findora-138a7.firebasestorage.app",
   messagingSenderId: "32712775834",
-  appId: "1:32712775834:android:707163f7d1832d72c82723",
+  appId: Platform.OS === 'ios'
+    ? "1:32712775834:ios:jvbe5dqn6vjvlj1cv9ot8qrmijjp8r3t"
+    : "1:32712775834:android:f6083188748409b0c82723",
   databaseURL: "https://findora-138a7-default-rtdb.asia-southeast1.firebasedatabase.app"
 };
 
@@ -33,6 +36,6 @@ try {
 
 export { auth };
 export const db = getFirestore(app);
-export const storage = getStorage(app);
+export const storage = getStorage(app, `gs://${firebaseConfig.storageBucket}`);
 export const rtdb = getDatabase(app);
 export const GEMINI_API_KEY = "AIzaSyAWK3VVS3DCfs05EptzcmaYjnu2WXhDo50";

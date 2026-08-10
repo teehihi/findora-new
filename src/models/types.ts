@@ -35,6 +35,7 @@ export interface User {
   resolvedCount?: number;
   createdAt?: Timestamp | any;
   pushToken?: string;
+  level?: string;
   levelBadge?: string;
 }
 

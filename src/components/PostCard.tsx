@@ -1,8 +1,9 @@
-import React from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Image } from 'react-native';
+import { Ionicons, Feather } from '@expo/vector-icons';
 import { Post } from '../models/types';
-import { COLORS, SPACING, SHADOWS } from '../constants/theme';
+import { auth, firebaseConfig } from '../config/firebase';
+import { toggleLikePost, getPosterDetails, getPostCommentCount } from '../services/firebaseService';
 
 interface PostCardProps {
   post: Post;
@@ -10,245 +11,376 @@ interface PostCardProps {
 }
 
 export const PostCard: React.FC<PostCardProps> = ({ post, onPress }) => {
+  const currentUser = auth.currentUser;
   const isLost = post.type === 'lost';
-  const isResolved = post.status === 'resolved';
+
+  const [poster, setPoster] = useState<{ name: string; avatarUrl: string }>({
+    name: 'Người dùng',
+    avatarUrl: ''
+  });
+  const [commentCount, setCommentCount] = useState<number>(0);
+
+  const [isLiked, setIsLiked] = useState<boolean>(
+    currentUser ? (post.likes || []).includes(currentUser.uid) : false
+  );
+  const [likeCount, setLikeCount] = useState<number>(post.likes?.length || 0);
+
+  // Fetch poster details from Firestore users/{userId} matching native PostAdapter.java
+  useEffect(() => {
+    let isMounted = true;
+    if (post.userId) {
+      getPosterDetails(post.userId).then((res) => {
+        if (isMounted) setPoster(res);
+      });
+    }
+    if (post.id) {
+      getPostCommentCount(post.id).then((count) => {
+        if (isMounted) setCommentCount(count);
+      });
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [post.userId, post.id]);
+
+  // Clean URL without arbitrary string replacements
+  const getSanitizedImageUrl = (url?: string): string => {
+    if (!url || typeof url !== 'string') return '';
+    let cleaned = url.trim();
+    if (cleaned.startsWith('http://')) {
+      cleaned = cleaned.replace('http://', 'https://');
+    }
+    return cleaned;
+  };
+
+  const rawImageUrl = post.imageUrl || '';
+  const imageUrlString = getSanitizedImageUrl(rawImageUrl);
+  const hasImage = Boolean(imageUrlString.length > 0);
+
+  // Log runtime diagnostics for image loading
+  if (hasImage) {
+    console.log(`[PostCard Diagnostics - ${post.id}]`, {
+      originalUrl: rawImageUrl,
+      finalUrlPassedToImage: imageUrlString,
+      projectId: firebaseConfig.projectId,
+      storageBucket: firebaseConfig.storageBucket,
+      userUid: currentUser?.uid || null,
+      isAuthenticated: Boolean(currentUser)
+    });
+  }
+
+  // Relative Time formatting exactly matching native PostAdapter.java getRelativeTime
+  const getRelativeTimeString = (dateObj: Date): string => {
+    const now = new Date();
+    const diffSeconds = Math.floor((now.getTime() - dateObj.getTime()) / 1000);
+
+    if (diffSeconds < 60) return 'Vừa xong';
+    if (diffSeconds < 3600) return `${Math.floor(diffSeconds / 60)} phút trước`;
+    if (diffSeconds < 86400) return `${Math.floor(diffSeconds / 3600)} giờ trước`;
+    
+    return `${dateObj.getDate()} tháng ${dateObj.getMonth() + 1}`;
+  };
 
   const formattedDate = post.createdAt?.toDate
-    ? post.createdAt.toDate().toLocaleTimeString('vi-VN', {
-        hour: '2-digit',
-        minute: '2-digit'
-      }) + ' ' + post.createdAt.toDate().toLocaleDateString('vi-VN', {
-        day: '2-digit',
-        month: '2-digit'
-      })
-    : 'Mới đăng';
+    ? getRelativeTimeString(post.createdAt.toDate())
+    : '28 tháng 4';
+
+  const handleToggleLike = async () => {
+    if (!currentUser) return;
+    const newIsLiked = !isLiked;
+    setIsLiked(newIsLiked);
+    setLikeCount((prev) => (newIsLiked ? prev + 1 : Math.max(0, prev - 1)));
+
+    if (post.id) {
+      try {
+        await toggleLikePost(post.id, currentUser.uid, isLiked);
+      } catch (e) {
+        console.error('Like toggle error:', e);
+      }
+    }
+  };
 
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.9}>
-      {/* Top Header Row */}
+    <View style={styles.cardContainer}>
+      {/* 1. Header: Avatar + Poster Name + Verified Badge + Date + 3-dots */}
       <View style={styles.headerRow}>
-        <View style={[styles.typeBadge, isLost ? styles.lostBadge : styles.foundBadge]}>
-          <Text style={[styles.typeBadgeText, isLost ? styles.lostText : styles.foundText]}>
-            {isLost ? 'MẤT ĐỒ 🚨' : 'NHẶT ĐƯỢC 📦'}
-          </Text>
+        <View style={styles.avatarFrame}>
+          {poster.avatarUrl ? (
+            <Image 
+              source={{ uri: getSanitizedImageUrl(poster.avatarUrl) }} 
+              style={styles.avatarImage} 
+              resizeMode="cover"
+              onLoad={(event) => {
+                console.log(`[Avatar Image Load SUCCESS - User ${post.userId}]`, event.nativeEvent);
+              }}
+              onError={(error) => {
+                console.error(`[Avatar Image Load ERROR - User ${post.userId}]`, {
+                  error: error.nativeEvent?.error || error,
+                  originalUrl: poster.avatarUrl,
+                  projectId: firebaseConfig.projectId,
+                  storageBucket: firebaseConfig.storageBucket,
+                  userUid: currentUser?.uid || null,
+                  isAuthenticated: Boolean(currentUser)
+                });
+              }}
+          />
+          ) : (
+            <View style={styles.avatarPlaceholder}>
+              <Text style={styles.avatarInitial}>{poster.name.charAt(0).toUpperCase()}</Text>
+            </View>
+          )}
         </View>
 
-        {isResolved ? (
-          <View style={styles.resolvedBadge}>
-            <Ionicons name="checkmark-circle" size={14} color="#FFFFFF" />
-            <Text style={styles.resolvedText}>ĐÃ GIẢI QUYẾT</Text>
+        <View style={styles.headerInfoCol}>
+          <View style={styles.nameRow}>
+            <Text style={styles.posterName}>{poster.name}</Text>
+            {/* Verified Blue Checkmark */}
+            <Ionicons name="checkmark-circle" size={16} color="#2563EB" style={styles.verifyIcon} />
           </View>
-        ) : (
-          <Text style={styles.dateText}>{formattedDate}</Text>
-        )}
+          <Text style={styles.createdDate}>{formattedDate}</Text>
+        </View>
+
+        <TouchableOpacity 
+          style={styles.moreBtn} 
+          onPress={() => Alert.alert('Tùy chọn', 'Tùy chọn bài đăng')}
+        >
+          <Ionicons name="ellipsis-vertical" size={20} color="#71717A" />
+        </TouchableOpacity>
       </View>
 
-      {/* Main Body Row */}
-      <View style={styles.bodyRow}>
-        {post.imageUrl ? (
-          <Image source={{ uri: post.imageUrl }} style={styles.image} resizeMode="cover" />
-        ) : (
-          <View style={styles.placeholderImage}>
-            <Ionicons name="image-outline" size={32} color="#CBD5E1" />
-          </View>
-        )}
+      {/* 2. Title & Description */}
+      <TouchableOpacity onPress={onPress} activeOpacity={0.9}>
+        <Text style={styles.postTitle} numberOfLines={2}>{post.title}</Text>
+        <Text style={styles.postDescription} numberOfLines={3}>{post.description}</Text>
 
-        <View style={styles.infoCol}>
-          <Text style={styles.title} numberOfLines={1}>{post.title}</Text>
-          <Text style={styles.description} numberOfLines={2}>{post.description}</Text>
+        {/* 3. Image Container with Top-Left Type Badge & Bottom Location Overlay */}
+        {hasImage ? (
+          <View style={styles.imageContainer}>
+            <Image 
+              source={{ uri: imageUrlString }} 
+              style={styles.postImage} 
+              resizeMode="cover"
+              onLoad={(event) => {
+                console.log(`[Post Image Load SUCCESS - Post ${post.id}]`, event.nativeEvent);
+              }}
+              onError={(error) => {
+                console.error(`[Post Image Load ERROR - Post ${post.id}]`, {
+                  error: error.nativeEvent?.error || error,
+                  originalUrl: rawImageUrl,
+                  finalUrl: imageUrlString,
+                  projectId: firebaseConfig.projectId,
+                  storageBucket: firebaseConfig.storageBucket,
+                  userUid: currentUser?.uid || null,
+                  isAuthenticated: Boolean(currentUser)
+                });
+              }}
+            />
 
-          {/* AI Tag if present */}
-          {post.imageLabel ? (
-            <View style={styles.aiTag}>
-              <Ionicons name="sparkles" size={12} color={COLORS.primary} />
-              <Text style={styles.aiTagText}>
-                AI: {post.imageLabel} ({Math.round((post.confidence || 0.8) * 100)}%)
+            {/* Type Badge (THẤT LẠC / TÌM THẤY) */}
+            <View style={[styles.typeBadge, isLost ? styles.lostBadge : styles.foundBadge]}>
+              <Text style={styles.typeBadgeText}>
+                {isLost ? 'THẤT LẠC' : 'TÌM THẤY'}
               </Text>
             </View>
-          ) : null}
 
-          {/* Address */}
-          {post.address ? (
-            <View style={styles.locationRow}>
-              <Ionicons name="location-outline" size={14} color="#64748B" />
-              <Text style={styles.locationText} numberOfLines={1}>
-                {post.address}
-              </Text>
-            </View>
-          ) : null}
-        </View>
-      </View>
-
-      {/* Card Footer */}
-      <View style={styles.footerRow}>
-        <View style={styles.statItem}>
-          <Ionicons name="heart-outline" size={16} color="#64748B" />
-          <Text style={styles.statText}>{post.likes?.length || 0} lượt thích</Text>
-        </View>
-
-        {post.rewardPoints && post.rewardPoints > 0 ? (
-          <View style={styles.rewardBadge}>
-            <Ionicons name="trophy" size={12} color="#B45309" />
-            <Text style={styles.rewardText}>Thưởng {post.rewardPoints}P</Text>
+            {/* Location Overlay Bar */}
+            {post.address ? (
+              <View style={styles.locationOverlay}>
+                <Ionicons name="location" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+                <Text style={styles.locationOverlayText} numberOfLines={1}>
+                  {post.address}
+                </Text>
+              </View>
+            ) : null}
           </View>
         ) : null}
+      </TouchableOpacity>
+
+      {/* 4. Bottom Action Bar: Genuine Facebook-style Like & Circle Comment Icons */}
+      <View style={styles.actionsRow}>
+        <TouchableOpacity 
+          style={styles.actionBtn} 
+          onPress={handleToggleLike}
+          activeOpacity={0.7}
+        >
+          <Feather 
+            name="thumbs-up" 
+            size={20} 
+            color={isLiked ? '#1877F2' : '#65676B'} 
+          />
+          {likeCount > 0 && (
+            <Text style={[styles.actionCount, isLiked && { color: '#1877F2', fontWeight: '700' }]}>
+              {likeCount}
+            </Text>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.actionBtn} onPress={onPress} activeOpacity={0.7}>
+          <Feather name="message-circle" size={20} color="#65676B" />
+          {commentCount > 0 && (
+            <Text style={styles.actionCount}>{commentCount}</Text>
+          )}
+        </TouchableOpacity>
       </View>
-    </TouchableOpacity>
+
+      {/* Card Divider */}
+      <View style={styles.bottomDivider} />
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  card: {
+  cardContainer: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 2
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    marginBottom: 8
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: SPACING.sm
+    marginBottom: 10
+  },
+  avatarFrame: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 2,
+    borderColor: '#00C853',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+    backgroundColor: '#F8FAFC'
+  },
+  avatarImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20
+  },
+  avatarPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#00C853',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  avatarInitial: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#FFFFFF'
+  },
+  headerInfoCol: {
+    flex: 1,
+    justifyContent: 'center'
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center'
+  },
+  posterName: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#111111'
+  },
+  verifyIcon: {
+    marginLeft: 4
+  },
+  createdDate: {
+    fontSize: 12,
+    color: '#71717A',
+    marginTop: 2
+  },
+  moreBtn: {
+    padding: 4
+  },
+  postTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#111111',
+    marginBottom: 4,
+    lineHeight: 22
+  },
+  postDescription: {
+    fontSize: 14,
+    color: '#374151',
+    marginBottom: 12,
+    lineHeight: 20
+  },
+  imageContainer: {
+    width: '100%',
+    height: 220,
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 12,
+    backgroundColor: '#E5E7EB',
+    position: 'relative'
+  },
+  postImage: {
+    width: '100%',
+    height: 220,
+    borderRadius: 16
   },
   typeBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 14,
+    zIndex: 10
   },
   lostBadge: {
-    backgroundColor: '#FEE2E2'
+    backgroundColor: '#EF4444'
   },
   foundBadge: {
-    backgroundColor: '#DCFCE7'
+    backgroundColor: '#00C853'
   },
   typeBadgeText: {
     fontSize: 11,
-    fontWeight: '800'
-  },
-  lostText: {
-    color: '#DC2626'
-  },
-  foundText: {
-    color: '#15803D'
-  },
-  resolvedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#6366F1',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8
-  },
-  resolvedText: {
-    fontSize: 10,
-    fontWeight: '700',
+    fontWeight: '900',
     color: '#FFFFFF',
-    marginLeft: 4
+    letterSpacing: 0.5
   },
-  dateText: {
-    fontSize: 12,
-    color: '#94A3B8',
-    fontWeight: '500'
-  },
-  bodyRow: {
+  locationOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
     flexDirection: 'row',
-    marginTop: 2
-  },
-  image: {
-    width: 90,
-    height: 90,
-    borderRadius: 12,
-    backgroundColor: '#F1F5F9'
-  },
-  placeholderImage: {
-    width: 90,
-    height: 90,
-    borderRadius: 12,
-    backgroundColor: '#F1F5F9',
     alignItems: 'center',
-    justifyContent: 'center'
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    zIndex: 10
   },
-  infoCol: {
-    flex: 1,
-    marginLeft: SPACING.md,
-    justifyContent: 'center'
-  },
-  title: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 4,
-    lineHeight: 20
-  },
-  description: {
+  locationOverlayText: {
     fontSize: 13,
-    color: '#64748B',
-    lineHeight: 18,
-    marginBottom: 6
-  },
-  aiTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E6F6F4',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    marginBottom: 4
-  },
-  aiTagText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#00A896',
-    marginLeft: 4
-  },
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center'
-  },
-  locationText: {
-    fontSize: 12,
-    color: '#64748B',
-    marginLeft: 4,
+    fontWeight: '500',
+    color: '#FFFFFF',
     flex: 1
   },
-  footerRow: {
+  actionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: SPACING.sm,
-    paddingTop: SPACING.xs,
-    borderTopWidth: 1,
-    borderTopColor: '#F8FAFC'
+    paddingVertical: 8
   },
-  statItem: {
-    flexDirection: 'row',
-    alignItems: 'center'
-  },
-  statText: {
-    fontSize: 12,
-    color: '#64748B',
-    marginLeft: 4
-  },
-  rewardBadge: {
+  actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8
+    marginRight: 24,
+    paddingVertical: 4
   },
-  rewardText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#B45309',
-    marginLeft: 4
+  actionCount: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#65676B',
+    marginLeft: 6
+  },
+  bottomDivider: {
+    height: 8,
+    backgroundColor: '#F3F4F6',
+    marginHorizontal: -16,
+    marginTop: 8
   }
 });
