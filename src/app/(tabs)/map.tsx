@@ -116,7 +116,7 @@ export default function MapScreen() {
             const themeColor = isLost ? '#EF4444' : '#10B981';
 
             if (isZoomedOut) {
-              // Compact pin when zoomed far out
+              // Compact custom dot pin when zoomed far out (No native pinColor prop to avoid Android crashes)
               return (
                 <Marker
                   key={post.id}
@@ -124,8 +124,12 @@ export default function MapScreen() {
                     latitude: post.lat!,
                     longitude: post.lng!,
                   }}
-                  pinColor={themeColor}
+                  tracksViewChanges={false}
                 >
+                  <View style={[styles.compactDotWrapper, { backgroundColor: themeColor }]}>
+                    <View style={styles.compactDotInner} />
+                  </View>
+
                   <Callout tooltip={Platform.OS === 'android'} onPress={() => router.push(`/post/${post.id}`)}>
                     <View style={styles.calloutContainer}>
                       <Text style={styles.calloutTitle} numberOfLines={1}>{post.title}</Text>
@@ -235,6 +239,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 52,
     height: 60,
+  },
+  compactDotWrapper: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 4,
+  },
+  compactDotInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#FFFFFF',
   },
   avatarWrapper: {
     width: 46,
