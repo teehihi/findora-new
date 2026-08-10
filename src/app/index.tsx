@@ -1,14 +1,21 @@
-import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, Image, ImageBackground, ActivityIndicator } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, StyleSheet, Image, ImageBackground, Animated } from 'react-native';
 import { useRouter } from 'expo-router';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../config/firebase';
 
 export default function SplashScreen() {
   const router = useRouter();
+  const progressAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // 2-second splash delay matching SplashActivity.java in native Findora
+    // Smooth progress bar animation over 1.8 seconds
+    Animated.timing(progressAnim, {
+      toValue: 1,
+      duration: 1800,
+      useNativeDriver: false
+    }).start();
+
     const timer = setTimeout(() => {
       const unsubscribe = onAuthStateChanged(auth, (user) => {
         if (user) {
@@ -22,6 +29,11 @@ export default function SplashScreen() {
 
     return () => clearTimeout(timer);
   }, []);
+
+  const progressWidth = progressAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0%', '100%']
+  });
 
   return (
     <ImageBackground
@@ -37,8 +49,11 @@ export default function SplashScreen() {
           resizeMode="contain"
         />
 
+        {/* Horizontal Loading Progress Bar */}
         <View style={styles.footer}>
-          <ActivityIndicator size="large" color="#00A896" />
+          <View style={styles.progressTrack}>
+            <Animated.View style={[styles.progressFill, { width: progressWidth }]} />
+          </View>
         </View>
       </View>
     </ImageBackground>
@@ -63,6 +78,19 @@ const styles = StyleSheet.create({
   },
   footer: {
     position: 'absolute',
-    bottom: 60
+    bottom: 80,
+    alignItems: 'center'
+  },
+  progressTrack: {
+    width: 220,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(0, 168, 150, 0.2)',
+    overflow: 'hidden'
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 3,
+    backgroundColor: '#00A896'
   }
 });
