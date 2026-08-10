@@ -41,62 +41,13 @@ class MapErrorBoundary extends React.Component<{ children: React.ReactNode }, { 
   }
 }
 
-// Custom Item Image Avatar Marker with Android Network Image Load Tracking
-function CustomItemMarker({ post, isLost, themeColor, onPress }: { post: Post; isLost: boolean; themeColor: string; onPress: () => void }) {
-  const [tracksViewChanges, setTracksViewChanges] = useState(true);
-
-  return (
-    <Marker
-      key={`${post.id}_custom_avatar`}
-      coordinate={{
-        latitude: post.lat!,
-        longitude: post.lng!,
-      }}
-      tracksViewChanges={tracksViewChanges}
-    >
-      <View style={styles.customMarkerContainer}>
-        <View style={[styles.avatarWrapper, { borderColor: themeColor }]}>
-          {post.imageUrl ? (
-            <Image
-              source={{ uri: post.imageUrl }}
-              style={styles.avatarImage}
-              onLoadEnd={() => setTracksViewChanges(false)}
-            />
-          ) : (
-            <Ionicons
-              name={isLost ? 'search-outline' : 'checkmark-circle-outline'}
-              size={20}
-              color={themeColor}
-            />
-          )}
-          <View style={[styles.badgeContainer, { backgroundColor: themeColor }]}>
-            <Text style={styles.badgeText}>{isLost ? '?' : '✓'}</Text>
-          </View>
-        </View>
-        <View style={[styles.pinTip, { borderTopColor: themeColor }]} />
-      </View>
-
-      <Callout tooltip={Platform.OS === 'android'} onPress={onPress}>
-        <View style={styles.calloutContainer}>
-          <Text style={styles.calloutTitle} numberOfLines={1}>{post.title}</Text>
-          <Text style={styles.calloutType}>
-            {isLost ? '🔴 Báo Mất' : '🟢 Nhặt Được'}
-          </Text>
-          {post.address ? (
-            <Text style={styles.calloutAddress} numberOfLines={1}>{post.address}</Text>
-          ) : null}
-        </View>
-      </Callout>
-    </Marker>
-  );
-}
-
 export default function MapScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [filter, setFilter] = useState<'all' | 'lost' | 'found'>('all');
+  const [tracksViewChanges, setTracksViewChanges] = useState(true);
   const [region, setRegion] = useState({
     latitude: 10.8505, // HCMUTE / Thu Duc default coordinates
     longitude: 106.7717,
@@ -106,6 +57,14 @@ export default function MapScreen() {
 
   useEffect(() => {
     fetchPosts('all').then((data) => {
+      // Pre-fetch all post images into disk/memory cache (similar to Glide in native Android)
+      data.forEach((p) => {
+        const img = p.imageUrl;
+        if (img && typeof img === 'string' && img.startsWith('http')) {
+          Image.prefetch(img).catch(() => {});
+        }
+      });
+
       // Map all posts and ensure every single post has valid lat/lng coordinates
       const mapped = data.map((p, idx) => {
         let latVal = p.lat != null ? Number(p.lat) : null;
@@ -128,6 +87,12 @@ export default function MapScreen() {
 
       setPosts(mapped);
 
+      // Keep tracksViewChanges true for 3 seconds so Android MapView captures fully loaded image bitmaps
+      setTracksViewChanges(true);
+      const timer = setTimeout(() => {
+        setTracksViewChanges(false);
+      }, 3000);
+
       if (mapped.length > 0 && mapRef.current) {
         const coords = mapped.map((p) => ({
           latitude: p.lat!,
@@ -140,6 +105,8 @@ export default function MapScreen() {
           });
         }, 600);
       }
+
+      return () => clearTimeout(timer);
     });
   }, []);
 
@@ -200,7 +167,7 @@ export default function MapScreen() {
                     latitude: post.lat!,
                     longitude: post.lng!,
                   }}
-                  tracksViewChanges={false}
+                  tracksViewChanges={tracksViewChanges}
                 >
                   <View style={[styles.compactDotWrapper, { backgroundColor: themeColor }]}>
                     <View style={styles.compactDotInner} />
@@ -223,13 +190,47 @@ export default function MapScreen() {
 
             // Custom Avatar Image Pin Marker when zoomed in
             return (
-              <CustomItemMarker
+              <Marker
                 key={`${post.id}_custom_avatar`}
-                post={post}
-                isLost={isLost}
-                themeColor={themeColor}
-                onPress={() => router.push(`/post/${post.id}`)}
-              />
+                coordinate={{
+                  latitude: post.lat!,
+                  longitude: post.lng!,
+                }}
+                tracksViewChanges={tracksViewChanges}
+              >
+                <View style={styles.customMarkerContainer}>
+                  <View style={[styles.avatarWrapper, { borderColor: themeColor }]}>
+                    {post.imageUrl ? (
+                      <Image
+                        source={{ uri: post.imageUrl }}
+                        style={styles.avatarImage}
+                      />
+                    ) : (
+                      <Ionicons
+                        name={isLost ? 'search-outline' : 'checkmark-circle-outline'}
+                        size={20}
+                        color={themeColor}
+                      />
+                    )}
+                    <View style={[styles.badgeContainer, { backgroundColor: themeColor }]}>
+                      <Text style={styles.badgeText}>{isLost ? '?' : '✓'}</Text>
+                    </View>
+                  </View>
+                  <View style={[styles.pinTip, { borderTopColor: themeColor }]} />
+                </View>
+
+                <Callout tooltip={Platform.OS === 'android'} onPress={() => router.push(`/post/${post.id}`)}>
+                  <View style={styles.calloutContainer}>
+                    <Text style={styles.calloutTitle} numberOfLines={1}>{post.title}</Text>
+                    <Text style={styles.calloutType}>
+                      {isLost ? '🔴 Báo Mất' : '🟢 Nhặt Được'}
+                    </Text>
+                    {post.address ? (
+                      <Text style={styles.calloutAddress} numberOfLines={1}>{post.address}</Text>
+                    ) : null}
+                  </View>
+                </Callout>
+              </Marker>
             );
           })}
         </MapView>
@@ -281,9 +282,9 @@ const styles = StyleSheet.create({
   },
   customMarkerContainer: {
     alignItems: 'center',
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
     width: 48,
-    height: 56,
+    height: 54,
   },
   compactDotWrapper: {
     width: 22,
@@ -313,7 +314,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.25,
