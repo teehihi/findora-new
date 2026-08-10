@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -9,22 +9,84 @@ import {
   Alert, 
   KeyboardAvoidingView, 
   Platform,
-  ScrollView
+  ScrollView,
+  Image
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { 
+  signInWithEmailAndPassword, 
+  GoogleAuthProvider, 
+  signInWithCredential 
+} from 'firebase/auth';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import * as Google from 'expo-auth-session/providers/google';
+import * as WebBrowser from 'expo-web-browser';
 import { Ionicons } from '@expo/vector-icons';
-import { auth } from '../../config/firebase';
+import { auth, db } from '../../config/firebase';
 import { COLORS, SPACING } from '../../constants/theme';
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  const handleLogin = async () => {
+  // Configure Google Auth Session
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    webClientId: '32712775834-at73e6qgmgo8shir419fks3v8daj8pjn.apps.googleusercontent.com',
+    androidClientId: '32712775834-2cf02a6qtip9ter0jlft4c6rs5741elf.apps.googleusercontent.com',
+    iosClientId: '32712775834-at73e6qgmgo8shir419fks3v8daj8pjn.apps.googleusercontent.com'
+  });
+
+  useEffect(() => {
+    if (response?.type === 'success') {
+      const { id_token } = response.params;
+      if (id_token) {
+        handleGoogleSignInWithToken(id_token);
+      }
+    }
+  }, [response]);
+
+  const handleGoogleSignInWithToken = async (idToken: string) => {
+    try {
+      setGoogleLoading(true);
+      const credential = GoogleAuthProvider.credential(idToken);
+      const userCredential = await signInWithCredential(auth, credential);
+      const user = userCredential.user;
+
+      // Check if user already exists in Firestore
+      const userDocRef = doc(db, 'users', user.uid);
+      const userSnap = await getDoc(userDocRef);
+
+      if (!userSnap.exists()) {
+        // Save new Google user to Firestore
+        await setDoc(userDocRef, {
+          uid: user.uid,
+          name: user.displayName || user.email?.split('@')[0] || 'User',
+          email: user.email || '',
+          avatarUrl: user.photoURL || '',
+          phone: '',
+          points: 100, // Initial bonus points
+          reputationScore: 100,
+          resolvedCount: 0,
+          authProvider: 'google',
+          createdAt: serverTimestamp()
+        });
+      }
+
+      setGoogleLoading(false);
+      router.replace('/(tabs)');
+    } catch (error: any) {
+      setGoogleLoading(false);
+      Alert.alert('Đăng nhập Google thất bại', error.message || 'Không thể xác thực với Google.');
+    }
+  };
+
+  const handleEmailLogin = async () => {
     if (!email.trim() || !password.trim()) {
       Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ Email và Mật khẩu.');
       return;
@@ -47,12 +109,13 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        {/* App Hero Branding */}
+        {/* Genuine Brand Logo */}
         <View style={styles.brandContainer}>
-          <View style={styles.logoCircle}>
-            <Ionicons name="search" size={40} color={COLORS.primary} />
-          </View>
-          <Text style={styles.appName}>Findora</Text>
+          <Image
+            source={require('../../../assets/images/Logo_noBG.png')}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
           <Text style={styles.tagline}>Nền tảng tìm đồ thất lạc AI thông minh</Text>
         </View>
 
@@ -101,7 +164,7 @@ export default function LoginScreen() {
 
           <TouchableOpacity 
             style={styles.loginBtn} 
-            onPress={handleLogin}
+            onPress={handleEmailLogin}
             disabled={loading}
             activeOpacity={0.8}
           >
@@ -109,6 +172,30 @@ export default function LoginScreen() {
               <ActivityIndicator color="#FFFFFF" />
             ) : (
               <Text style={styles.loginBtnText}>Đăng Nhập</Text>
+            )}
+          </TouchableOpacity>
+
+          {/* Social Sign-In Divider */}
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>HOẶC ĐĂNG NHẬP VỚI</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          {/* Google Sign-In Button */}
+          <TouchableOpacity 
+            style={styles.googleBtn} 
+            onPress={() => promptAsync()}
+            disabled={googleLoading || !request}
+            activeOpacity={0.8}
+          >
+            {googleLoading ? (
+              <ActivityIndicator color="#1F1F1F" />
+            ) : (
+              <View style={styles.googleBtnContent}>
+                <Ionicons name="logo-google" size={20} color="#EA4335" style={{ marginRight: 10 }} />
+                <Text style={styles.googleBtnText}>Tiếp tục với Google</Text>
+              </View>
             )}
           </TouchableOpacity>
 
@@ -137,25 +224,14 @@ const styles = StyleSheet.create({
   },
   brandContainer: {
     alignItems: 'center',
-    marginBottom: SPACING.xl
+    marginBottom: SPACING.lg
   },
-  logoCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: COLORS.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: SPACING.sm
-  },
-  appName: {
-    fontSize: 32,
-    fontWeight: '900',
-    color: COLORS.primaryDark,
-    letterSpacing: 1
+  logoImage: {
+    width: 220,
+    height: 70
   },
   tagline: {
-    fontSize: 14,
+    fontSize: 13,
     color: COLORS.textMuted,
     marginTop: 4
   },
@@ -209,6 +285,41 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#FFFFFF'
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: SPACING.lg
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E2E8F0'
+  },
+  dividerText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94A3B8',
+    marginHorizontal: 12,
+    letterSpacing: 0.5
+  },
+  googleBtn: {
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 1,
+    borderColor: '#DADCE0',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  googleBtnContent: {
+    flexDirection: 'row',
+    alignItems: 'center'
+  },
+  googleBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1F1F1F'
   },
   registerRow: {
     flexDirection: 'row',

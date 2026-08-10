@@ -8,7 +8,8 @@ import {
   TouchableOpacity, 
   ActivityIndicator, 
   RefreshControl,
-  SafeAreaView
+  SafeAreaView,
+  Image
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -48,14 +49,13 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* App Header */}
+      {/* App Header with genuine Findora Logo */}
       <View style={styles.header}>
-        <View style={styles.brandRow}>
-          <View style={styles.logoIconCircle}>
-            <Ionicons name="search" size={20} color="#FFFFFF" />
-          </View>
-          <Text style={styles.brandTitle}>Findora</Text>
-        </View>
+        <Image
+          source={require('../../../assets/images/Logo_noBG.png')}
+          style={styles.headerLogo}
+          resizeMode="contain"
+        />
 
         <TouchableOpacity 
           style={styles.aiButton} 
@@ -176,29 +176,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
+    paddingVertical: SPACING.xs,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9'
   },
-  brandRow: {
-    flexDirection: 'row',
-    alignItems: 'center'
-  },
-  logoIconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#00A896',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8
-  },
-  brandTitle: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: '#00A896',
-    letterSpacing: -0.5
+  headerLogo: {
+    width: 130,
+    height: 40
   },
   aiButton: {
     flexDirection: 'row',

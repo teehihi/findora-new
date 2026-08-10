@@ -1,20 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Image, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, Image, ImageBackground, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { onAuthStateChanged } from 'firebase/auth';
-import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../config/firebase';
-import { COLORS } from '../constants/theme';
 
 export default function SplashScreen() {
   const router = useRouter();
-  const [checking, setChecking] = useState(true);
 
   useEffect(() => {
     // 2-second splash delay matching SplashActivity.java in native Findora
     const timer = setTimeout(() => {
       const unsubscribe = onAuthStateChanged(auth, (user) => {
-        setChecking(false);
         if (user) {
           router.replace('/(tabs)');
         } else {
@@ -28,64 +24,45 @@ export default function SplashScreen() {
   }, []);
 
   return (
-    <View style={styles.container}>
-      <View style={styles.logoContainer}>
-        <View style={styles.iconCircle}>
-          <Ionicons name="search" size={60} color="#FFFFFF" />
-        </View>
-        <Text style={styles.brandTitle}>Findora</Text>
-        <Text style={styles.brandSubtitle}>Nền tảng tìm đồ thất lạc AI</Text>
-      </View>
+    <ImageBackground
+      source={require('../../assets/images/Splash_BG.png')}
+      style={styles.background}
+      resizeMode="cover"
+    >
+      <View style={styles.container}>
+        {/* Centered Genuine Logo */}
+        <Image
+          source={require('../../assets/images/Logo_noBG.png')}
+          style={styles.logo}
+          resizeMode="contain"
+        />
 
-      <View style={styles.footerContainer}>
-        <ActivityIndicator size="large" color="#FFFFFF" />
-        <Text style={styles.versionText}>Phiên bản 1.0.0</Text>
+        <View style={styles.footer}>
+          <ActivityIndicator size="large" color="#00A896" />
+        </View>
       </View>
-    </View>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
+  background: {
+    flex: 1,
+    width: '100%',
+    height: '100%'
+  },
   container: {
     flex: 1,
-    backgroundColor: COLORS.primary,
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 60
-  },
-  logoContainer: {
-    alignItems: 'center',
-    marginTop: 120
-  },
-  iconCircle: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-    marginBottom: 20
+    paddingHorizontal: 20
   },
-  brandTitle: {
-    fontSize: 42,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    letterSpacing: 2
+  logo: {
+    width: 280,
+    height: 280
   },
-  brandSubtitle: {
-    fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.9)',
-    marginTop: 6,
-    fontWeight: '500'
-  },
-  footerContainer: {
-    alignItems: 'center'
-  },
-  versionText: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.7)',
-    marginTop: 12
+  footer: {
+    position: 'absolute',
+    bottom: 60
   }
 });
