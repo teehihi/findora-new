@@ -36,18 +36,23 @@ export default function LoginScreen() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  // Configure Google Auth Session
+  // Configure Google Auth Session with Account Chooser prompt extra parameter
   const [request, response, promptAsync] = Google.useAuthRequest({
+    clientId: '32712775834-at73e6qgmgo8shir419fks3v8daj8pjn.apps.googleusercontent.com',
     webClientId: '32712775834-at73e6qgmgo8shir419fks3v8daj8pjn.apps.googleusercontent.com',
     androidClientId: '32712775834-2cf02a6qtip9ter0jlft4c6rs5741elf.apps.googleusercontent.com',
-    iosClientId: '32712775834-at73e6qgmgo8shir419fks3v8daj8pjn.apps.googleusercontent.com'
+    iosClientId: '32712775834-at73e6qgmgo8shir419fks3v8daj8pjn.apps.googleusercontent.com',
+    scopes: ['profile', 'email'],
+    extraParams: {
+      prompt: 'select_account'
+    }
   });
 
   useEffect(() => {
     if (response?.type === 'success') {
-      const { id_token } = response.params;
-      if (id_token) {
-        handleGoogleSignInWithToken(id_token);
+      const idToken = response.authentication?.idToken || response.params?.id_token;
+      if (idToken) {
+        handleGoogleSignInWithToken(idToken);
       }
     }
   }, [response]);
