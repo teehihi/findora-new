@@ -581,22 +581,29 @@ export function subscribeComments(postId: string, callback: (comments: Comment[]
   const commentsRef = collection(db, 'comments');
   const q = query(commentsRef, where('postId', '==', postId), orderBy('createdAt', 'asc'));
 
-  return onSnapshot(q, (snapshot) => {
-    const comments: Comment[] = [];
-    snapshot.forEach((docSnap) => {
-      const data = docSnap.data();
-      comments.push({
-        id: docSnap.id,
-        postId: data.postId,
-        userId: data.userId,
-        userName: data.userName || 'Anonymous',
-        userAvatar: data.userAvatar || '',
-        content: data.content || '',
-        createdAt: data.createdAt
+  return onSnapshot(
+    q, 
+    (snapshot) => {
+      const comments: Comment[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        comments.push({
+          id: docSnap.id,
+          postId: data.postId,
+          userId: data.userId,
+          userName: data.userName || 'Anonymous',
+          userAvatar: data.userAvatar || '',
+          content: data.content || '',
+          createdAt: data.createdAt
+        });
       });
-    });
-    callback(comments);
-  });
+      callback(comments);
+    },
+    (error) => {
+      console.log('Comments listener error/permission notice:', error);
+      callback([]);
+    }
+  );
 }
 
 export async function addComment(commentData: Omit<Comment, 'id'>): Promise<string> {

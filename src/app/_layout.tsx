@@ -1,9 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { LogBox } from 'react-native';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import { setupOnlinePresence } from '../services/presenceService';
+
+LogBox.ignoreLogs([
+  'FirebaseError: [code=permission-denied]',
+  'Uncaught Error in snapshot listener',
+  'Missing or insufficient permissions',
+  '@firebase/firestore'
+]);
 
 export default function RootLayout() {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);

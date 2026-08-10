@@ -56,26 +56,33 @@ export default function ChatRoomScreen() {
       orderBy('timestamp', 'asc')
     );
 
-    const unsubMessages = onSnapshot(q, (snapshot) => {
-      const list: ChatMessage[] = [];
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        const isParticipant =
-          (data.senderId === currentUser.uid && data.receiverId === otherUserId) ||
-          (data.senderId === otherUserId && data.receiverId === currentUser.uid);
+    const unsubMessages = onSnapshot(
+      q, 
+      (snapshot) => {
+        const list: ChatMessage[] = [];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          const isParticipant =
+            (data.senderId === currentUser.uid && data.receiverId === otherUserId) ||
+            (data.senderId === otherUserId && data.receiverId === currentUser.uid);
 
-        if (isParticipant) {
-          list.push({
-            id: docSnap.id,
-            senderId: data.senderId,
-            receiverId: data.receiverId,
-            message: data.message || '',
-            timestamp: data.timestamp
-          });
-        }
-      });
-      setMessages(list);
-    });
+          if (isParticipant) {
+            list.push({
+              id: docSnap.id,
+              senderId: data.senderId,
+              receiverId: data.receiverId,
+              message: data.message || '',
+              timestamp: data.timestamp
+            });
+          }
+        });
+        setMessages(list);
+      },
+      (error) => {
+        console.log('Chat messages listener notice:', error);
+        setMessages([]);
+      }
+    );
 
     return () => {
       unsubPresence();

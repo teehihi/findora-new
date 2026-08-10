@@ -75,6 +75,14 @@
           }
         },
         {
+          "client_id": "32712775834-ksihvu7asmk8iiqrs95echab3v2922b0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "vn.edu.hcmute.findora",
+            "certificate_hash": "b6065bb5d27749194afd2ff6894ebc5eda7a5132"
+          }
+        },
+        {
           "client_id": "32712775834-at73e6qgmgo8shir419fks3v8daj8pjn.apps.googleusercontent.com",
           "client_type": 3
         }
