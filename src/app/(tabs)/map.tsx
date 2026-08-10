@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, Platform, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Platform, TouchableOpacity, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker, Callout } from 'react-native-maps';
 import { useRouter } from 'expo-router';
@@ -85,7 +85,7 @@ export default function MapScreen() {
         }));
         setTimeout(() => {
           mapRef.current?.fitToCoordinates(coords, {
-            edgePadding: { top: 60, right: 60, bottom: 100, left: 60 },
+            edgePadding: { top: 70, right: 60, bottom: 100, left: 60 },
             animated: true,
           });
         }, 600);
@@ -99,6 +99,9 @@ export default function MapScreen() {
     return true;
   });
 
+  // Dynamic zoom check: If map is zoomed far out (latitudeDelta > 0.16), show compact default pins
+  const isZoomedOut = region.latitudeDelta > 0.16;
+
   return (
     <View style={styles.container}>
       <MapErrorBoundary>
@@ -108,28 +111,78 @@ export default function MapScreen() {
           region={region} 
           onRegionChangeComplete={setRegion}
         >
-          {filteredPosts.map((post) => (
-            <Marker
-              key={post.id}
-              coordinate={{
-                latitude: post.lat!,
-                longitude: post.lng!,
-              }}
-              pinColor={post.type === 'lost' ? '#EF4444' : '#10B981'}
-            >
-              <Callout tooltip={Platform.OS === 'android'} onPress={() => router.push(`/post/${post.id}`)}>
-                <View style={styles.calloutContainer}>
-                  <Text style={styles.calloutTitle} numberOfLines={1}>{post.title}</Text>
-                  <Text style={styles.calloutType}>
-                    {post.type === 'lost' ? '🔴 Báo Mất' : '🟢 Nhặt Được'}
-                  </Text>
-                  {post.address ? (
-                    <Text style={styles.calloutAddress} numberOfLines={1}>{post.address}</Text>
-                  ) : null}
+          {filteredPosts.map((post) => {
+            const isLost = post.type === 'lost';
+            const themeColor = isLost ? '#EF4444' : '#10B981';
+
+            if (isZoomedOut) {
+              // Compact pin when zoomed far out
+              return (
+                <Marker
+                  key={post.id}
+                  coordinate={{
+                    latitude: post.lat!,
+                    longitude: post.lng!,
+                  }}
+                  pinColor={themeColor}
+                >
+                  <Callout tooltip={Platform.OS === 'android'} onPress={() => router.push(`/post/${post.id}`)}>
+                    <View style={styles.calloutContainer}>
+                      <Text style={styles.calloutTitle} numberOfLines={1}>{post.title}</Text>
+                      <Text style={styles.calloutType}>
+                        {isLost ? '🔴 Báo Mất' : '🟢 Nhặt Được'}
+                      </Text>
+                      {post.address ? (
+                        <Text style={styles.calloutAddress} numberOfLines={1}>{post.address}</Text>
+                      ) : null}
+                    </View>
+                  </Callout>
+                </Marker>
+              );
+            }
+
+            // Custom Avatar Image Pin Marker when zoomed in
+            return (
+              <Marker
+                key={post.id}
+                coordinate={{
+                  latitude: post.lat!,
+                  longitude: post.lng!,
+                }}
+                tracksViewChanges={false}
+              >
+                <View style={styles.customMarkerContainer}>
+                  <View style={[styles.avatarWrapper, { borderColor: themeColor }]}>
+                    {post.imageUrl ? (
+                      <Image source={{ uri: post.imageUrl }} style={styles.avatarImage} />
+                    ) : (
+                      <Ionicons
+                        name={isLost ? 'search-outline' : 'checkmark-circle-outline'}
+                        size={22}
+                        color={themeColor}
+                      />
+                    )}
+                    <View style={[styles.badgeContainer, { backgroundColor: themeColor }]}>
+                      <Text style={styles.badgeText}>{isLost ? '?' : '✓'}</Text>
+                    </View>
+                  </View>
+                  <View style={[styles.pinTip, { borderTopColor: themeColor }]} />
                 </View>
-              </Callout>
-            </Marker>
-          ))}
+
+                <Callout tooltip={Platform.OS === 'android'} onPress={() => router.push(`/post/${post.id}`)}>
+                  <View style={styles.calloutContainer}>
+                    <Text style={styles.calloutTitle} numberOfLines={1}>{post.title}</Text>
+                    <Text style={styles.calloutType}>
+                      {isLost ? '🔴 Báo Mất' : '🟢 Nhặt Được'}
+                    </Text>
+                    {post.address ? (
+                      <Text style={styles.calloutAddress} numberOfLines={1}>{post.address}</Text>
+                    ) : null}
+                  </View>
+                </Callout>
+              </Marker>
+            );
+          })}
         </MapView>
       </MapErrorBoundary>
 
@@ -176,6 +229,61 @@ const styles = StyleSheet.create({
   },
   map: {
     flex: 1
+  },
+  customMarkerContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 52,
+    height: 60,
+  },
+  avatarWrapper: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    borderWidth: 3,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'visible',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
+    elevation: 6,
+  },
+  avatarImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  badgeContainer: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 17,
+    height: 17,
+    borderRadius: 8.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '900',
+  },
+  pinTip: {
+    width: 0,
+    height: 0,
+    backgroundColor: 'transparent',
+    borderStyle: 'solid',
+    borderLeftWidth: 6,
+    borderRightWidth: 6,
+    borderTopWidth: 8,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    marginTop: -2,
   },
   filterBarWrapper: {
     position: 'absolute',
