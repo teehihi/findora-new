@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Platform, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import MapView, { Marker, Callout, UrlTile } from 'react-native-maps';
+import MapView, { Marker, Callout } from 'react-native-maps';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { fetchPosts } from '../../services/firebaseService';
@@ -69,19 +69,9 @@ export default function MapScreen() {
   }, []);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Ionicons name="map" size={24} color={COLORS.primary} />
-        <Text style={styles.headerTitle}>Bản Đồ Thất Lạc 📍</Text>
-      </View>
-
+    <View style={styles.container}>
       <MapErrorBoundary>
         <MapView style={styles.map} region={region} onRegionChangeComplete={setRegion}>
-          <UrlTile
-            urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-            maximumZ={19}
-            flipY={false}
-          />
           {posts
             .filter((p) => typeof p.lat === 'number' && typeof p.lng === 'number' && !isNaN(p.lat) && !isNaN(p.lng))
             .map((post) => (
@@ -108,7 +98,7 @@ export default function MapScreen() {
             ))}
         </MapView>
       </MapErrorBoundary>
-    </SafeAreaView>
+    </View>
   );
 }
 
