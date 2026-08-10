@@ -135,8 +135,11 @@ export const PostCard: React.FC<PostCardProps> = ({ post, onPress }) => {
       {hasImage ? (
         <TouchableOpacity 
           style={styles.imageContainer} 
-          onPress={() => setIsImageViewerVisible(true)}
-          activeOpacity={0.95}
+          onPress={(e) => {
+            e.stopPropagation();
+            setIsImageViewerVisible(true);
+          }}
+          activeOpacity={0.9}
         >
           <Image 
             source={{ uri: imageUrlString }} 
@@ -144,7 +147,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, onPress }) => {
             resizeMode="cover"
           />
 
-          {/* Type Badge (THẤT LẠC / TÌM THẤT) */}
+          {/* Type Badge (THẤT LẠC / TÌM THẤY) */}
           <View style={[styles.typeBadge, isLost ? styles.lostBadge : styles.foundBadge]}>
             <Text style={styles.typeBadgeText}>
               {isLost ? 'THẤT LẠC' : 'TÌM THẤY'}

@@ -30,35 +30,8 @@ export default function ChatListScreen() {
       return;
     }
 
-    // 1. Try native Findora 'chats' collection schema (participants: [uid1, uid2])
-    const chatsRef = collection(db, 'chats');
-    const qChats = query(chatsRef, where('participants', 'array-contains', user.uid));
-
-    const unsubChats = onSnapshot(qChats, async (snapshot) => {
-      if (!snapshot.empty) {
-        const list: Conversation[] = [];
-
-        for (const docSnap of snapshot.docs) {
-          const data = docSnap.data();
-          const participants: string[] = data.participants || [];
-          const otherId = participants.find(id => id !== user.uid) || user.uid;
-          const userDetails = await getPosterDetails(otherId);
-
-          list.push({
-            id: docSnap.id,
-            otherUserId: otherId,
-            otherUserName: userDetails.name || 'Người dùng Findora',
-            otherUserAvatar: userDetails.avatarUrl || '',
-            lastMessage: data.lastMessage || data.message || 'Bắt đầu trò chuyện',
-            timestamp: data.lastTimestamp || data.timestamp,
-            postId: data.postId
-          });
-        }
-
-        setConversations(list);
-        setLoading(false);
-      } else {
-        // Fallback: Query flat 'messages' collection
+    const loadFallbackMessages = async () => {
+      try {
         const msgsRef = collection(db, 'messages');
         const snap = await getDocs(msgsRef);
         const map = new Map<string, Conversation>();
@@ -83,12 +56,55 @@ export default function ChatListScreen() {
         }
 
         setConversations(Array.from(map.values()));
+      } catch (err) {
+        console.log('Messages fallback query notice:', err);
+      } finally {
         setLoading(false);
       }
-    }, (error) => {
-      console.log('Chats query notice:', error);
-      setLoading(false);
-    });
+    };
+
+    // 1. Try native Findora 'chats' collection schema safely
+    let unsubChats = () => {};
+    try {
+      const chatsRef = collection(db, 'chats');
+      const qChats = query(chatsRef, where('participants', 'array-contains', user.uid));
+
+      unsubChats = onSnapshot(
+        qChats, 
+        async (snapshot) => {
+          if (!snapshot.empty) {
+            const list: Conversation[] = [];
+            for (const docSnap of snapshot.docs) {
+              const data = docSnap.data();
+              const participants: string[] = data.participants || [];
+              const otherId = participants.find(id => id !== user.uid) || user.uid;
+              const userDetails = await getPosterDetails(otherId);
+
+              list.push({
+                id: docSnap.id,
+                otherUserId: otherId,
+                otherUserName: userDetails.name || 'Người dùng Findora',
+                otherUserAvatar: userDetails.avatarUrl || '',
+                lastMessage: data.lastMessage || data.message || 'Bắt đầu trò chuyện',
+                timestamp: data.lastTimestamp || data.timestamp,
+                postId: data.postId
+              });
+            }
+            setConversations(list);
+            setLoading(false);
+          } else {
+            await loadFallbackMessages();
+          }
+        }, 
+        (error) => {
+          console.log('Chats listener permission notice:', error);
+          loadFallbackMessages();
+        }
+      );
+    } catch (e) {
+      console.log('Chats query exception:', e);
+      loadFallbackMessages();
+    }
 
     return () => unsubChats();
   }, []);
