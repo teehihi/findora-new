@@ -20,6 +20,7 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import * as Google from 'expo-auth-session/providers/google';
+import { makeRedirectUri } from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import { Ionicons } from '@expo/vector-icons';
 import { auth, db } from '../../config/firebase';
@@ -36,16 +37,14 @@ export default function LoginScreen() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  // Configure Google Auth Session with Account Chooser prompt extra parameter
+  // Configure Google Auth Session with clean redirectUri
   const [request, response, promptAsync] = Google.useAuthRequest({
     clientId: '32712775834-at73e6qgmgo8shir419fks3v8daj8pjn.apps.googleusercontent.com',
     webClientId: '32712775834-at73e6qgmgo8shir419fks3v8daj8pjn.apps.googleusercontent.com',
     androidClientId: '32712775834-2cf02a6qtip9ter0jlft4c6rs5741elf.apps.googleusercontent.com',
     iosClientId: '32712775834-at73e6qgmgo8shir419fks3v8daj8pjn.apps.googleusercontent.com',
     scopes: ['profile', 'email'],
-    extraParams: {
-      prompt: 'select_account'
-    }
+    redirectUri: makeRedirectUri()
   });
 
   useEffect(() => {
@@ -90,6 +89,13 @@ export default function LoginScreen() {
       setGoogleLoading(false);
       Alert.alert('Đăng nhập Google thất bại', error.message || 'Không thể xác thực với Google.');
     }
+  };
+
+  const handleGoogleBtnPress = () => {
+    // preferEphemeralSession: true prevents Safari from remembering cached account session
+    promptAsync({
+      preferEphemeralSession: true
+    });
   };
 
   const handleEmailLogin = async () => {
@@ -191,7 +197,7 @@ export default function LoginScreen() {
           {/* Official Multi-Color Google Sign-In Button */}
           <TouchableOpacity 
             style={styles.googleBtn} 
-            onPress={() => promptAsync()}
+            onPress={handleGoogleBtnPress}
             disabled={googleLoading || !request}
             activeOpacity={0.8}
           >
