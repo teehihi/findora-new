@@ -23,6 +23,7 @@ import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 import { Ionicons } from '@expo/vector-icons';
 import { auth, db } from '../../config/firebase';
+import { GoogleLogo } from '../../components/GoogleLogo';
 import { COLORS, SPACING } from '../../constants/theme';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -182,7 +183,7 @@ export default function LoginScreen() {
             <View style={styles.dividerLine} />
           </View>
 
-          {/* Google Sign-In Button */}
+          {/* Official Multi-Color Google Sign-In Button */}
           <TouchableOpacity 
             style={styles.googleBtn} 
             onPress={() => promptAsync()}
@@ -193,7 +194,9 @@ export default function LoginScreen() {
               <ActivityIndicator color="#1F1F1F" />
             ) : (
               <View style={styles.googleBtnContent}>
-                <Ionicons name="logo-google" size={20} color="#EA4335" style={{ marginRight: 10 }} />
+                <View style={styles.googleLogoBox}>
+                  <GoogleLogo size={22} />
+                </View>
                 <Text style={styles.googleBtnText}>Tiếp tục với Google</Text>
               </View>
             )}
@@ -315,6 +318,9 @@ const styles = StyleSheet.create({
   googleBtnContent: {
     flexDirection: 'row',
     alignItems: 'center'
+  },
+  googleLogoBox: {
+    marginRight: 10
   },
   googleBtnText: {
     fontSize: 15,
