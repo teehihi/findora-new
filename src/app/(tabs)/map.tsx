@@ -41,6 +41,56 @@ class MapErrorBoundary extends React.Component<{ children: React.ReactNode }, { 
   }
 }
 
+// Custom Item Image Avatar Marker with Android Network Image Load Tracking
+function CustomItemMarker({ post, isLost, themeColor, onPress }: { post: Post; isLost: boolean; themeColor: string; onPress: () => void }) {
+  const [tracksViewChanges, setTracksViewChanges] = useState(true);
+
+  return (
+    <Marker
+      key={`${post.id}_custom_avatar`}
+      coordinate={{
+        latitude: post.lat!,
+        longitude: post.lng!,
+      }}
+      tracksViewChanges={tracksViewChanges}
+    >
+      <View style={styles.customMarkerContainer}>
+        <View style={[styles.avatarWrapper, { borderColor: themeColor }]}>
+          {post.imageUrl ? (
+            <Image
+              source={{ uri: post.imageUrl }}
+              style={styles.avatarImage}
+              onLoadEnd={() => setTracksViewChanges(false)}
+            />
+          ) : (
+            <Ionicons
+              name={isLost ? 'search-outline' : 'checkmark-circle-outline'}
+              size={20}
+              color={themeColor}
+            />
+          )}
+          <View style={[styles.badgeContainer, { backgroundColor: themeColor }]}>
+            <Text style={styles.badgeText}>{isLost ? '?' : '✓'}</Text>
+          </View>
+        </View>
+        <View style={[styles.pinTip, { borderTopColor: themeColor }]} />
+      </View>
+
+      <Callout tooltip={Platform.OS === 'android'} onPress={onPress}>
+        <View style={styles.calloutContainer}>
+          <Text style={styles.calloutTitle} numberOfLines={1}>{post.title}</Text>
+          <Text style={styles.calloutType}>
+            {isLost ? '🔴 Báo Mất' : '🟢 Nhặt Được'}
+          </Text>
+          {post.address ? (
+            <Text style={styles.calloutAddress} numberOfLines={1}>{post.address}</Text>
+          ) : null}
+        </View>
+      </Callout>
+    </Marker>
+  );
+}
+
 export default function MapScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -173,44 +223,13 @@ export default function MapScreen() {
 
             // Custom Avatar Image Pin Marker when zoomed in
             return (
-              <Marker
+              <CustomItemMarker
                 key={`${post.id}_custom_avatar`}
-                coordinate={{
-                  latitude: post.lat!,
-                  longitude: post.lng!,
-                }}
-                tracksViewChanges={false}
-              >
-                <View style={styles.customMarkerContainer}>
-                  <View style={[styles.avatarWrapper, { borderColor: themeColor }]}>
-                    {post.imageUrl ? (
-                      <Image source={{ uri: post.imageUrl }} style={styles.avatarImage} />
-                    ) : (
-                      <Ionicons
-                        name={isLost ? 'search-outline' : 'checkmark-circle-outline'}
-                        size={22}
-                        color={themeColor}
-                      />
-                    )}
-                    <View style={[styles.badgeContainer, { backgroundColor: themeColor }]}>
-                      <Text style={styles.badgeText}>{isLost ? '?' : '✓'}</Text>
-                    </View>
-                  </View>
-                  <View style={[styles.pinTip, { borderTopColor: themeColor }]} />
-                </View>
-
-                <Callout tooltip={Platform.OS === 'android'} onPress={() => router.push(`/post/${post.id}`)}>
-                  <View style={styles.calloutContainer}>
-                    <Text style={styles.calloutTitle} numberOfLines={1}>{post.title}</Text>
-                    <Text style={styles.calloutType}>
-                      {isLost ? '🔴 Báo Mất' : '🟢 Nhặt Được'}
-                    </Text>
-                    {post.address ? (
-                      <Text style={styles.calloutAddress} numberOfLines={1}>{post.address}</Text>
-                    ) : null}
-                  </View>
-                </Callout>
-              </Marker>
+                post={post}
+                isLost={isLost}
+                themeColor={themeColor}
+                onPress={() => router.push(`/post/${post.id}`)}
+              />
             );
           })}
         </MapView>
@@ -262,9 +281,9 @@ const styles = StyleSheet.create({
   },
   customMarkerContainer: {
     alignItems: 'center',
-    justifyContent: 'center',
-    width: 52,
-    height: 60,
+    justifyContent: 'flex-start',
+    width: 48,
+    height: 56,
   },
   compactDotWrapper: {
     width: 22,
@@ -287,53 +306,55 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   avatarWrapper: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     borderWidth: 3,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'visible',
+    position: 'relative',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.25,
-    shadowRadius: 5,
+    shadowRadius: 4,
     elevation: 6,
   },
   avatarImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
   },
   badgeContainer: {
     position: 'absolute',
-    bottom: -2,
-    right: -2,
-    width: 17,
-    height: 17,
-    borderRadius: 8.5,
+    bottom: -1,
+    right: -1,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
     borderColor: '#FFFFFF',
+    zIndex: 10,
   },
   badgeText: {
     color: '#FFFFFF',
     fontSize: 9,
     fontWeight: '900',
+    lineHeight: 11,
   },
   pinTip: {
     width: 0,
     height: 0,
     backgroundColor: 'transparent',
     borderStyle: 'solid',
-    borderLeftWidth: 6,
-    borderRightWidth: 6,
-    borderTopWidth: 8,
+    borderLeftWidth: 5,
+    borderRightWidth: 5,
+    borderTopWidth: 7,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    marginTop: -2,
+    marginTop: -1,
   },
   filterBarWrapper: {
     position: 'absolute',
