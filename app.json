@@ -20,6 +20,11 @@
     "android": {
       "package": "vn.edu.hcmute.findora",
       "googleServicesFile": "./google-services.json",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyYOUR_GOOGLE_MAPS_API_KEY_HERE"
+        }
+      },
       "adaptiveIcon": {
         "backgroundColor": "#00A896",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

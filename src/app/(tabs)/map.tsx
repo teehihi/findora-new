@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker, Callout } from 'react-native-maps';
 import { useRouter } from 'expo-router';
@@ -42,28 +42,30 @@ export default function MapScreen() {
       </View>
 
       <MapView style={styles.map} region={region} onRegionChangeComplete={setRegion}>
-        {posts.map((post) => (
-          <Marker
-            key={post.id}
-            coordinate={{
-              latitude: post.lat!,
-              longitude: post.lng!,
-            }}
-            pinColor={post.type === 'lost' ? '#EF4444' : '#10B981'}
-          >
-            <Callout onPress={() => router.push(`/post/${post.id}`)}>
-              <View style={styles.calloutContainer}>
-                <Text style={styles.calloutTitle} numberOfLines={1}>{post.title}</Text>
-                <Text style={styles.calloutType}>
-                  {post.type === 'lost' ? '🔴 Báo Mất' : '🟢 Nhặt Được'}
-                </Text>
-                {post.address ? (
-                  <Text style={styles.calloutAddress} numberOfLines={1}>{post.address}</Text>
-                ) : null}
-              </View>
-            </Callout>
-          </Marker>
-        ))}
+        {posts
+          .filter((p) => typeof p.lat === 'number' && typeof p.lng === 'number' && !isNaN(p.lat) && !isNaN(p.lng))
+          .map((post) => (
+            <Marker
+              key={post.id}
+              coordinate={{
+                latitude: Number(post.lat),
+                longitude: Number(post.lng),
+              }}
+              pinColor={post.type === 'lost' ? '#EF4444' : '#10B981'}
+            >
+              <Callout tooltip={Platform.OS === 'android'} onPress={() => router.push(`/post/${post.id}`)}>
+                <View style={styles.calloutContainer}>
+                  <Text style={styles.calloutTitle} numberOfLines={1}>{post.title}</Text>
+                  <Text style={styles.calloutType}>
+                    {post.type === 'lost' ? '🔴 Báo Mất' : '🟢 Nhặt Được'}
+                  </Text>
+                  {post.address ? (
+                    <Text style={styles.calloutAddress} numberOfLines={1}>{post.address}</Text>
+                  ) : null}
+                </View>
+              </Callout>
+            </Marker>
+          ))}
       </MapView>
     </SafeAreaView>
   );
