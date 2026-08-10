@@ -14,8 +14,9 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { fetchPosts, getCurrentAddressFromGPS, subscribeUnreadNotificationCount } from '../../services/firebaseService';
+import { findMatches } from '../../services/aiMatching';
 import { auth } from '../../config/firebase';
-import { Post } from '../../models/types';
+import { Post, MatchResult } from '../../models/types';
 import { PostCard } from '../../components/PostCard';
 
 export default function HomeScreen() {
@@ -29,6 +30,7 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [userLocation, setUserLocation] = useState<string>('Thành phố Hồ Chí Minh');
   const [unreadCount, setUnreadCount] = useState<number>(0);
+  const [topMatch, setTopMatch] = useState<{ count: number; best: MatchResult | null }>({ count: 0, best: null });
 
   const loadLocation = async () => {
     try {
@@ -45,6 +47,33 @@ export default function HomeScreen() {
     try {
       const data = await fetchPosts(typeFilter, searchQuery);
       setPosts(data);
+
+      // Compute dynamic AI match recommendation for user
+      if (data.length > 0) {
+        let results: MatchResult[] = [];
+        if (currentUser) {
+          const userPosts = data.filter(p => p.userId === currentUser.uid);
+          if (userPosts.length > 0) {
+            results = findMatches(userPosts[0], data);
+          } else {
+            const lostPosts = data.filter(p => p.type === 'lost');
+            if (lostPosts.length > 0) {
+              results = findMatches(lostPosts[0], data);
+            }
+          }
+        } else {
+          const lostPosts = data.filter(p => p.type === 'lost');
+          if (lostPosts.length > 0) {
+            results = findMatches(lostPosts[0], data);
+          }
+        }
+
+        if (results.length > 0) {
+          setTopMatch({ count: results.length, best: results[0] });
+        } else {
+          setTopMatch({ count: 0, best: null });
+        }
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -164,7 +193,7 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* 5. AI Assistant Teaser Card */}
+      {/* 5. AI Assistant Teaser Card (Dynamic) */}
       <TouchableOpacity 
         style={styles.aiCard} 
         onPress={() => router.push('/(tabs)/matches')}
@@ -173,9 +202,15 @@ export default function HomeScreen() {
         <View style={styles.aiHeaderRow}>
           <Text style={styles.aiTagText}>TRỢ LÝ AI THÔNG MINH</Text>
         </View>
-        <Text style={styles.aiCardTitle}>Tìm thấy 2 gợi ý phù hợp</Text>
-        <Text style={styles.aiCardDesc}>
-          Mất: Thẻ sinh viên Nguyễn Thị Thuỳ Trang ĐH KHTN - Độ phù hợp 80%
+        <Text style={styles.aiCardTitle}>
+          {topMatch.count > 0 
+            ? `Tìm thấy ${topMatch.count} gợi ý phù hợp` 
+            : 'AI Findora đang ghép đôi các bài đăng'}
+        </Text>
+        <Text style={styles.aiCardDesc} numberOfLines={2}>
+          {topMatch.best 
+            ? `${topMatch.best.post.type === 'lost' ? 'Mất' : 'Nhặt được'}: ${topMatch.best.post.title} - Độ phù hợp ${topMatch.best.percentage}%` 
+            : 'Tạo bài đăng Mất đồ/Nhặt được để AI Findora tự động tìm kiếm kết quả ghép đôi.'}
         </Text>
       </TouchableOpacity>
 

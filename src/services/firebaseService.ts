@@ -323,6 +323,153 @@ export function subscribeUnreadNotificationCount(
   }
 }
 
+export async function fetchNotificationsList(userId: string): Promise<Notification[]> {
+  if (!userId) return [];
+  try {
+    const notifRef = collection(db, 'notifications');
+    const q = query(notifRef, where('userId', '==', userId));
+    const snapshot = await getDocs(q);
+    const list: Notification[] = [];
+
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      list.push({
+        id: docSnap.id,
+        userId: data.userId,
+        title: data.title || 'Thông báo',
+        message: data.message || '',
+        type: data.type || 'system',
+        postId: data.postId,
+        createdAt: data.createdAt,
+        read: data.read || false
+      });
+    });
+
+    list.sort((a, b) => {
+      const tA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0);
+      const tB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0);
+      return tB - tA;
+    });
+
+    return list;
+  } catch (e) {
+    console.error('Error fetching notifications list:', e);
+    return [];
+  }
+}
+
+// ==================== TRANSACTIONS ====================
+
+export async function fetchUserTransactions(userId: string): Promise<Transaction[]> {
+  if (!userId) return [];
+  try {
+    const txRef = collection(db, 'transactions');
+    const q = query(txRef, where('userId', '==', userId));
+    const snapshot = await getDocs(q);
+    const list: Transaction[] = [];
+
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      list.push({
+        id: docSnap.id,
+        userId: data.userId,
+        amount: data.amount || 0,
+        type: data.type || 'reward',
+        description: data.description || '',
+        timestamp: data.timestamp
+      });
+    });
+
+    list.sort((a, b) => {
+      const tA = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : (a.timestamp?.seconds ? a.timestamp.seconds * 1000 : 0);
+      const tB = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : (b.timestamp?.seconds ? b.timestamp.seconds * 1000 : 0);
+      return tB - tA;
+    });
+
+    return list;
+  } catch (e) {
+    console.error('Error fetching transactions:', e);
+    return [];
+  }
+}
+
+// ==================== VOUCHERS ====================
+
+export interface VoucherItem {
+  id: string;
+  title: string;
+  brand: string;
+  pointsCost: number;
+  discount: string;
+  icon: string;
+  code?: string;
+}
+
+export async function fetchVouchers(): Promise<VoucherItem[]> {
+  try {
+    const vouchersRef = collection(db, 'vouchers');
+    const snapshot = await getDocs(vouchersRef);
+    if (!snapshot.empty) {
+      const list: VoucherItem[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        list.push({
+          id: docSnap.id,
+          title: data.title || 'Voucher Ưu Đãi',
+          brand: data.brand || 'Findora Partner',
+          pointsCost: data.pointsCost || data.points || 50,
+          discount: data.discount || 'Ưu đãi đặc biệt',
+          icon: data.icon || 'gift',
+          code: data.code || 'FINDORA_VIP'
+        });
+      });
+      return list;
+    }
+  } catch (e) {
+    console.log('Fetching Firestore vouchers fallback to catalog:', e);
+  }
+
+  // Brand Catalog Fallback matching native VoucherMarketActivity.java lines 143-178
+  return [
+    {
+      id: '1',
+      title: 'Voucher giảm giá 25% tối đa 100k',
+      brand: 'XANH SM',
+      pointsCost: 20,
+      discount: 'Giảm 25% chuyến đi',
+      icon: 'car',
+      code: 'XANHWIN'
+    },
+    {
+      id: '2',
+      title: 'Voucher mua 1 tặng 1',
+      brand: 'HIGHLANDS COFFEE',
+      pointsCost: 30,
+      discount: 'Mua 1 tặng 1',
+      icon: 'cafe',
+      code: 'BUY1GET1'
+    },
+    {
+      id: '3',
+      title: 'Voucher đồng giá 39k',
+      brand: 'THE COFFEE HOUSE',
+      pointsCost: 50,
+      discount: 'Đồng giá 39k',
+      icon: 'cafe',
+      code: 'DONGIA39'
+    },
+    {
+      id: '4',
+      title: 'Voucher giảm giá 15% toàn menu',
+      brand: 'JOLLIBEE VIỆT NAM',
+      pointsCost: 80,
+      discount: 'Giảm 15% menu',
+      icon: 'restaurant',
+      code: 'JOLLI15PER'
+    }
+  ];
+}
+
 // ==================== USERS & PROFILE ====================
 
 export async function getUserProfile(userId: string): Promise<User | null> {

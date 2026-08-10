@@ -1,27 +1,23 @@
-import React from 'react';
-import { View, Text, StyleSheet, FlatList, SafeAreaView, TouchableOpacity, Alert } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, FlatList, SafeAreaView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { fetchVouchers, VoucherItem } from '../../services/firebaseService';
 import { HeaderBar } from '../../components/HeaderBar';
 import { COLORS, SPACING, SHADOWS } from '../../constants/theme';
 
-interface Voucher {
-  id: string;
-  title: string;
-  brand: string;
-  pointsCost: number;
-  discount: string;
-  icon: string;
-}
-
-const VOUCHERS: Voucher[] = [
-  { id: '1', title: 'Voucher Highlands Coffee 30k', brand: 'Highlands Coffee', pointsCost: 150, discount: 'Giảm 30.000đ', icon: 'cafe' },
-  { id: '2', title: 'Voucher GrabBike 20k', brand: 'Grab', pointsCost: 100, discount: 'Giảm 20.000đ chuyến xe', icon: 'bicycle' },
-  { id: '3', title: 'Voucher Shopee 50k', brand: 'Shopee', pointsCost: 250, discount: 'Giảm 50.000đ đơn bất kỳ', icon: 'cart' },
-  { id: '4', title: 'Voucher Circle K 15k', brand: 'Circle K', pointsCost: 80, discount: 'Giảm 15.000đ thanh toán', icon: 'storefront' }
-];
-
 export default function VoucherMarketScreen() {
-  const handleRedeem = (voucher: Voucher) => {
+  const [vouchers, setVouchers] = useState<VoucherItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchVouchers().then((data) => {
+      setVouchers(data);
+      setLoading(false);
+    });
+  }, []);
+
+  const handleRedeem = (voucher: VoucherItem) => {
+    const code = voucher.code || `FINDORA_${Math.floor(100000 + Math.random() * 900000)}`;
     Alert.alert(
       'Xác nhận đổi quà',
       `Bạn có muốn dùng ${voucher.pointsCost} điểm Findora để đổi "${voucher.title}" không?`,
@@ -29,7 +25,7 @@ export default function VoucherMarketScreen() {
         { text: 'Hủy', style: 'cancel' },
         {
           text: 'Đổi ngay',
-          onPress: () => Alert.alert('Đổi quà thành công 🎉', `Mã Voucher: FINDORA_${Math.floor(100000 + Math.random() * 900000)}`)
+          onPress: () => Alert.alert('Đổi quà thành công 🎉', `Mã Voucher: ${code}`)
         }
       ]
     );
@@ -39,26 +35,33 @@ export default function VoucherMarketScreen() {
     <SafeAreaView style={styles.container}>
       <HeaderBar title="Chợ Voucher Đổi Quà" showBack />
 
-      <FlatList
-        data={VOUCHERS}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <View style={styles.iconBox}>
-              <Ionicons name={item.icon as any} size={28} color={COLORS.primary} />
+      {loading ? (
+        <View style={styles.centerLoading}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Đang tải chợ Voucher...</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={vouchers}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <View style={styles.card}>
+              <View style={styles.iconBox}>
+                <Ionicons name={(item.icon || 'gift') as any} size={28} color={COLORS.primary} />
+              </View>
+              <View style={styles.info}>
+                <Text style={styles.brand}>{item.brand}</Text>
+                <Text style={styles.title}>{item.title}</Text>
+                <Text style={styles.cost}>Cần {item.pointsCost} điểm Findora</Text>
+              </View>
+              <TouchableOpacity style={styles.redeemBtn} onPress={() => handleRedeem(item)}>
+                <Text style={styles.redeemText}>Đổi quà</Text>
+              </TouchableOpacity>
             </View>
-            <View style={styles.info}>
-              <Text style={styles.brand}>{item.brand}</Text>
-              <Text style={styles.title}>{item.title}</Text>
-              <Text style={styles.cost}>Cần {item.pointsCost} điểm Findora</Text>
-            </View>
-            <TouchableOpacity style={styles.redeemBtn} onPress={() => handleRedeem(item)}>
-              <Text style={styles.redeemText}>Đổi quà</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-        contentContainerStyle={styles.listContent}
-      />
+          )}
+          contentContainerStyle={styles.listContent}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -67,6 +70,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background
+  },
+  centerLoading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 14,
+    color: COLORS.textMuted
   },
   listContent: {
     padding: SPACING.md

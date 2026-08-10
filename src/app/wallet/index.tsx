@@ -2,9 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, SafeAreaView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
-import { auth, db } from '../../config/firebase';
-import { getUserProfile } from '../../services/firebaseService';
+import { auth } from '../../config/firebase';
+import { getUserProfile, fetchUserTransactions } from '../../services/firebaseService';
 import { Transaction, User } from '../../models/types';
 import { HeaderBar } from '../../components/HeaderBar';
 import { COLORS, SPACING, SHADOWS } from '../../constants/theme';
@@ -24,21 +23,7 @@ export default function WalletScreen() {
 
     getUserProfile(user.uid).then(setProfile);
 
-    const txRef = collection(db, 'transactions');
-    const q = query(txRef, where('userId', '==', user.uid), orderBy('timestamp', 'desc'));
-    getDocs(q).then((snapshot) => {
-      const list: Transaction[] = [];
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        list.push({
-          id: docSnap.id,
-          userId: data.userId,
-          amount: data.amount || 0,
-          type: data.type || 'reward',
-          description: data.description || '',
-          timestamp: data.timestamp
-        });
-      });
+    fetchUserTransactions(user.uid).then((list) => {
       setTransactions(list);
       setLoading(false);
     });

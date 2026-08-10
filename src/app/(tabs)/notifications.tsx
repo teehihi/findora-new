@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, SafeAreaView, TouchableOpacity, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, FlatList, SafeAreaView, TouchableOpacity, RefreshControl, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
-import { auth, db } from '../../config/firebase';
+import { auth } from '../../config/firebase';
+import { fetchNotificationsList } from '../../services/firebaseService';
 import { Notification } from '../../models/types';
 import { COLORS, SPACING, SHADOWS } from '../../constants/theme';
 
@@ -22,25 +22,7 @@ export default function NotificationsScreen() {
         return;
       }
 
-      const notifRef = collection(db, 'notifications');
-      const q = query(notifRef, where('userId', '==', user.uid), orderBy('createdAt', 'desc'));
-      const snapshot = await getDocs(q);
-      const list: Notification[] = [];
-
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        list.push({
-          id: docSnap.id,
-          userId: data.userId,
-          title: data.title || 'Thông báo',
-          message: data.message || '',
-          type: data.type || 'system',
-          postId: data.postId,
-          createdAt: data.createdAt,
-          read: data.read || false
-        });
-      });
-
+      const list = await fetchNotificationsList(user.uid);
       setNotifications(list);
     } catch (e) {
       console.error(e);
@@ -71,37 +53,44 @@ export default function NotificationsScreen() {
         <Text style={styles.headerTitle}>Thông Báo 🔔</Text>
       </View>
 
-      <FlatList
-        data={notifications}
-        keyExtractor={(item) => item.id || Math.random().toString()}
-        renderItem={({ item }) => (
-          <TouchableOpacity 
-            style={[styles.itemCard, !item.read && styles.unreadCard]}
-            onPress={() => {
-              if (item.postId) router.push(`/post/${item.postId}`);
-            }}
-          >
-            <View style={styles.iconCircle}>
-              <Ionicons name={getNotifIcon(item.type)} size={22} color={COLORS.primary} />
+      {loading ? (
+        <View style={styles.centerLoading}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Đang tải thông báo...</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={notifications}
+          keyExtractor={(item) => item.id || Math.random().toString()}
+          renderItem={({ item }) => (
+            <TouchableOpacity 
+              style={[styles.itemCard, !item.read && styles.unreadCard]}
+              onPress={() => {
+                if (item.postId) router.push(`/post/${item.postId}`);
+              }}
+            >
+              <View style={styles.iconCircle}>
+                <Ionicons name={getNotifIcon(item.type)} size={22} color={COLORS.primary} />
+              </View>
+              <View style={styles.infoCol}>
+                <Text style={styles.title}>{item.title}</Text>
+                <Text style={styles.message}>{item.message}</Text>
+              </View>
+            </TouchableOpacity>
+          )}
+          contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadNotifications(); }} colors={[COLORS.primary]} />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Ionicons name="notifications-off-outline" size={56} color={COLORS.textMuted} />
+              <Text style={styles.emptyTitle}>Chưa có thông báo nào</Text>
+              <Text style={styles.emptySubtitle}>Các cập nhật về ghép đôi AI, tin nhắn và điểm thưởng sẽ xuất hiện tại đây.</Text>
             </View>
-            <View style={styles.infoCol}>
-              <Text style={styles.title}>{item.title}</Text>
-              <Text style={styles.message}>{item.message}</Text>
-            </View>
-          </TouchableOpacity>
-        )}
-        contentContainerStyle={styles.listContent}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadNotifications(); }} colors={[COLORS.primary]} />
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Ionicons name="notifications-off-outline" size={56} color={COLORS.textMuted} />
-            <Text style={styles.emptyTitle}>Chưa có thông báo nào</Text>
-            <Text style={styles.emptySubtitle}>Các cập nhật về ghép đôi AI, tin nhắn và điểm thưởng sẽ xuất hiện tại đây.</Text>
-          </View>
-        }
-      />
+          }
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -128,6 +117,16 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: SPACING.md
+  },
+  centerLoading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 14,
+    color: COLORS.textMuted
   },
   itemCard: {
     flexDirection: 'row',

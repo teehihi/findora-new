@@ -2,8 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, SafeAreaView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, getDocs } from 'firebase/firestore';
 import { auth, db } from '../../config/firebase';
+import { getPosterDetails } from '../../services/firebaseService';
 import { HeaderBar } from '../../components/HeaderBar';
 import { COLORS, SPACING, SHADOWS } from '../../constants/theme';
 
@@ -11,6 +12,7 @@ export interface Conversation {
   id: string;
   otherUserId: string;
   otherUserName: string;
+  otherUserAvatar: string;
   lastMessage: string;
   timestamp: any;
   postId?: string;
@@ -28,36 +30,67 @@ export default function ChatListScreen() {
       return;
     }
 
-    const chatsRef = collection(db, 'messages');
-    const q = query(
-      chatsRef,
-      where('senderId', '==', user.uid),
-      orderBy('timestamp', 'desc')
-    );
+    // 1. Try native Findora 'chats' collection schema (participants: [uid1, uid2])
+    const chatsRef = collection(db, 'chats');
+    const qChats = query(chatsRef, where('participants', 'array-contains', user.uid));
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const map = new Map<string, Conversation>();
+    const unsubChats = onSnapshot(qChats, async (snapshot) => {
+      if (!snapshot.empty) {
+        const list: Conversation[] = [];
 
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        const otherId = data.receiverId;
-        if (!map.has(otherId)) {
-          map.set(otherId, {
+        for (const docSnap of snapshot.docs) {
+          const data = docSnap.data();
+          const participants: string[] = data.participants || [];
+          const otherId = participants.find(id => id !== user.uid) || user.uid;
+          const userDetails = await getPosterDetails(otherId);
+
+          list.push({
             id: docSnap.id,
             otherUserId: otherId,
-            otherUserName: data.receiverName || 'Người dùng Findora',
-            lastMessage: data.message || '',
-            timestamp: data.timestamp,
+            otherUserName: userDetails.name || 'Người dùng Findora',
+            otherUserAvatar: userDetails.avatarUrl || '',
+            lastMessage: data.lastMessage || data.message || 'Bắt đầu trò chuyện',
+            timestamp: data.lastTimestamp || data.timestamp,
             postId: data.postId
           });
         }
-      });
 
-      setConversations(Array.from(map.values()));
+        setConversations(list);
+        setLoading(false);
+      } else {
+        // Fallback: Query flat 'messages' collection
+        const msgsRef = collection(db, 'messages');
+        const snap = await getDocs(msgsRef);
+        const map = new Map<string, Conversation>();
+
+        for (const docSnap of snap.docs) {
+          const data = docSnap.data();
+          if (data.senderId === user.uid || data.receiverId === user.uid) {
+            const otherId = data.senderId === user.uid ? data.receiverId : data.senderId;
+            if (otherId && !map.has(otherId)) {
+              const userDetails = await getPosterDetails(otherId);
+              map.set(otherId, {
+                id: docSnap.id,
+                otherUserId: otherId,
+                otherUserName: userDetails.name || 'Người dùng Findora',
+                otherUserAvatar: userDetails.avatarUrl || '',
+                lastMessage: data.message || data.text || '',
+                timestamp: data.timestamp,
+                postId: data.postId
+              });
+            }
+          }
+        }
+
+        setConversations(Array.from(map.values()));
+        setLoading(false);
+      }
+    }, (error) => {
+      console.log('Chats query notice:', error);
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => unsubChats();
   }, []);
 
   return (
@@ -67,6 +100,7 @@ export default function ChatListScreen() {
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Đang tải cuộc trò chuyện...</Text>
         </View>
       ) : (
         <FlatList
@@ -110,6 +144,11 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center'
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 14,
+    color: COLORS.textMuted
   },
   listContent: {
     padding: SPACING.md
