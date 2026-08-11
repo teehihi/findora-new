@@ -1,13 +1,18 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, Platform, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Platform, TouchableOpacity, Modal, TouchableWithoutFeedback, Animated, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker, Callout } from 'react-native-maps';
 import Svg, { Path, Circle, ClipPath, Image as SvgImage, Text as SvgText, Defs } from 'react-native-svg';
+import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { fetchPosts } from '../../services/firebaseService';
 import { Post } from '../../models/types';
 import { COLORS, SPACING } from '../../constants/theme';
+
+const IC_DEFAULT = require('../../../assets/ic_default.png');
+const IC_VETINH = require('../../../assets/ic_vetinh.png');
+const IC_DIAHINH = require('../../../assets/ic_diahinh.png');
 
 class MapErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
   constructor(props: any) {
@@ -147,6 +152,11 @@ export default function MapScreen() {
   const mapRef = useRef<MapView>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [filter, setFilter] = useState<'all' | 'lost' | 'found'>('all');
+  const [mapType, setMapType] = useState<'standard' | 'hybrid' | 'terrain'>('standard');
+  const [modalVisible, setModalVisible] = useState(false);
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const slideAnim = useRef(new Animated.Value(450)).current;
+
   const [region, setRegion] = useState({
     latitude: 10.8505, // HCMUTE / Thu Duc default coordinates
     longitude: 106.7717,
@@ -155,6 +165,24 @@ export default function MapScreen() {
   });
 
   useEffect(() => {
+    // Request location permission & fetch current position on mount
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          if (loc && loc.coords) {
+            setUserLocation({
+              latitude: loc.coords.latitude,
+              longitude: loc.coords.longitude,
+            });
+          }
+        }
+      } catch (e) {
+        console.warn("User location init error:", e);
+      }
+    })();
+
     fetchPosts('all').then((data) => {
       // Map all posts and ensure every single post has valid lat/lng coordinates
       const mapped = data.map((p, idx) => {
@@ -192,6 +220,28 @@ export default function MapScreen() {
     });
   }, []);
 
+  useEffect(() => {
+    if (modalVisible) {
+      slideAnim.setValue(450);
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        damping: 24,
+        stiffness: 220,
+      }).start();
+    }
+  }, [modalVisible]);
+
+  const closeModal = () => {
+    Animated.timing(slideAnim, {
+      toValue: 450,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      setModalVisible(false);
+    });
+  };
+
   const filteredPosts = posts.filter((p) => {
     if (filter === 'lost') return p.type === 'lost';
     if (filter === 'found') return p.type === 'found';
@@ -200,13 +250,58 @@ export default function MapScreen() {
 
   const isZoomedOut = region.latitudeDelta > 0.16;
 
+  // Handle Recenter User Position with smooth zoom & high accuracy GPS
+  const handleRecenterUserLocation = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        // Fallback to default HCMUTE coordinates if permission is denied
+        mapRef.current?.animateToRegion({
+          latitude: 10.8505,
+          longitude: 106.7717,
+          latitudeDelta: 0.012,
+          longitudeDelta: 0.012,
+        }, 1000);
+        return;
+      }
+
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      if (loc && loc.coords && mapRef.current) {
+        const userCoords = {
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude,
+        };
+        setUserLocation(userCoords);
+        mapRef.current.animateToRegion({
+          latitude: userCoords.latitude,
+          longitude: userCoords.longitude,
+          latitudeDelta: 0.012, // Zoom in close to user location
+          longitudeDelta: 0.012,
+        }, 1000);
+      }
+    } catch (err) {
+      console.warn("Recenter location error:", err);
+      mapRef.current?.animateToRegion({
+        latitude: 10.8505,
+        longitude: 106.7717,
+        latitudeDelta: 0.012,
+        longitudeDelta: 0.012,
+      }, 1000);
+    }
+  };
+
+  const isFilterActive = filter !== 'all' || mapType !== 'standard';
+
   return (
     <View style={styles.container}>
       <MapErrorBoundary>
         <MapView 
           ref={mapRef}
           style={styles.map} 
-          region={region} 
+          initialRegion={region} 
+          mapType={mapType}
+          showsUserLocation={true}
+          showsMyLocationButton={false}
           onRegionChangeComplete={setRegion}
         >
           {filteredPosts.map((post, idx) => {
@@ -281,37 +376,180 @@ export default function MapScreen() {
         </MapView>
       </MapErrorBoundary>
 
-      <View style={[styles.filterBarWrapper, { top: insets.top + 10 }]}>
+      {/* Floating Action Control Stack (Top Right - Exact Google Maps Native Icon Style) */}
+      <View style={[styles.floatingControlStack, { top: insets.top + 12 }]}>
         <TouchableOpacity
-          style={[styles.filterChip, filter === 'all' && styles.activeFilterChip]}
-          onPress={() => setFilter('all')}
-          activeOpacity={0.8}
+          style={styles.floatingFabBtn}
+          onPress={() => setModalVisible(true)}
+          activeOpacity={0.85}
         >
-          <Text style={[styles.filterChipText, filter === 'all' && styles.activeFilterChipText]}>
-            Tất cả ({posts.length})
-          </Text>
+          {/* Exact Google Maps Native Layers Vector SVG Icon */}
+          <Svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1E293B" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+            <Path d="M 12 3 L 21 8 L 12 13 L 3 8 Z" />
+            <Path d="M 3 13.5 L 12 18.5 L 21 13.5" />
+          </Svg>
+          {isFilterActive && <View style={styles.activeDotBadge} />}
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.filterChip, filter === 'lost' && styles.activeFilterChipLost]}
-          onPress={() => setFilter('lost')}
-          activeOpacity={0.8}
+          style={[styles.floatingFabBtn, { marginTop: 10 }]}
+          onPress={handleRecenterUserLocation}
+          activeOpacity={0.85}
         >
-          <Text style={[styles.filterChipText, filter === 'lost' && styles.activeFilterChipTextWhite]}>
-            🔴 Báo Mất ({posts.filter((p) => p.type === 'lost').length})
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.filterChip, filter === 'found' && styles.activeFilterChipFound]}
-          onPress={() => setFilter('found')}
-          activeOpacity={0.8}
-        >
-          <Text style={[styles.filterChipText, filter === 'found' && styles.activeFilterChipTextWhite]}>
-            🟢 Nhặt Được ({posts.filter((p) => p.type === 'found').length})
-          </Text>
+          <Ionicons name="locate-outline" size={22} color="#1E293B" />
         </TouchableOpacity>
       </View>
+
+      {/* Google Maps Style Bottom Sheet Modal with Soft Backdrop Fade + Independent Sheet Slide Up */}
+      <Modal
+        visible={modalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={closeModal}
+      >
+        <TouchableWithoutFeedback onPress={closeModal}>
+          <View style={styles.modalOverlay}>
+            <TouchableWithoutFeedback>
+              <Animated.View
+                style={[
+                  styles.bottomSheetContainer,
+                  {
+                    paddingBottom: insets.bottom + 20,
+                    transform: [{ translateY: slideAnim }]
+                  }
+                ]}
+              >
+                {/* Drag Handle Bar */}
+                <View style={styles.dragHandle} />
+
+                {/* Modal Header */}
+                <View style={styles.modalHeaderRow}>
+                  <Text style={styles.modalTitle}>Tùy chọn bản đồ & Bộ lọc</Text>
+                  <TouchableOpacity
+                    style={styles.closeBtn}
+                    onPress={closeModal}
+                  >
+                    <Ionicons name="close" size={22} color={COLORS.textMuted} />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Section 1: Loại bản đồ (Map Types - User Provided Custom PNG Icons) */}
+                <Text style={styles.sectionHeading}>Loại bản đồ</Text>
+                <View style={styles.mapTypeRow}>
+                  {/* Standard Map (Mặc định) */}
+                  <TouchableOpacity
+                    style={styles.mapTypeCard}
+                    onPress={() => setMapType('standard')}
+                    activeOpacity={0.85}
+                  >
+                    <View style={[styles.mapTypeImageWrapper, mapType === 'standard' && styles.activeMapTypeImageWrapper]}>
+                      <Image source={IC_DEFAULT} style={styles.mapTypeImg} resizeMode="cover" />
+                    </View>
+                    <Text style={[styles.mapTypeLabel, mapType === 'standard' && styles.activeMapTypeLabel]}>
+                      Mặc định
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* Satellite Map with Road & Place Labels Overlay (hybrid) */}
+                  <TouchableOpacity
+                    style={styles.mapTypeCard}
+                    onPress={() => setMapType('hybrid')}
+                    activeOpacity={0.85}
+                  >
+                    <View style={[styles.mapTypeImageWrapper, mapType === 'hybrid' && styles.activeMapTypeImageWrapper]}>
+                      <Image source={IC_VETINH} style={styles.mapTypeImg} resizeMode="cover" />
+                    </View>
+                    <Text style={[styles.mapTypeLabel, mapType === 'hybrid' && styles.activeMapTypeLabel]}>
+                      Vệ tinh
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* Topographic Contour Terrain Map (terrain) */}
+                  <TouchableOpacity
+                    style={styles.mapTypeCard}
+                    onPress={() => setMapType('terrain')}
+                    activeOpacity={0.85}
+                  >
+                    <View style={[styles.mapTypeImageWrapper, mapType === 'terrain' && styles.activeMapTypeImageWrapper]}>
+                      <Image source={IC_DIAHINH} style={styles.mapTypeImg} resizeMode="cover" />
+                    </View>
+                    <Text style={[styles.mapTypeLabel, mapType === 'terrain' && styles.activeMapTypeLabel]}>
+                      Địa hình
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Section 2: Hiển thị bài đăng (Post Type Filter Cards Row with Badge on Outer Border) */}
+                <Text style={[styles.sectionHeading, { marginTop: 22 }]}>Hiển thị bài đăng</Text>
+                <View style={styles.postTypeRow}>
+                  {/* All Posts Card */}
+                  <TouchableOpacity
+                    style={styles.postTypeCard}
+                    onPress={() => setFilter('all')}
+                    activeOpacity={0.85}
+                  >
+                    <View style={styles.postTypeBoxContainer}>
+                      <View style={[styles.postTypeImageWrapper, filter === 'all' && styles.activePostTypeImageWrapperAll]}>
+                        <View style={[styles.postTypeIconBoxInner, { backgroundColor: filter === 'all' ? 'rgba(13, 148, 136, 0.12)' : '#F1F5F9' }]}>
+                          <Ionicons name="apps-outline" size={26} color={filter === 'all' ? '#0D9488' : '#64748B'} />
+                        </View>
+                      </View>
+                      <View style={[styles.badgePill, { backgroundColor: filter === 'all' ? '#0D9488' : '#64748B' }]}>
+                        <Text style={styles.badgePillText}>{posts.length}</Text>
+                      </View>
+                    </View>
+                    <Text style={[styles.postTypeLabel, filter === 'all' && styles.activePostTypeLabelAll]}>
+                      Tất cả
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* Lost Posts Card */}
+                  <TouchableOpacity
+                    style={styles.postTypeCard}
+                    onPress={() => setFilter('lost')}
+                    activeOpacity={0.85}
+                  >
+                    <View style={styles.postTypeBoxContainer}>
+                      <View style={[styles.postTypeImageWrapper, filter === 'lost' && styles.activePostTypeImageWrapperLost]}>
+                        <View style={[styles.postTypeIconBoxInner, { backgroundColor: filter === 'lost' ? 'rgba(239, 68, 68, 0.12)' : '#F1F5F9' }]}>
+                          <Ionicons name="search-outline" size={26} color={filter === 'lost' ? '#EF4444' : '#64748B'} />
+                        </View>
+                      </View>
+                      <View style={[styles.badgePill, { backgroundColor: filter === 'lost' ? '#EF4444' : '#64748B' }]}>
+                        <Text style={styles.badgePillText}>{posts.filter(p => p.type === 'lost').length}</Text>
+                      </View>
+                    </View>
+                    <Text style={[styles.postTypeLabel, filter === 'lost' && styles.activePostTypeLabelLost]}>
+                      Báo Mất
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* Found Posts Card */}
+                  <TouchableOpacity
+                    style={styles.postTypeCard}
+                    onPress={() => setFilter('found')}
+                    activeOpacity={0.85}
+                  >
+                    <View style={styles.postTypeBoxContainer}>
+                      <View style={[styles.postTypeImageWrapper, filter === 'found' && styles.activePostTypeImageWrapperFound]}>
+                        <View style={[styles.postTypeIconBoxInner, { backgroundColor: filter === 'found' ? 'rgba(16, 185, 129, 0.12)' : '#F1F5F9' }]}>
+                          <Ionicons name="checkmark-circle-outline" size={26} color={filter === 'found' ? '#10B981' : '#64748B'} />
+                        </View>
+                      </View>
+                      <View style={[styles.badgePill, { backgroundColor: filter === 'found' ? '#10B981' : '#64748B' }]}>
+                        <Text style={styles.badgePillText}>{posts.filter(p => p.type === 'found').length}</Text>
+                      </View>
+                    </View>
+                    <Text style={[styles.postTypeLabel, filter === 'found' && styles.activePostTypeLabelFound]}>
+                      Nhặt Được
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </Animated.View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </View>
   );
 }
@@ -323,6 +561,45 @@ const styles = StyleSheet.create({
   },
   map: {
     flex: 1
+  },
+  googleUserMarkerContainer: {
+    width: 60,
+    height: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  compassBeamCone: {
+    position: 'absolute',
+    top: 3,
+    right: 3,
+  },
+  breathingWhiteHalo: {
+    position: 'absolute',
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(255, 255, 255, 0.75)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.95)',
+  },
+  solidWhiteRing: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#1D4ED8',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.45,
+    shadowRadius: 5,
+    elevation: 6,
+  },
+  innerBlueDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#1D4ED8',
   },
   svgMarkerWrapper: {
     width: 44,
@@ -360,49 +637,209 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: '#FFFFFF',
   },
-  filterBarWrapper: {
+  floatingControlStack: {
     position: 'absolute',
-    left: 16,
     right: 16,
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     zIndex: 100,
   },
-  filterChip: {
-    backgroundColor: 'rgba(255, 255, 255, 0.92)',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginHorizontal: 4,
+  floatingFabBtn: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.16,
     shadowRadius: 6,
-    elevation: 4,
+    elevation: 6,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.8)',
+    borderColor: 'rgba(255, 255, 255, 0.9)',
   },
-  activeFilterChip: {
+  activeDotBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: COLORS.primary,
   },
-  activeFilterChipLost: {
-    backgroundColor: '#EF4444',
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'flex-end',
   },
-  activeFilterChipFound: {
-    backgroundColor: '#10B981',
+  bottomSheetContainer: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 12,
   },
-  filterChipText: {
+  dragHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#CBD5E1',
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 18,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  closeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sectionHeading: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.textMuted,
+    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  mapTypeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  mapTypeCard: {
+    flex: 1,
+    alignItems: 'center',
+    marginHorizontal: 4,
+  },
+  mapTypeImageWrapper: {
+    width: 68,
+    height: 68,
+    borderRadius: 20,
+    overflow: 'hidden',
+    borderWidth: 3,
+    borderColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 2.5,
+    backgroundColor: 'transparent',
+  },
+  activeMapTypeImageWrapper: {
+    borderColor: '#0D9488',
+    backgroundColor: '#FFFFFF',
+  },
+  mapTypeImg: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 14,
+  },
+  mapTypeLabel: {
     fontSize: 12,
     fontWeight: '600',
     color: COLORS.text,
+    marginTop: 8,
   },
-  activeFilterChipText: {
-    color: '#FFFFFF',
+  activeMapTypeLabel: {
+    color: '#0D9488',
     fontWeight: '700',
   },
-  activeFilterChipTextWhite: {
+  postTypeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  postTypeCard: {
+    flex: 1,
+    alignItems: 'center',
+    marginHorizontal: 4,
+  },
+  postTypeBoxContainer: {
+    position: 'relative',
+    width: 68,
+    height: 68,
+  },
+  postTypeImageWrapper: {
+    width: 68,
+    height: 68,
+    borderRadius: 20,
+    overflow: 'hidden',
+    borderWidth: 3,
+    borderColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 2.5,
+    backgroundColor: 'transparent',
+  },
+  activePostTypeImageWrapperAll: {
+    borderColor: '#0D9488',
+    backgroundColor: '#FFFFFF',
+  },
+  activePostTypeImageWrapperLost: {
+    borderColor: '#EF4444',
+    backgroundColor: '#FFFFFF',
+  },
+  activePostTypeImageWrapperFound: {
+    borderColor: '#10B981',
+    backgroundColor: '#FFFFFF',
+  },
+  postTypeIconBoxInner: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgePill: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    zIndex: 10,
+    elevation: 4,
+  },
+  badgePillText: {
     color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  postTypeLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginTop: 8,
+  },
+  activePostTypeLabelAll: {
+    color: '#0D9488',
+    fontWeight: '700',
+  },
+  activePostTypeLabelLost: {
+    color: '#EF4444',
+    fontWeight: '700',
+  },
+  activePostTypeLabelFound: {
+    color: '#10B981',
     fontWeight: '700',
   },
   calloutContainer: {
