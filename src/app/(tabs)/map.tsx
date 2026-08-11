@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, Platform, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Platform, TouchableOpacity, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker, Callout } from 'react-native-maps';
-import { Image as ExpoImage } from 'expo-image';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { fetchPosts } from '../../services/firebaseService';
@@ -42,14 +42,33 @@ class MapErrorBoundary extends React.Component<{ children: React.ReactNode }, { 
   }
 }
 
-// Individual Custom Avatar Marker component using High Performance expo-image (Glide/Coil powered on Android)
-function CustomAvatarMarker({ post, isLost, themeColor, onPress }: { post: Post; isLost: boolean; themeColor: string; onPress: () => void }) {
-  // Always keep tracksViewChanges true on Android so MapView continuously captures native bitmap canvas
-  const tracksViewChanges = Platform.OS === 'android';
+// Individual Custom Avatar Marker component
+function CustomAvatarMarker({
+  post,
+  imageUri,
+  isLost,
+  themeColor,
+  onPress
+}: {
+  post: Post;
+  imageUri: string | null;
+  isLost: boolean;
+  themeColor: string;
+  onPress: () => void;
+}) {
+  const [tracksViewChanges, setTracksViewChanges] = useState(true);
+
+  useEffect(() => {
+    setTracksViewChanges(true);
+    const timer = setTimeout(() => {
+      setTracksViewChanges(false);
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [imageUri]);
 
   return (
     <Marker
-      key={`${post.id}_custom_avatar`}
+      key={`${post.id}_custom_avatar_${imageUri ? 'loaded' : 'pending'}`}
       coordinate={{
         latitude: post.lat!,
         longitude: post.lng!,
@@ -58,13 +77,11 @@ function CustomAvatarMarker({ post, isLost, themeColor, onPress }: { post: Post;
     >
       <View style={styles.customMarkerContainer}>
         <View style={[styles.avatarWrapper, { borderColor: themeColor }]}>
-          {post.imageUrl && typeof post.imageUrl === 'string' && post.imageUrl.trim() !== '' ? (
-            <ExpoImage
-              source={{ uri: post.imageUrl }}
+          {imageUri ? (
+            <Image
+              source={{ uri: imageUri }}
               style={styles.avatarImage}
-              contentFit="cover"
-              cachePolicy="memory-disk"
-              transition={150}
+              resizeMode="cover"
             />
           ) : (
             <Ionicons
@@ -101,6 +118,7 @@ export default function MapScreen() {
   const mapRef = useRef<MapView>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [filter, setFilter] = useState<'all' | 'lost' | 'found'>('all');
+  const [localImages, setLocalImages] = useState<Record<string, string>>({});
   const [region, setRegion] = useState({
     latitude: 10.8505, // HCMUTE / Thu Duc default coordinates
     longitude: 106.7717,
@@ -115,7 +133,6 @@ export default function MapScreen() {
         let latVal = p.lat != null ? Number(p.lat) : null;
         let lngVal = p.lng != null ? Number(p.lng) : null;
 
-        // Smart coordinate assignment for posts created without explicit GPS coordinates
         if (!latVal || isNaN(latVal) || !lngVal || isNaN(lngVal)) {
           const spreadLat = 10.8505 + ((idx % 7) - 3) * 0.004;
           const spreadLng = 106.7717 + ((Math.floor(idx / 3) % 7) - 3) * 0.004;
@@ -131,6 +148,29 @@ export default function MapScreen() {
       });
 
       setPosts(mapped);
+
+      // Download all post images to local device disk cache for 100% instant rendering in Android offscreen views
+      mapped.forEach(async (p, idx) => {
+        const postId = p.id || `post_${idx}`;
+        const imgUrl = p.imageUrl;
+        if (imgUrl && typeof imgUrl === 'string' && imgUrl.startsWith('http')) {
+          try {
+            const filename = `marker_${postId.replace(/[^a-zA-Z0-9]/g, '_')}.jpg`;
+            const fileUri = `${FileSystem.cacheDirectory}${filename}`;
+            const info = await FileSystem.getInfoAsync(fileUri);
+            if (info.exists) {
+              setLocalImages((prev) => ({ ...prev, [postId]: fileUri }));
+            } else {
+              const res = await FileSystem.downloadAsync(imgUrl, fileUri);
+              if (res.status === 200) {
+                setLocalImages((prev) => ({ ...prev, [postId]: res.uri }));
+              }
+            }
+          } catch (err) {
+            console.warn('Marker image download error:', err);
+          }
+        }
+      });
 
       if (mapped.length > 0 && mapRef.current) {
         const coords = mapped.map((p) => ({
@@ -153,24 +193,10 @@ export default function MapScreen() {
     return true;
   });
 
-  // Dynamic zoom check: If map is zoomed far out (latitudeDelta > 0.16), show compact pins
   const isZoomedOut = region.latitudeDelta > 0.16;
 
   return (
     <View style={styles.container}>
-      {/* Hidden preloader container with expo-image to ensure Android Glide/Coil memory-disk caching */}
-      <View style={styles.hiddenImagePreloader}>
-        {posts.map((p) => (
-          p.imageUrl && typeof p.imageUrl === 'string' && p.imageUrl.startsWith('http') ? (
-            <ExpoImage
-              key={`preload_${p.id}`}
-              source={{ uri: p.imageUrl }}
-              cachePolicy="memory-disk"
-            />
-          ) : null
-        ))}
-      </View>
-
       <MapErrorBoundary>
         <MapView 
           ref={mapRef}
@@ -178,16 +204,17 @@ export default function MapScreen() {
           region={region} 
           onRegionChangeComplete={setRegion}
         >
-          {filteredPosts.map((post) => {
+          {filteredPosts.map((post, idx) => {
             const isLost = post.type === 'lost';
             const themeColor = isLost ? '#EF4444' : '#10B981';
+            const postId = post.id || `post_${idx}`;
+            const imageUri = localImages[postId] || post.imageUrl || null;
 
             if (isZoomedOut) {
               if (Platform.OS === 'ios') {
-                // Native Apple Maps animated drop pin on iOS when zoomed out
                 return (
                   <Marker
-                    key={`${post.id}_ios_pin`}
+                    key={`${postId}_ios_pin`}
                     coordinate={{
                       latitude: post.lat!,
                       longitude: post.lng!,
@@ -209,15 +236,14 @@ export default function MapScreen() {
                 );
               }
 
-              // Compact custom dot pin on Android when zoomed out
               return (
                 <Marker
-                  key={`${post.id}_android_dot`}
+                  key={`${postId}_android_dot`}
                   coordinate={{
                     latitude: post.lat!,
                     longitude: post.lng!,
                   }}
-                  tracksViewChanges={Platform.OS === 'android'}
+                  tracksViewChanges={false}
                 >
                   <View style={[styles.compactDotWrapper, { backgroundColor: themeColor }]}>
                     <View style={styles.compactDotInner} />
@@ -238,11 +264,11 @@ export default function MapScreen() {
               );
             }
 
-            // Custom Avatar Image Pin Marker when zoomed in
             return (
               <CustomAvatarMarker
-                key={`${post.id}_custom_avatar`}
+                key={`${postId}_custom_avatar`}
                 post={post}
+                imageUri={imageUri}
                 isLost={isLost}
                 themeColor={themeColor}
                 onPress={() => router.push(`/post/${post.id}`)}
@@ -252,7 +278,6 @@ export default function MapScreen() {
         </MapView>
       </MapErrorBoundary>
 
-      {/* Floating Filter Chips Header Bar */}
       <View style={[styles.filterBarWrapper, { top: insets.top + 10 }]}>
         <TouchableOpacity
           style={[styles.filterChip, filter === 'all' && styles.activeFilterChip]}
@@ -292,13 +317,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background
-  },
-  hiddenImagePreloader: {
-    position: 'absolute',
-    width: 0,
-    height: 0,
-    opacity: 0,
-    overflow: 'hidden',
   },
   map: {
     flex: 1
