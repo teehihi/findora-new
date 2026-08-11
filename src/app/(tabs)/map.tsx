@@ -41,17 +41,10 @@ class MapErrorBoundary extends React.Component<{ children: React.ReactNode }, { 
   }
 }
 
-// Individual Custom Avatar Marker component with independent image load tracking
+// Individual Custom Avatar Marker component
 function CustomAvatarMarker({ post, isLost, themeColor, onPress }: { post: Post; isLost: boolean; themeColor: string; onPress: () => void }) {
-  // Always keep tracksViewChanges true on Android until image is fully loaded
-  const [tracksViewChanges, setTracksViewChanges] = useState(true);
-
-  const handleImageLoad = () => {
-    // Wait 800ms after image load event so Android MapView captures final decoded image bitmap
-    setTimeout(() => {
-      setTracksViewChanges(false);
-    }, 800);
-  };
+  // On Android, tracksViewChanges must be true to allow MapView bitmap canvas to re-draw remote network images
+  const tracksViewChanges = Platform.OS === 'android';
 
   return (
     <Marker
@@ -64,17 +57,16 @@ function CustomAvatarMarker({ post, isLost, themeColor, onPress }: { post: Post;
     >
       <View style={styles.customMarkerContainer}>
         <View style={[styles.avatarWrapper, { borderColor: themeColor }]}>
-          {post.imageUrl ? (
+          {post.imageUrl && typeof post.imageUrl === 'string' && post.imageUrl.trim() !== '' ? (
             <Image
               source={{ uri: post.imageUrl }}
               style={styles.avatarImage}
-              onLoad={handleImageLoad}
-              onLoadEnd={handleImageLoad}
+              resizeMode="cover"
             />
           ) : (
             <Ionicons
               name={isLost ? 'search-outline' : 'checkmark-circle-outline'}
-              size={20}
+              size={22}
               color={themeColor}
             />
           )}
@@ -115,7 +107,7 @@ export default function MapScreen() {
 
   useEffect(() => {
     fetchPosts('all').then((data) => {
-      // Pre-fetch images
+      // Pre-fetch all network images in main UI thread
       data.forEach((p) => {
         const img = p.imageUrl;
         if (img && typeof img === 'string' && img.startsWith('http')) {
@@ -171,6 +163,15 @@ export default function MapScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Hidden preloader container to ensure React Native caches image bitmaps in main UI thread */}
+      <View style={styles.hiddenImagePreloader}>
+        {posts.map((p) => (
+          p.imageUrl && typeof p.imageUrl === 'string' && p.imageUrl.startsWith('http') ? (
+            <Image key={`preload_${p.id}`} source={{ uri: p.imageUrl }} />
+          ) : null
+        ))}
+      </View>
+
       <MapErrorBoundary>
         <MapView 
           ref={mapRef}
@@ -217,7 +218,7 @@ export default function MapScreen() {
                     latitude: post.lat!,
                     longitude: post.lng!,
                   }}
-                  tracksViewChanges={false}
+                  tracksViewChanges={Platform.OS === 'android'}
                 >
                   <View style={[styles.compactDotWrapper, { backgroundColor: themeColor }]}>
                     <View style={styles.compactDotInner} />
@@ -292,6 +293,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background
+  },
+  hiddenImagePreloader: {
+    position: 'absolute',
+    width: 0,
+    height: 0,
+    opacity: 0,
+    overflow: 'hidden',
   },
   map: {
     flex: 1
