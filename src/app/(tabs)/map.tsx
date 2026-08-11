@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, Platform, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, Platform, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker, Callout } from 'react-native-maps';
-import * as FileSystem from 'expo-file-system/legacy';
+import Svg, { Path, Circle, ClipPath, Image as SvgImage, Text as SvgText, Defs } from 'react-native-svg';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { fetchPosts } from '../../services/firebaseService';
@@ -42,86 +42,88 @@ class MapErrorBoundary extends React.Component<{ children: React.ReactNode }, { 
   }
 }
 
-// Individual Custom Avatar Marker component
-function CustomAvatarMarker({
+// Vector SVG Map Marker Component for 100% accurate pin tip alignment & crisp graphics
+function SvgMapMarker({
   post,
-  imageUri,
   isLost,
   themeColor,
   onPress
 }: {
   post: Post;
-  imageUri: string | null;
   isLost: boolean;
   themeColor: string;
   onPress: () => void;
 }) {
-  const [tracksViewChanges, setTracksViewChanges] = useState(true);
+  const badgeText = isLost ? '?' : '✓';
+  const hasImage = post.imageUrl && typeof post.imageUrl === 'string' && post.imageUrl.trim() !== '';
 
-  useEffect(() => {
-    setTracksViewChanges(true);
-    const timer = setTimeout(() => {
-      setTracksViewChanges(false);
-    }, 1200);
-    return () => clearTimeout(timer);
-  }, [imageUri]);
-
-  // On Android, if local image file is available, use Google Maps Native icon prop for 100% reliable rendering
-  if (Platform.OS === 'android' && imageUri) {
-    return (
-      <Marker
-        key={`${post.id}_android_native_icon`}
-        coordinate={{
-          latitude: post.lat!,
-          longitude: post.lng!,
-        }}
-        icon={{ uri: imageUri }}
-      >
-        <Callout onPress={onPress}>
-          <View style={styles.calloutContainer}>
-            <Text style={styles.calloutTitle} numberOfLines={1}>{post.title}</Text>
-            <Text style={styles.calloutType}>
-              {isLost ? '🔴 Báo Mất' : '🟢 Nhặt Được'}
-            </Text>
-            {post.address ? (
-              <Text style={styles.calloutAddress} numberOfLines={1}>{post.address}</Text>
-            ) : null}
-          </View>
-        </Callout>
-      </Marker>
-    );
-  }
-
-  // Custom React View Avatar Marker for iOS and fallback states
   return (
     <Marker
-      key={`${post.id}_custom_avatar_${imageUri ? 'loaded' : 'pending'}`}
+      key={`${post.id}_svg_marker`}
       coordinate={{
         latitude: post.lat!,
         longitude: post.lng!,
       }}
-      tracksViewChanges={tracksViewChanges}
+      anchor={{ x: 0.5, y: 1.0 }}
+      tracksViewChanges={false}
     >
-      <View style={styles.customMarkerContainer}>
-        <View style={[styles.avatarWrapper, { borderColor: themeColor }]}>
-          {imageUri ? (
-            <Image
-              source={{ uri: imageUri }}
-              style={styles.avatarImage}
-              resizeMode="cover"
+      <View style={styles.svgMarkerWrapper}>
+        <Svg width="44" height="56" viewBox="0 0 44 56">
+          <Defs>
+            <ClipPath id={`avatarClip_${post.id}`}>
+              <Circle cx="22" cy="20" r="13" />
+            </ClipPath>
+          </Defs>
+
+          {/* Outer Teardrop Pin Path (Red for Lost, Emerald Green for Found) */}
+          <Path
+            d="M 22,2 A 18,18 0 0,1 40,20 C 40,30 22,54 22,54 C 22,54 4,30 4,20 A 18,18 0 0,1 22,2 Z"
+            fill={themeColor}
+            stroke="#FFFFFF"
+            strokeWidth="2.5"
+          />
+
+          {/* Inner White Circle */}
+          <Circle cx="22" cy="20" r="14" fill="#FFFFFF" />
+
+          {/* Item Image inside ClipPath if present */}
+          {hasImage ? (
+            <SvgImage
+              href={{ uri: post.imageUrl }}
+              x="8"
+              y="6"
+              width="28"
+              height="28"
+              preserveAspectRatio="xMidYMid slice"
+              clipPath={`url(#avatarClip_${post.id})`}
             />
-          ) : (
+          ) : null}
+
+          {/* Bottom Right Badge Circle */}
+          <Circle cx="32" cy="28" r="7.5" fill="#FFFFFF" />
+          <Circle cx="32" cy="28" r="6" fill={themeColor} />
+          <SvgText
+            x="32"
+            y="31.2"
+            fontSize="8.5"
+            fontWeight="bold"
+            fill="#FFFFFF"
+            textAnchor="middle"
+          >
+            {badgeText}
+          </SvgText>
+        </Svg>
+
+        {/* Fallback Icon overlay if no image is attached to the post */}
+        {!hasImage && (
+          <View style={styles.fallbackIconOverlay}>
             <Ionicons
               name={isLost ? 'search-outline' : 'checkmark-circle-outline'}
-              size={22}
+              size={16}
               color={themeColor}
             />
-          )}
-          <View style={[styles.badgeContainer, { backgroundColor: themeColor }]}>
-            <Text style={styles.badgeText}>{isLost ? '?' : '✓'}</Text>
           </View>
-        </View>
-        <View style={[styles.pinTip, { borderTopColor: themeColor }]} />
+        )}
       </View>
 
       <Callout tooltip={Platform.OS === 'android'} onPress={onPress}>
@@ -145,7 +147,6 @@ export default function MapScreen() {
   const mapRef = useRef<MapView>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [filter, setFilter] = useState<'all' | 'lost' | 'found'>('all');
-  const [localImages, setLocalImages] = useState<Record<string, string>>({});
   const [region, setRegion] = useState({
     latitude: 10.8505, // HCMUTE / Thu Duc default coordinates
     longitude: 106.7717,
@@ -175,29 +176,6 @@ export default function MapScreen() {
       });
 
       setPosts(mapped);
-
-      // Download all post images to local device disk cache for 100% instant rendering in Android offscreen views
-      mapped.forEach(async (p, idx) => {
-        const postId = p.id || `post_${idx}`;
-        const imgUrl = p.imageUrl;
-        if (imgUrl && typeof imgUrl === 'string' && imgUrl.startsWith('http')) {
-          try {
-            const filename = `marker_${postId.replace(/[^a-zA-Z0-9]/g, '_')}.jpg`;
-            const fileUri = `${FileSystem.cacheDirectory}${filename}`;
-            const info = await FileSystem.getInfoAsync(fileUri);
-            if (info.exists) {
-              setLocalImages((prev) => ({ ...prev, [postId]: fileUri }));
-            } else {
-              const res = await FileSystem.downloadAsync(imgUrl, fileUri);
-              if (res.status === 200) {
-                setLocalImages((prev) => ({ ...prev, [postId]: res.uri }));
-              }
-            }
-          } catch (err) {
-            console.warn('Marker image download error:', err);
-          }
-        }
-      });
 
       if (mapped.length > 0 && mapRef.current) {
         const coords = mapped.map((p) => ({
@@ -235,7 +213,6 @@ export default function MapScreen() {
             const isLost = post.type === 'lost';
             const themeColor = isLost ? '#EF4444' : '#10B981';
             const postId = post.id || `post_${idx}`;
-            const imageUri = localImages[postId] || post.imageUrl || null;
 
             if (isZoomedOut) {
               if (Platform.OS === 'ios') {
@@ -292,10 +269,9 @@ export default function MapScreen() {
             }
 
             return (
-              <CustomAvatarMarker
-                key={`${postId}_custom_avatar`}
+              <SvgMapMarker
+                key={`${postId}_svg_marker`}
                 post={post}
-                imageUri={imageUri}
                 isLost={isLost}
                 themeColor={themeColor}
                 onPress={() => router.push(`/post/${post.id}`)}
@@ -348,11 +324,21 @@ const styles = StyleSheet.create({
   map: {
     flex: 1
   },
-  customMarkerContainer: {
+  svgMarkerWrapper: {
+    width: 44,
+    height: 56,
     alignItems: 'center',
     justifyContent: 'center',
-    width: 48,
-    height: 54,
+  },
+  fallbackIconOverlay: {
+    position: 'absolute',
+    top: 6,
+    left: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   compactDotWrapper: {
     width: 22,
@@ -373,56 +359,6 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: '#FFFFFF',
-  },
-  avatarWrapper: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 3,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 6,
-  },
-  avatarImage: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-  },
-  badgeContainer: {
-    position: 'absolute',
-    bottom: -1,
-    right: -1,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: '#FFFFFF',
-    zIndex: 10,
-  },
-  badgeText: {
-    color: '#FFFFFF',
-    fontSize: 9,
-    fontWeight: '900',
-    lineHeight: 11,
-  },
-  pinTip: {
-    width: 0,
-    height: 0,
-    backgroundColor: 'transparent',
-    borderStyle: 'solid',
-    borderLeftWidth: 5,
-    borderRightWidth: 5,
-    borderTopWidth: 7,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    marginTop: -1,
   },
   filterBarWrapper: {
     position: 'absolute',
