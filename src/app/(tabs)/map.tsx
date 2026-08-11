@@ -66,6 +66,33 @@ function CustomAvatarMarker({
     return () => clearTimeout(timer);
   }, [imageUri]);
 
+  // On Android, if local image file is available, use Google Maps Native icon prop for 100% reliable rendering
+  if (Platform.OS === 'android' && imageUri) {
+    return (
+      <Marker
+        key={`${post.id}_android_native_icon`}
+        coordinate={{
+          latitude: post.lat!,
+          longitude: post.lng!,
+        }}
+        icon={{ uri: imageUri }}
+      >
+        <Callout onPress={onPress}>
+          <View style={styles.calloutContainer}>
+            <Text style={styles.calloutTitle} numberOfLines={1}>{post.title}</Text>
+            <Text style={styles.calloutType}>
+              {isLost ? '🔴 Báo Mất' : '🟢 Nhặt Được'}
+            </Text>
+            {post.address ? (
+              <Text style={styles.calloutAddress} numberOfLines={1}>{post.address}</Text>
+            ) : null}
+          </View>
+        </Callout>
+      </Marker>
+    );
+  }
+
+  // Custom React View Avatar Marker for iOS and fallback states
   return (
     <Marker
       key={`${post.id}_custom_avatar_${imageUri ? 'loaded' : 'pending'}`}
