@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, Platform, TouchableOpacity, Modal, TouchableWithoutFeedback, Animated, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import MapView, { Marker, Callout } from 'react-native-maps';
-import Svg, { Path, Circle, ClipPath, Image as SvgImage, Text as SvgText, Defs } from 'react-native-svg';
+import MapView, { Marker } from 'react-native-maps';
+import Svg, { Path, Circle, ClipPath, Image as SvgImage, Text as SvgText, Defs, Rect } from 'react-native-svg';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -52,7 +52,7 @@ function SvgMapMarker({
   post,
   isLost,
   themeColor,
-  onPress
+  onPress,
 }: {
   post: Post;
   isLost: boolean;
@@ -71,77 +71,71 @@ function SvgMapMarker({
       }}
       anchor={{ x: 0.5, y: 1.0 }}
       tracksViewChanges={false}
+      onPress={onPress}
     >
-      <View style={styles.svgMarkerWrapper}>
-        <Svg width="44" height="56" viewBox="0 0 44 56">
-          <Defs>
-            <ClipPath id={`avatarClip_${post.id}`}>
-              <Circle cx="22" cy="20" r="13" />
-            </ClipPath>
-          </Defs>
+      <TouchableOpacity
+        activeOpacity={0.8}
+        onPress={onPress}
+      >
+        <View style={styles.svgMarkerWrapper}>
+          <Svg width="44" height="56" viewBox="0 0 44 56">
+            <Defs>
+              <ClipPath id={`avatarClip_${post.id}`}>
+                <Circle cx="22" cy="20" r="13" />
+              </ClipPath>
+            </Defs>
 
-          {/* Outer Teardrop Pin Path (Red for Lost, Emerald Green for Found) */}
-          <Path
-            d="M 22,2 A 18,18 0 0,1 40,20 C 40,30 22,54 22,54 C 22,54 4,30 4,20 A 18,18 0 0,1 22,2 Z"
-            fill={themeColor}
-            stroke="#FFFFFF"
-            strokeWidth="2.5"
-          />
-
-          {/* Inner White Circle */}
-          <Circle cx="22" cy="20" r="14" fill="#FFFFFF" />
-
-          {/* Item Image inside ClipPath if present */}
-          {hasImage ? (
-            <SvgImage
-              href={{ uri: post.imageUrl }}
-              x="8"
-              y="6"
-              width="28"
-              height="28"
-              preserveAspectRatio="xMidYMid slice"
-              clipPath={`url(#avatarClip_${post.id})`}
+            {/* Outer Teardrop Pin Path (Red for Lost, Emerald Green for Found) */}
+            <Path
+              d="M 22,2 A 18,18 0 0,1 40,20 C 40,30 22,54 22,54 C 22,54 4,30 4,20 A 18,18 0 0,1 22,2 Z"
+              fill={themeColor}
+              stroke="#FFFFFF"
+              strokeWidth="2.5"
             />
-          ) : null}
 
-          {/* Bottom Right Badge Circle */}
-          <Circle cx="32" cy="28" r="7.5" fill="#FFFFFF" />
-          <Circle cx="32" cy="28" r="6" fill={themeColor} />
-          <SvgText
-            x="32"
-            y="31.2"
-            fontSize="8.5"
-            fontWeight="bold"
-            fill="#FFFFFF"
-            textAnchor="middle"
-          >
-            {badgeText}
-          </SvgText>
-        </Svg>
+            {/* Inner White Circle */}
+            <Circle cx="22" cy="20" r="14" fill="#FFFFFF" />
 
-        {/* Fallback Icon overlay if no image is attached to the post */}
-        {!hasImage && (
-          <View style={styles.fallbackIconOverlay}>
-            <Ionicons
-              name={isLost ? 'search-outline' : 'checkmark-circle-outline'}
-              size={16}
-              color={themeColor}
-            />
-          </View>
-        )}
-      </View>
+            {/* Item Image inside ClipPath if present */}
+            {hasImage ? (
+              <SvgImage
+                href={{ uri: post.imageUrl }}
+                x="8"
+                y="6"
+                width="28"
+                height="28"
+                preserveAspectRatio="xMidYMid slice"
+                clipPath={`url(#avatarClip_${post.id})`}
+              />
+            ) : null}
 
-      <Callout tooltip={Platform.OS === 'android'} onPress={onPress}>
-        <View style={styles.calloutContainer}>
-          <Text style={styles.calloutTitle} numberOfLines={1}>{post.title}</Text>
-          <Text style={styles.calloutType}>
-            {isLost ? '🔴 Báo Mất' : '🟢 Nhặt Được'}
-          </Text>
-          {post.address ? (
-            <Text style={styles.calloutAddress} numberOfLines={1}>{post.address}</Text>
-          ) : null}
+            {/* Bottom Right Badge Circle */}
+            <Circle cx="32" cy="28" r="7.5" fill="#FFFFFF" />
+            <Circle cx="32" cy="28" r="6" fill={themeColor} />
+            <SvgText
+              x="32"
+              y="31.2"
+              fontSize="8.5"
+              fontWeight="bold"
+              fill="#FFFFFF"
+              textAnchor="middle"
+            >
+              {badgeText}
+            </SvgText>
+          </Svg>
+
+          {/* Fallback Icon overlay if no image is attached to the post */}
+          {!hasImage && (
+            <View style={styles.fallbackIconOverlay}>
+              <Ionicons
+                name={isLost ? 'search-outline' : 'checkmark-circle-outline'}
+                size={16}
+                color={themeColor}
+              />
+            </View>
+          )}
         </View>
-      </Callout>
+      </TouchableOpacity>
     </Marker>
   );
 }
@@ -155,6 +149,11 @@ export default function MapScreen() {
   const [mapType, setMapType] = useState<'standard' | 'hybrid' | 'terrain'>('standard');
   const [modalVisible, setModalVisible] = useState(false);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+
+  // Post Preview Modal State
+  const [previewPost, setPreviewPost] = useState<Post | null>(null);
+  const previewSlideAnim = useRef(new Animated.Value(450)).current;
+
   const slideAnim = useRef(new Animated.Value(450)).current;
 
   const [region, setRegion] = useState({
@@ -232,6 +231,18 @@ export default function MapScreen() {
     }
   }, [modalVisible]);
 
+  useEffect(() => {
+    if (previewPost !== null) {
+      previewSlideAnim.setValue(450);
+      Animated.spring(previewSlideAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        damping: 24,
+        stiffness: 220,
+      }).start();
+    }
+  }, [previewPost]);
+
   const closeModal = () => {
     Animated.timing(slideAnim, {
       toValue: 450,
@@ -239,6 +250,16 @@ export default function MapScreen() {
       useNativeDriver: true,
     }).start(() => {
       setModalVisible(false);
+    });
+  };
+
+  const closePreviewModal = () => {
+    Animated.timing(previewSlideAnim, {
+      toValue: 450,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      setPreviewPost(null);
     });
   };
 
@@ -302,6 +323,7 @@ export default function MapScreen() {
           mapType={mapType}
           showsUserLocation={true}
           showsMyLocationButton={false}
+          toolbarEnabled={false}
           onRegionChangeComplete={setRegion}
         >
           {filteredPosts.map((post, idx) => {
@@ -313,25 +335,14 @@ export default function MapScreen() {
               if (Platform.OS === 'ios') {
                 return (
                   <Marker
-                    key={`${postId}_ios_pin`}
+                    key={`${postId}_ios_native_pin`}
                     coordinate={{
                       latitude: post.lat!,
                       longitude: post.lng!,
                     }}
                     pinColor={themeColor}
-                  >
-                    <Callout onPress={() => router.push(`/post/${post.id}`)}>
-                      <View style={styles.calloutContainer}>
-                        <Text style={styles.calloutTitle} numberOfLines={1}>{post.title}</Text>
-                        <Text style={styles.calloutType}>
-                          {isLost ? '🔴 Báo Mất' : '🟢 Nhặt Được'}
-                        </Text>
-                        {post.address ? (
-                          <Text style={styles.calloutAddress} numberOfLines={1}>{post.address}</Text>
-                        ) : null}
-                      </View>
-                    </Callout>
-                  </Marker>
+                    onPress={() => setPreviewPost(post)}
+                  />
                 );
               }
 
@@ -343,22 +354,16 @@ export default function MapScreen() {
                     longitude: post.lng!,
                   }}
                   tracksViewChanges={false}
+                  onPress={() => setPreviewPost(post)}
                 >
-                  <View style={[styles.compactDotWrapper, { backgroundColor: themeColor }]}>
-                    <View style={styles.compactDotInner} />
-                  </View>
-
-                  <Callout tooltip onPress={() => router.push(`/post/${post.id}`)}>
-                    <View style={styles.calloutContainer}>
-                      <Text style={styles.calloutTitle} numberOfLines={1}>{post.title}</Text>
-                      <Text style={styles.calloutType}>
-                        {isLost ? '🔴 Báo Mất' : '🟢 Nhặt Được'}
-                      </Text>
-                      {post.address ? (
-                        <Text style={styles.calloutAddress} numberOfLines={1}>{post.address}</Text>
-                      ) : null}
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => setPreviewPost(post)}
+                  >
+                    <View style={[styles.compactDotWrapper, { backgroundColor: themeColor }]}>
+                      <View style={styles.compactDotInner} />
                     </View>
-                  </Callout>
+                  </TouchableOpacity>
                 </Marker>
               );
             }
@@ -369,7 +374,7 @@ export default function MapScreen() {
                 post={post}
                 isLost={isLost}
                 themeColor={themeColor}
-                onPress={() => router.push(`/post/${post.id}`)}
+                onPress={() => setPreviewPost(post)}
               />
             );
           })}
@@ -399,6 +404,126 @@ export default function MapScreen() {
           <Ionicons name="locate-outline" size={22} color="#1E293B" />
         </TouchableOpacity>
       </View>
+
+      {/* Post Preview Modal (Triggered on Clicking a Marker) */}
+      <Modal
+        visible={previewPost !== null}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={closePreviewModal}
+      >
+        <TouchableWithoutFeedback onPress={closePreviewModal}>
+          <View style={styles.previewModalOverlay}>
+            <TouchableWithoutFeedback>
+              <Animated.View
+                style={[
+                  styles.previewCardContainer,
+                  {
+                    transform: [{ translateY: previewSlideAnim }]
+                  }
+                ]}
+              >
+                {/* Post Image */}
+                {previewPost?.imageUrl ? (
+                  <Image source={{ uri: previewPost.imageUrl }} style={styles.previewImage} resizeMode="cover" />
+                ) : (
+                  <View style={styles.previewPlaceholderImage}>
+                    <Ionicons
+                      name={previewPost?.type === 'lost' ? 'search-outline' : 'checkmark-circle-outline'}
+                      size={48}
+                      color={previewPost?.type === 'lost' ? '#EF4444' : '#10B981'}
+                    />
+                  </View>
+                )}
+
+                <View style={styles.previewContentPadding}>
+                  {/* Category Type Badge Tag */}
+                  <View style={[
+                    styles.previewBadgePill,
+                    { backgroundColor: previewPost?.type === 'lost' ? '#FEF2F2' : '#ECFDF5' }
+                  ]}>
+                    <Text style={[
+                      styles.previewBadgeText,
+                      { color: previewPost?.type === 'lost' ? '#EF4444' : '#10B981' }
+                    ]}>
+                      {previewPost?.type === 'lost' ? 'THẤT LẠC' : 'NHẶT ĐƯỢC'}
+                    </Text>
+                  </View>
+
+                  {/* Title */}
+                  <Text style={styles.previewTitle} numberOfLines={1}>
+                    {previewPost?.title}
+                  </Text>
+
+                  {/* Description */}
+                  {previewPost?.description ? (
+                    <Text style={styles.previewDescription} numberOfLines={2}>
+                      {previewPost.description}
+                    </Text>
+                  ) : null}
+
+                  {/* Address */}
+                  {previewPost?.address ? (
+                    <View style={styles.previewAddressRow}>
+                      <Ionicons name="location-sharp" size={16} color="#10B981" />
+                      <Text style={styles.previewAddressText} numberOfLines={1}>
+                        {previewPost.address}
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  {/* Action Buttons Row: Google Maps Directions Button + Xem chi tiết */}
+                  <View style={styles.previewActionRowGroup}>
+                    <TouchableOpacity
+                      style={styles.previewDirectionsBtn}
+                      onPress={() => {
+                        console.log("Future direction feature clicked for post:", previewPost?.id);
+                      }}
+                      activeOpacity={0.85}
+                    >
+                      {/* Exact Google Maps Rotated Diamond with Right-Turn Arrow Icon */}
+                      <Svg width="40" height="40" viewBox="0 0 40 40">
+                        <Rect
+                          x="8"
+                          y="8"
+                          width="24"
+                          height="24"
+                          rx="5"
+                          ry="5"
+                          fill="#087F8C"
+                          transform="rotate(45 20 20)"
+                        />
+                        <Path
+                          d="M 14.5 25 V 20.5 C 14.5 18 16.5 16 19 16 H 22.5 V 12.5 L 28 18 L 22.5 23.5 V 20 H 19 C 18.7 20 18 20.7 18 21.5 V 25 H 14.5 Z"
+                          fill="#FFFFFF"
+                        />
+                      </Svg>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.previewActionBtn,
+                        { backgroundColor: previewPost?.type === 'lost' ? '#EF4444' : '#10B981' }
+                      ]}
+                      onPress={() => {
+                        const id = previewPost?.id;
+                        closePreviewModal();
+                        if (id) {
+                          router.push(`/post/${id}`);
+                        }
+                      }}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={styles.previewActionBtnText}>Xem chi tiết</Text>
+                      <Ionicons name="chevron-forward" size={18} color="#FFFFFF" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </Animated.View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
 
       {/* Google Maps Style Bottom Sheet Modal with Soft Backdrop Fade + Independent Sheet Slide Up */}
       <Modal
@@ -562,45 +687,6 @@ const styles = StyleSheet.create({
   map: {
     flex: 1
   },
-  googleUserMarkerContainer: {
-    width: 60,
-    height: 60,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  compassBeamCone: {
-    position: 'absolute',
-    top: 3,
-    right: 3,
-  },
-  breathingWhiteHalo: {
-    position: 'absolute',
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: 'rgba(255, 255, 255, 0.75)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.95)',
-  },
-  solidWhiteRing: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#1D4ED8',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.45,
-    shadowRadius: 5,
-    elevation: 6,
-  },
-  innerBlueDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#1D4ED8',
-  },
   svgMarkerWrapper: {
     width: 44,
     height: 56,
@@ -666,6 +752,104 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: COLORS.primary,
+  },
+  previewModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  previewCardContainer: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 16,
+  },
+  previewImage: {
+    width: '100%',
+    height: 180,
+  },
+  previewPlaceholderImage: {
+    width: '100%',
+    height: 140,
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewContentPadding: {
+    padding: 18,
+  },
+  previewBadgePill: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginBottom: 10,
+  },
+  previewBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  previewTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 6,
+  },
+  previewDescription: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    lineHeight: 18,
+    marginBottom: 10,
+  },
+  previewAddressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  previewAddressText: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginLeft: 6,
+    flex: 1,
+  },
+  previewActionRowGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  previewDirectionsBtn: {
+    width: 50,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  previewActionBtn: {
+    flex: 1,
+    height: 48,
+    backgroundColor: '#10B981',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 24,
+  },
+  previewActionBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+    marginRight: 4,
   },
   modalOverlay: {
     flex: 1,
