@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, Platform, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, Platform, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker, Callout } from 'react-native-maps';
+import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { fetchPosts } from '../../services/firebaseService';
@@ -41,9 +42,9 @@ class MapErrorBoundary extends React.Component<{ children: React.ReactNode }, { 
   }
 }
 
-// Individual Custom Avatar Marker component
+// Individual Custom Avatar Marker component using High Performance expo-image (Glide/Coil powered on Android)
 function CustomAvatarMarker({ post, isLost, themeColor, onPress }: { post: Post; isLost: boolean; themeColor: string; onPress: () => void }) {
-  // On Android, tracksViewChanges must be true to allow MapView bitmap canvas to re-draw remote network images
+  // Always keep tracksViewChanges true on Android so MapView continuously captures native bitmap canvas
   const tracksViewChanges = Platform.OS === 'android';
 
   return (
@@ -58,10 +59,12 @@ function CustomAvatarMarker({ post, isLost, themeColor, onPress }: { post: Post;
       <View style={styles.customMarkerContainer}>
         <View style={[styles.avatarWrapper, { borderColor: themeColor }]}>
           {post.imageUrl && typeof post.imageUrl === 'string' && post.imageUrl.trim() !== '' ? (
-            <Image
+            <ExpoImage
               source={{ uri: post.imageUrl }}
               style={styles.avatarImage}
-              resizeMode="cover"
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={150}
             />
           ) : (
             <Ionicons
@@ -107,14 +110,6 @@ export default function MapScreen() {
 
   useEffect(() => {
     fetchPosts('all').then((data) => {
-      // Pre-fetch all network images in main UI thread
-      data.forEach((p) => {
-        const img = p.imageUrl;
-        if (img && typeof img === 'string' && img.startsWith('http')) {
-          Image.prefetch(img).catch(() => {});
-        }
-      });
-
       // Map all posts and ensure every single post has valid lat/lng coordinates
       const mapped = data.map((p, idx) => {
         let latVal = p.lat != null ? Number(p.lat) : null;
@@ -163,11 +158,15 @@ export default function MapScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Hidden preloader container to ensure React Native caches image bitmaps in main UI thread */}
+      {/* Hidden preloader container with expo-image to ensure Android Glide/Coil memory-disk caching */}
       <View style={styles.hiddenImagePreloader}>
         {posts.map((p) => (
           p.imageUrl && typeof p.imageUrl === 'string' && p.imageUrl.startsWith('http') ? (
-            <Image key={`preload_${p.id}`} source={{ uri: p.imageUrl }} />
+            <ExpoImage
+              key={`preload_${p.id}`}
+              source={{ uri: p.imageUrl }}
+              cachePolicy="memory-disk"
+            />
           ) : null
         ))}
       </View>
