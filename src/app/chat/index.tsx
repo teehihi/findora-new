@@ -1,13 +1,21 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  ActivityIndicator,
+  Image,
+  RefreshControl
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { collection, query, where, onSnapshot, getDocs } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, getDocs, doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../../config/firebase';
 import { getPosterDetails } from '../../services/firebaseService';
-import { HeaderBar } from '../../components/HeaderBar';
-import { COLORS, SPACING, SHADOWS } from '../../constants/theme';
+import { COLORS, SPACING } from '../../constants/theme';
 
 export interface Conversation {
   id: string;
@@ -15,24 +23,111 @@ export interface Conversation {
   otherUserName: string;
   otherUserAvatar: string;
   lastMessage: string;
-  timestamp: any;
-  postId?: string;
+  postTitle?: string;
+  timestamp: string;
+  unreadCount: number;
 }
 
 export default function ChatListScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
+  const formatTimestamp = (rawTs: any): string => {
+    if (!rawTs) return '';
+    try {
+      let dateObj: Date;
+      if (rawTs.seconds) {
+        dateObj = new Date(rawTs.seconds * 1000);
+      } else if (rawTs instanceof Date) {
+        dateObj = rawTs;
+      } else {
+        dateObj = new Date(rawTs);
+      }
+
+      if (isNaN(dateObj.getTime())) return '';
+
+      const now = new Date();
+      const isToday = dateObj.toDateString() === now.toDateString();
+
+      if (isToday) {
+        const hours = dateObj.getHours().toString().padStart(2, '0');
+        const minutes = dateObj.getMinutes().toString().padStart(2, '0');
+        return `${hours}:${minutes}`;
+      } else {
+        const day = dateObj.getDate().toString().padStart(2, '0');
+        const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+        return `${day}/${month}`;
+      }
+    } catch {
+      return '';
+    }
+  };
+
+  const loadConversations = async () => {
     const user = auth.currentUser;
     if (!user) {
       setLoading(false);
+      setRefreshing(false);
       return;
     }
 
-    const loadFallbackMessages = async () => {
-      try {
+    try {
+      const chatsRef = collection(db, 'chats');
+      const qChats = query(chatsRef, where('participants', 'array-contains', user.uid));
+      const snapshot = await getDocs(qChats);
+
+      if (!snapshot.empty) {
+        const list: Conversation[] = [];
+        for (const docSnap of snapshot.docs) {
+          const data = docSnap.data();
+          const participants: string[] = data.participants || [];
+          const otherId = participants.find((id) => id !== user.uid) || user.uid;
+          
+          let userDetails = { name: 'Người dùng', avatarUrl: '' };
+          try {
+            userDetails = await getPosterDetails(otherId);
+          } catch (e) {
+            console.log('Error fetching user details:', e);
+          }
+
+          // Count unread messages for current user
+          let unread = 0;
+          try {
+            const msgsRef = collection(db, 'chats', docSnap.id, 'messages');
+            const unreadQuery = query(msgsRef, where('receiverId', '==', user.uid), where('read', '==', false));
+            const unreadSnap = await getDocs(unreadQuery);
+            unread = unreadSnap.size;
+          } catch (e) {
+            // Safe fallback if subcollection query is omitted
+          }
+
+          let postTitleVal = data.postTitle || '';
+          if (!postTitleVal && data.postId) {
+            try {
+              const postDoc = await getDoc(doc(db, 'posts', data.postId));
+              if (postDoc.exists()) {
+                postTitleVal = postDoc.data().title || '';
+              }
+            } catch (e) {}
+          }
+
+          list.push({
+            id: docSnap.id,
+            otherUserId: otherId,
+            otherUserName: userDetails.name || data.otherUserName || 'Người dùng Findora',
+            otherUserAvatar: userDetails.avatarUrl || data.otherUserAvatar || '',
+            lastMessage: data.lastMessage || data.message || 'Bắt đầu trò chuyện',
+            postTitle: postTitleVal,
+            timestamp: formatTimestamp(data.lastTimestamp || data.timestamp || data.updatedAt),
+            unreadCount: unread
+          });
+        }
+        setConversations(list);
+      } else {
+        // Fallback fallback querying 'messages' directly
         const msgsRef = collection(db, 'messages');
         const snap = await getDocs(msgsRef);
         const map = new Map<string, Conversation>();
@@ -42,188 +137,332 @@ export default function ChatListScreen() {
           if (data.senderId === user.uid || data.receiverId === user.uid) {
             const otherId = data.senderId === user.uid ? data.receiverId : data.senderId;
             if (otherId && !map.has(otherId)) {
-              const userDetails = await getPosterDetails(otherId);
+              let userDetails = { name: 'Người dùng', avatarUrl: '' };
+              try {
+                userDetails = await getPosterDetails(otherId);
+              } catch (e) {}
+
+              let postTitleVal = data.postTitle || '';
+              if (!postTitleVal && data.postId) {
+                try {
+                  const postDoc = await getDoc(doc(db, 'posts', data.postId));
+                  if (postDoc.exists()) {
+                    postTitleVal = postDoc.data().title || '';
+                  }
+                } catch (e) {}
+              }
+
               map.set(otherId, {
                 id: docSnap.id,
                 otherUserId: otherId,
                 otherUserName: userDetails.name || 'Người dùng Findora',
                 otherUserAvatar: userDetails.avatarUrl || '',
-                lastMessage: data.message || data.text || '',
-                timestamp: data.timestamp,
-                postId: data.postId
+                lastMessage: data.message || data.text || 'Bắt đầu trò chuyện',
+                postTitle: postTitleVal,
+                timestamp: formatTimestamp(data.timestamp),
+                unreadCount: data.read === false && data.receiverId === user.uid ? 1 : 0
               });
             }
           }
         }
-
         setConversations(Array.from(map.values()));
-      } catch (err) {
-        console.log('Messages fallback query notice:', err);
-      } finally {
-        setLoading(false);
       }
-    };
+    } catch (err) {
+      console.log('Error loading chat list:', err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
-    // 1. Try native Findora 'chats' collection schema safely
-    let unsubChats = () => {};
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
+    // Subscribe to real-time chats updates
+    let unsub = () => {};
     try {
       const chatsRef = collection(db, 'chats');
       const qChats = query(chatsRef, where('participants', 'array-contains', user.uid));
-
-      unsubChats = onSnapshot(
-        qChats, 
-        async (snapshot) => {
-          if (!snapshot.empty) {
-            const list: Conversation[] = [];
-            for (const docSnap of snapshot.docs) {
-              const data = docSnap.data();
-              const participants: string[] = data.participants || [];
-              const otherId = participants.find(id => id !== user.uid) || user.uid;
-              const userDetails = await getPosterDetails(otherId);
-
-              list.push({
-                id: docSnap.id,
-                otherUserId: otherId,
-                otherUserName: userDetails.name || 'Người dùng Findora',
-                otherUserAvatar: userDetails.avatarUrl || '',
-                lastMessage: data.lastMessage || data.message || 'Bắt đầu trò chuyện',
-                timestamp: data.lastTimestamp || data.timestamp,
-                postId: data.postId
-              });
-            }
-            setConversations(list);
-            setLoading(false);
-          } else {
-            await loadFallbackMessages();
-          }
-        }, 
-        (error) => {
-          console.log('Chats listener permission notice:', error);
-          loadFallbackMessages();
+      unsub = onSnapshot(
+        qChats,
+        () => {
+          loadConversations();
+        },
+        () => {
+          loadConversations();
         }
       );
     } catch (e) {
-      console.log('Chats query exception:', e);
-      loadFallbackMessages();
+      loadConversations();
     }
 
-    return () => unsubChats();
+    return () => unsub();
   }, []);
 
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadConversations();
+  };
+
   return (
-    <SafeAreaView style={styles.container}>
-      <HeaderBar title="Trò Chuyện Direct" showBack />
+    <View style={styles.container}>
+      {/* Messenger Large Bold Header */}
+      <View style={[styles.headerContainer, { paddingTop: insets.top + 16 }]}>
+        <Text style={styles.headerTitle}>Tin nhắn</Text>
+      </View>
 
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Đang tải cuộc trò chuyện...</Text>
+          <ActivityIndicator size="large" color="#0084FF" />
+          <Text style={styles.loadingText}>Đang tải tin nhắn...</Text>
         </View>
       ) : (
         <FlatList
           data={conversations}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <TouchableOpacity 
-              style={styles.card} 
-              onPress={() => router.push({ pathname: '/chat/[id]', params: { id: item.otherUserId } })}
-            >
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{item.otherUserName.charAt(0).toUpperCase()}</Text>
-              </View>
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#0084FF" />
+          }
+          renderItem={({ item }) => {
+            const hasUnread = item.unreadCount > 0;
+            return (
+              <TouchableOpacity
+                style={styles.chatItemRow}
+                onPress={() => router.push({ pathname: '/chat/[id]', params: { id: item.otherUserId, postTitle: item.postTitle || '' } })}
+                activeOpacity={0.7}
+              >
+                {/* Avatar Container with Messenger Blue Unread Dot */}
+                <View style={styles.avatarContainer}>
+                  {item.otherUserAvatar ? (
+                    <Image source={{ uri: item.otherUserAvatar }} style={styles.avatarImage} />
+                  ) : (
+                    <View style={styles.avatarPlaceholder}>
+                      <Ionicons name="person" size={24} color="#64748B" />
+                    </View>
+                  )}
 
-              <View style={styles.infoCol}>
-                <Text style={styles.userName}>{item.otherUserName}</Text>
-                <Text style={styles.lastMsg} numberOfLines={1}>{item.lastMessage}</Text>
-              </View>
-            </TouchableOpacity>
-          )}
-          contentContainerStyle={styles.listContent}
+                  {/* Messenger Style Blue Unread Dot */}
+                  {hasUnread && <View style={styles.unreadDotIndicator} />}
+                </View>
+
+                {/* Content Column */}
+                <View style={styles.contentCol}>
+                  {/* Name and Timestamp Row */}
+                  <View style={styles.topMetaRow}>
+                    <Text style={styles.userNameText} numberOfLines={1}>
+                      {item.otherUserName}
+                    </Text>
+                    {item.timestamp ? (
+                      <Text style={styles.timeText}>{item.timestamp}</Text>
+                    ) : null}
+                  </View>
+
+                  {/* Last Message and Unread Count Badge Row */}
+                  <View style={styles.middleMessageRow}>
+                    <Text
+                      style={[
+                        styles.lastMessageText,
+                        hasUnread ? styles.unreadLastMessageText : styles.readLastMessageText
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {item.lastMessage}
+                    </Text>
+
+                    {/* Messenger Style Blue Badge */}
+                    {hasUnread ? (
+                      <View style={styles.unreadBadgePill}>
+                        <Text style={styles.unreadBadgeText}>{item.unreadCount}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+
+                  {/* Post Title Context (e.g. Về: Thẻ sinh viên...) */}
+                  {item.postTitle ? (
+                    <Text style={styles.postTitleText} numberOfLines={1}>
+                      Về: {item.postTitle}
+                    </Text>
+                  ) : null}
+                </View>
+              </TouchableOpacity>
+            );
+          }}
+          contentContainerStyle={styles.listContentContainer}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <Ionicons name="chatbubbles-outline" size={56} color={COLORS.textMuted} />
-              <Text style={styles.emptyTitle}>Chưa có cuộc trò chuyện nào</Text>
-              <Text style={styles.emptySubtitle}>Bắt đầu trò chuyện với người đăng bài để trao đổi về đồ thất lạc.</Text>
+              <View style={styles.emptyIconCircle}>
+                <Ionicons name="chatbubbles-outline" size={42} color="#94A3B8" />
+              </View>
+              <Text style={styles.emptyTitle}>Chưa có tin nhắn nào</Text>
+              <Text style={styles.emptySubtitle}>
+                Bắt đầu nhắn tin từ chi tiết bài đăng để trao đổi về đồ thất lạc.
+              </Text>
             </View>
           }
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background
+    backgroundColor: '#FFFFFF',
+  },
+  headerContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    backgroundColor: '#FFFFFF',
+  },
+  headerTitle: {
+    fontSize: 30,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: -0.5,
   },
   center: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
   },
   loadingText: {
     marginTop: 10,
     fontSize: 14,
-    color: COLORS.textMuted
+    color: '#64748B',
   },
-  listContent: {
-    padding: SPACING.md
+  listContentContainer: {
+    paddingBottom: 100,
   },
-  card: {
+  chatItemRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.card,
-    borderRadius: 16,
-    padding: SPACING.md,
-    marginBottom: SPACING.sm,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    ...SHADOWS.small
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
   },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: COLORS.primaryLight,
+  avatarContainer: {
+    position: 'relative',
+    width: 52,
+    height: 52,
+    marginRight: 14,
+  },
+  avatarImage: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#F1F5F9',
+  },
+  avatarPlaceholder: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: SPACING.md
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
-  avatarText: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: COLORS.primaryDark
+  unreadDotIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 15,
+    height: 15,
+    borderRadius: 7.5,
+    backgroundColor: '#0084FF', // Messenger Brand Signature Blue
+    borderWidth: 2.5,
+    borderColor: '#FFFFFF',
   },
-  infoCol: {
-    flex: 1
+  contentCol: {
+    flex: 1,
+    justifyContent: 'center',
   },
-  userName: {
+  topMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 3,
+  },
+  userNameText: {
     fontSize: 16,
     fontWeight: '700',
-    color: COLORS.text,
-    marginBottom: 2
+    color: '#0F172A',
+    flex: 1,
+    marginRight: 8,
   },
-  lastMsg: {
-    fontSize: 13,
-    color: COLORS.textMuted
+  timeText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#94A3B8',
+  },
+  middleMessageRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  lastMessageText: {
+    fontSize: 14,
+    flex: 1,
+    marginRight: 8,
+  },
+  unreadLastMessageText: {
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  readLastMessageText: {
+    fontWeight: '400',
+    color: '#64748B',
+  },
+  unreadBadgePill: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#0084FF', // Messenger Brand Signature Blue
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  unreadBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  postTitleText: {
+    fontSize: 11,
+    color: '#94A3B8',
+    marginTop: 3,
+    fontWeight: '500',
   },
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: SPACING.xl * 2
+    paddingTop: 80,
+    paddingHorizontal: 30,
+  },
+  emptyIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
   },
   emptyTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: COLORS.text,
-    marginTop: SPACING.md
+    color: '#0F172A',
+    marginBottom: 6,
   },
   emptySubtitle: {
     fontSize: 13,
-    color: COLORS.textMuted,
+    color: '#64748B',
     textAlign: 'center',
-    marginTop: 4,
-    paddingHorizontal: SPACING.lg
-  }
+    lineHeight: 20,
+  },
 });
