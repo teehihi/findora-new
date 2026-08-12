@@ -32,7 +32,7 @@ export function CustomTabBar({ state, descriptors, navigation }: any) {
 
   // Determine active tab index (0: index, 1: map, 2: plus, 3: chat, 4: profile)
   const activeRouteName = state.routes[state.index]?.name;
-  const isChatActive = pathname?.startsWith('/chat');
+  const isChatActive = activeRouteName === 'chat' || pathname === '/chat' || pathname === '/(tabs)/chat';
 
   let activeIndex = 0;
   if (isChatActive) {
@@ -96,23 +96,19 @@ export function CustomTabBar({ state, descriptors, navigation }: any) {
 
   const handleNavPress = (routeName: string, anim: Animated.Value) => {
     animateTabPress(anim);
-    if (routeName === 'chat') {
-      router.push('/chat');
-    } else {
-      const routeIndex = state.routes.findIndex((r: any) => r.name === routeName);
-      if (routeIndex !== -1) {
-        const event = navigation.emit({
-          type: 'tabPress',
-          target: state.routes[routeIndex].key,
-          canPreventDefault: true,
-        });
+    const routeIndex = state.routes.findIndex((r: any) => r.name === routeName);
+    if (routeIndex !== -1) {
+      const event = navigation.emit({
+        type: 'tabPress',
+        target: state.routes[routeIndex].key,
+        canPreventDefault: true,
+      });
 
-        if (!event.defaultPrevented) {
-          navigation.navigate(routeName);
-        }
-      } else {
-        navigation.navigate(routeName as any);
+      if (!event.defaultPrevented) {
+        navigation.navigate(routeName);
       }
+    } else {
+      navigation.navigate(routeName as any);
     }
   };
 

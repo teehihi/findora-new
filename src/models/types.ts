@@ -55,7 +55,14 @@ export interface ChatMessage {
   receiverId: string;
   postId?: string;
   message: string;
+  type?: 'text' | 'image' | 'call';
+  callType?: 'voice' | 'video';
+  callDuration?: number;
+  callStatus?: 'ended' | 'missed' | 'rejected';
   imageUrl?: string;
+  replyToId?: string | null;
+  replyToText?: string | null;
+  replyToSender?: string | null;
   timestamp?: Timestamp | any;
   read?: boolean;
 }

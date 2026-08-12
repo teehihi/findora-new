@@ -5,6 +5,7 @@ import { LogBox } from 'react-native';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import { setupOnlinePresence } from '../services/presenceService';
+import { GlobalCallListener } from '../components/GlobalCallListener';
 
 LogBox.ignoreLogs([
   'FirebaseError: [code=permission-denied]',
@@ -43,6 +44,8 @@ export default function RootLayout() {
         <Stack.Screen name="wallet/leaderboard" />
         <Stack.Screen name="profile/edit" />
       </Stack>
+      {/* Global In-App Call Receiver Listener */}
+      {currentUser && <GlobalCallListener />}
     </>
   );
 }

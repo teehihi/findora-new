@@ -8,7 +8,6 @@ import {
   Image, 
   ScrollView, 
   Dimensions, 
-  SafeAreaView, 
   StatusBar,
   Platform,
   Animated,
@@ -17,6 +16,7 @@ import {
   Alert,
   Share
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { File, Paths } from 'expo-file-system';
 import { BlurView } from 'expo-blur';
@@ -33,14 +33,15 @@ try {
 interface ImageViewerModalProps {
   visible: boolean;
   imageUrl: string;
-  post: Post;
-  posterName: string;
+  post?: Post;
+  posterName?: string;
   posterAvatar?: string;
-  formattedDate: string;
-  likeCount: number;
-  isLiked: boolean;
-  commentCount: number;
-  onToggleLike: () => void;
+  formattedDate?: string;
+  likeCount?: number;
+  isLiked?: boolean;
+  commentCount?: number;
+  hideBottomOverlay?: boolean;
+  onToggleLike?: () => void;
   onClose: () => void;
   onCommentPress?: () => void;
 }
@@ -54,19 +55,23 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
   posterName,
   posterAvatar,
   formattedDate,
-  likeCount,
-  isLiked,
-  commentCount,
+  likeCount = 0,
+  isLiked = false,
+  commentCount = 0,
+  hideBottomOverlay = false,
   onToggleLike,
   onClose,
   onCommentPress
 }) => {
+  const insets = useSafeAreaInsets();
   const [showControls, setShowControls] = useState<boolean>(true);
   const [isZoomed, setIsZoomed] = useState<boolean>(false);
   const [isOptionsModalVisible, setIsOptionsModalVisible] = useState<boolean>(false);
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState<boolean>(false);
 
   const currentZoomScale = useRef<number>(1);
+  const initialPinchDistRef = useRef<number | null>(null);
+  const initialZoomScaleRef = useRef<number>(1);
   const scrollViewRef = useRef<ScrollView>(null);
 
   const panXY = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
@@ -87,49 +92,88 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
       setIsOptionsModalVisible(false);
       setIsDescriptionExpanded(false);
       currentZoomScale.current = 1;
+      initialPinchDistRef.current = null;
     }
   }, [visible]);
 
-  // Facebook Drag-To-Dismiss PanResponder (Applies ONLY when image is unzoomed)
+  // PanResponder with Cross-Platform Pinch-to-Zoom (2 fingers), Double-Tap Zoom, and Drag-to-Dismiss
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => !isZoomed,
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        if (isZoomed) return false;
-        return Math.abs(gestureState.dx) > 2 || Math.abs(gestureState.dy) > 2;
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (evt) => {
+        const touches = evt.nativeEvent.touches;
+        if (touches && touches.length === 2) {
+          const dx = touches[0].pageX - touches[1].pageX;
+          const dy = touches[0].pageY - touches[1].pageY;
+          initialPinchDistRef.current = Math.sqrt(dx * dx + dy * dy);
+          initialZoomScaleRef.current = currentZoomScale.current;
+        } else {
+          initialPinchDistRef.current = null;
+        }
       },
-      onPanResponderMove: (_, gestureState) => {
-        if (isZoomed) return;
-        panXY.setValue({ x: gestureState.dx, y: gestureState.dy });
+      onPanResponderMove: (evt, gestureState) => {
+        const touches = evt.nativeEvent.touches;
+        if (touches && touches.length === 2) {
+          // 2-Finger Pinch Zoom
+          const dx = touches[0].pageX - touches[1].pageX;
+          const dy = touches[0].pageY - touches[1].pageY;
+          const currentDist = Math.sqrt(dx * dx + dy * dy);
+          if (initialPinchDistRef.current && initialPinchDistRef.current > 0) {
+            const scaleFactor = currentDist / initialPinchDistRef.current;
+            const newScale = Math.max(1, Math.min(4.5, initialZoomScaleRef.current * scaleFactor));
+            currentZoomScale.current = newScale;
+            zoomAnim.setValue(newScale);
+            if (newScale > 1.1 && !isZoomed) setIsZoomed(true);
+            if (newScale <= 1.1 && isZoomed) setIsZoomed(false);
+          }
+        } else if (isZoomed) {
+          // Pan image when zoomed
+          panXY.setValue({ x: gestureState.dx, y: gestureState.dy });
+        } else {
+          // Drag down/up to dismiss when unzoomed
+          panXY.setValue({ x: gestureState.dx, y: gestureState.dy });
+        }
       },
       onPanResponderRelease: (_, gestureState) => {
-        if (isZoomed) return;
+        initialPinchDistRef.current = null;
 
-        const dist = Math.sqrt(gestureState.dx * gestureState.dx + gestureState.dy * gestureState.dy);
-        const velocity = Math.sqrt(gestureState.vx * gestureState.vx + gestureState.vy * gestureState.vy);
-
-        // Fluid release: drag > 15px or flick speed > 0.08 instantly dismisses photo smoothly like Facebook
-        if (dist > 15 || velocity > 0.08) {
-          const targetX = gestureState.dx * 3;
-          const targetY = gestureState.dy * 3;
-
-          Animated.timing(panXY, {
-            toValue: { x: targetX, y: targetY },
-            duration: 120,
-            useNativeDriver: true
-          }).start(() => {
-            onClose();
-            // Immediately reset panXY coordinates after offscreen animation finishes so next open is 100% centered
-            panXY.stopAnimation();
-            panXY.setValue({ x: 0, y: 0 });
-          });
-        } else {
-          // If minimal drag/tap, spring smoothly back to center
+        if (isZoomed && currentZoomScale.current > 1.1) {
           Animated.spring(panXY, {
             toValue: { x: 0, y: 0 },
             useNativeDriver: true,
             bounciness: 2
           }).start();
+        } else {
+          if (currentZoomScale.current <= 1.1) {
+            setIsZoomed(false);
+            currentZoomScale.current = 1;
+            Animated.spring(zoomAnim, { toValue: 1, useNativeDriver: true, bounciness: 2 }).start();
+          }
+
+          const dist = Math.sqrt(gestureState.dx * gestureState.dx + gestureState.dy * gestureState.dy);
+          const velocity = Math.sqrt(gestureState.vx * gestureState.vx + gestureState.vy * gestureState.vy);
+
+          if (dist > 15 || velocity > 0.08) {
+            const targetX = gestureState.dx * 3;
+            const targetY = gestureState.dy * 3;
+
+            Animated.timing(panXY, {
+              toValue: { x: targetX, y: targetY },
+              duration: 120,
+              useNativeDriver: true
+            }).start(() => {
+              onClose();
+              panXY.stopAnimation();
+              panXY.setValue({ x: 0, y: 0 });
+            });
+          } else {
+            Animated.spring(panXY, {
+              toValue: { x: 0, y: 0 },
+              useNativeDriver: true,
+              bounciness: 2
+            }).start();
+          }
         }
       }
     })
@@ -141,23 +185,27 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
     const DOUBLE_TAP_DELAY = 280;
 
     if (now - lastTapRef.current < DOUBLE_TAP_DELAY) {
-      // Double Tap Detected! Clear single tap timer
       if (singleTapTimerRef.current) {
         clearTimeout(singleTapTimerRef.current);
         singleTapTimerRef.current = null;
       }
 
       if (isZoomed) {
-        // Double tap #2: Reset zoom back to 1.0
         setIsZoomed(false);
         currentZoomScale.current = 1;
-        Animated.spring(zoomAnim, {
-          toValue: 1,
-          useNativeDriver: true,
-          bounciness: 2
-        }).start();
+        Animated.parallel([
+          Animated.spring(zoomAnim, {
+            toValue: 1,
+            useNativeDriver: true,
+            bounciness: 2
+          }),
+          Animated.spring(panXY, {
+            toValue: { x: 0, y: 0 },
+            useNativeDriver: true,
+            bounciness: 2
+          })
+        ]).start();
       } else {
-        // Double tap #1: Zoom in to fill viewport (2.5x)
         setIsZoomed(true);
         currentZoomScale.current = 2.5;
         Animated.spring(zoomAnim, {
@@ -167,7 +215,6 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
         }).start();
       }
     } else {
-      // Potential Single Tap ➔ Wait 250ms to toggle controls
       singleTapTimerRef.current = setTimeout(() => {
         setShowControls((prev) => !prev);
       }, 250);
@@ -176,14 +223,14 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
     lastTapRef.current = now;
   };
 
-  // Safe Save Image with Native Module Fallback to iOS System Share Sheet ("Lưu hình ảnh")
+  // Save Image safely with fallback
   const handleSaveImage = async () => {
     try {
       let MediaLibraryModule: any = null;
       try {
         MediaLibraryModule = require('expo-media-library');
       } catch (e) {
-        console.log('MediaLibrary native module notice: using system Share Sheet fallback');
+        console.log('MediaLibrary notice: system share sheet fallback');
       }
 
       if (MediaLibraryModule && MediaLibraryModule.saveToLibraryAsync) {
@@ -191,12 +238,11 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
         if (status === 'granted') {
           const file = await File.downloadFileAsync(imageUrl, Paths.cache);
           await MediaLibraryModule.saveToLibraryAsync(file.uri);
-          Alert.alert('Thành công', 'Đã lưu hình ảnh vào Thư viện ảnh của thiết bị!');
+          Alert.alert('Thành công', 'Đã lưu hình ảnh vào Thư viện ảnh!');
           return;
         }
       }
 
-      // Native Fallback: iOS / Android System Share Sheet with built-in "Save Image" option
       await Share.share(
         Platform.OS === 'ios'
           ? { url: imageUrl }
@@ -208,19 +254,17 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
     }
   };
 
-  // Share Image / Post
   const handleSharePost = async () => {
     try {
       await Share.share({
         url: imageUrl,
-        message: post.title ? `[Findora] ${post.title}\n${imageUrl}` : imageUrl
+        message: post?.title ? `[Findora] ${post.title}\n${imageUrl}` : imageUrl
       });
     } catch (error) {
-      console.error('Error sharing post:', error);
+      console.error('Error sharing image:', error);
     }
   };
 
-  // Helper component to render Liquid Glass (iOS) or BlurView (Android & Fallback)
   const GlassCardContainer = ({ children, style }: { children: React.ReactNode; style?: any }) => {
     if (Platform.OS === 'ios' && LiquidGlassView) {
       return (
@@ -242,7 +286,6 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
 
   if (!visible || !imageUrl) return null;
 
-  // Dynamically calculate opacity for background, top header, and bottom caption based on image drag distance
   const opacityY = panXY.y.interpolate({
     inputRange: [-SCREEN_HEIGHT / 2, 0, SCREEN_HEIGHT / 2],
     outputRange: [0, 1, 0],
@@ -259,37 +302,38 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor="#000000" hidden={!showControls} />
 
-        {/* 1. Backdrop Background - Anchored, Only Fades Out */}
+        {/* 1. Backdrop Background */}
         <Animated.View style={[styles.backdrop, { opacity: opacityY }]} />
 
-        {/* 2. Top Bar Header: Close X (Left) + 3 Dots (Right) - Anchored, Only Fades Out */}
+        {/* 2. Top Bar Header: Close X (Left) + 3 Dots (Right) - Blue Icon Buttons (No Background Circle) */}
         {showControls ? (
-          <Animated.View style={[styles.safeTopHeader, { opacity: opacityY }]}>
-            <SafeAreaView>
-              <View style={styles.topHeaderRow}>
-                <TouchableOpacity 
-                  style={styles.headerBtn} 
-                  onPress={onClose}
-                  activeOpacity={0.7}
-                  hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
-                >
-                  <Ionicons name="close" size={26} color="#FFFFFF" />
-                </TouchableOpacity>
+          <Animated.View style={[
+            styles.safeTopHeader, 
+            { paddingTop: insets.top || (Platform.OS === 'ios' ? 44 : 20), opacity: opacityY }
+          ]}>
+            <View style={styles.topHeaderRow}>
+              <TouchableOpacity 
+                style={styles.headerBtn} 
+                onPress={onClose}
+                activeOpacity={0.7}
+                hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+              >
+                <Ionicons name="close" size={28} color="#0084FF" />
+              </TouchableOpacity>
 
-                <TouchableOpacity 
-                  style={styles.headerBtn} 
-                  onPress={() => setIsOptionsModalVisible(true)}
-                  activeOpacity={0.7}
-                  hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
-                >
-                  <Ionicons name="ellipsis-vertical" size={22} color="#FFFFFF" />
-                </TouchableOpacity>
-              </View>
-            </SafeAreaView>
+              <TouchableOpacity 
+                style={styles.headerBtn} 
+                onPress={() => setIsOptionsModalVisible(true)}
+                activeOpacity={0.7}
+                hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+              >
+                <Ionicons name="ellipsis-vertical" size={24} color="#0084FF" />
+              </TouchableOpacity>
+            </View>
           </Animated.View>
         ) : null}
 
-        {/* 3. Fullscreen Image - PERFECTLY CENTERED VERTICALLY & HORIZONTALLY IN SCREEN CENTER */}
+        {/* 3. Fullscreen Image with Pinch-to-Zoom & Double-Tap Zoom */}
         <Animated.View 
           style={[
             styles.animatedImageWrapper, 
@@ -297,46 +341,23 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
           ]}
           {...panResponder.panHandlers}
         >
-          <ScrollView
-            ref={scrollViewRef}
-            style={styles.scrollContainer}
-            contentContainerStyle={styles.scrollContent}
-            scrollEnabled={isZoomed}
-            maximumZoomScale={5}
-            minimumZoomScale={1}
-            zoomScale={1}
-            pinchGestureEnabled={true}
-            scrollEventThrottle={16}
-            showsHorizontalScrollIndicator={false}
-            showsVerticalScrollIndicator={false}
-            centerContent={true}
-            bouncesZoom={true}
-            onScroll={(e) => {
-              const scale = e.nativeEvent.zoomScale || 1;
-              currentZoomScale.current = scale;
-              if (scale > 1.05 && !isZoomed) setIsZoomed(true);
-              if (scale <= 1.05 && isZoomed) setIsZoomed(false);
-            }}
-          >
-            <TouchableWithoutFeedback onPress={handleImageTap}>
-              <Animated.Image
-                source={{ uri: imageUrl }}
-                style={[
-                  styles.fullImage,
-                  { transform: [{ scale: zoomAnim }] }
-                ]}
-                resizeMode="contain"
-              />
-            </TouchableWithoutFeedback>
-          </ScrollView>
+          <TouchableWithoutFeedback onPress={handleImageTap}>
+            <Animated.Image
+              source={{ uri: imageUrl }}
+              style={[
+                styles.fullImage,
+                { transform: [{ scale: zoomAnim }] }
+              ]}
+              resizeMode="contain"
+            />
+          </TouchableWithoutFeedback>
         </Animated.View>
 
-        {/* 4. Bottom Overlay (Caption & Action Bar) - Anchored, Only Fades Out */}
-        {showControls ? (
+        {/* 4. Bottom Overlay (Caption & Action Bar) */}
+        {!hideBottomOverlay && showControls && post ? (
           <Animated.View style={[styles.safeBottomOverlay, { opacity: opacityY }]}>
-            <SafeAreaView>
+            <SafeAreaView edges={['bottom']}>
               <View style={styles.bottomOverlayContent}>
-                {/* Poster Info Row matching Facebook Compact Typography */}
                 <View style={styles.posterRow}>
                   <View style={styles.avatarCircle}>
                     {posterAvatar ? (
@@ -349,11 +370,10 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
                   </View>
                   <View style={styles.posterTextCol}>
                     <Text style={styles.posterNameText}>{posterName || 'Người dùng Findora'}</Text>
-                    <Text style={styles.dateText}>{formattedDate}</Text>
+                    {formattedDate ? <Text style={styles.dateText}>{formattedDate}</Text> : null}
                   </View>
                 </View>
 
-                {/* Post Title & Description with Collapsed "... Xem thêm" matching Facebook */}
                 {post.title ? (
                   <Text style={styles.postTitleText} numberOfLines={1}>
                     {post.title}
@@ -376,45 +396,46 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
                   </TouchableOpacity>
                 ) : null}
 
-                {/* Action Buttons: Facebook Thumbs Up Outline & Message Circle Outline */}
-                <View style={styles.actionsRow}>
-                  <TouchableOpacity 
-                    style={styles.actionBtn} 
-                    onPress={onToggleLike}
-                    activeOpacity={0.7}
-                  >
-                    <Feather 
-                      name="thumbs-up" 
-                      size={20} 
-                      color={isLiked ? '#3B82F6' : '#FFFFFF'} 
-                    />
-                    {likeCount > 0 && (
-                      <Text style={[styles.actionCountText, isLiked && styles.likedText]}>
-                        {likeCount}
-                      </Text>
-                    )}
-                  </TouchableOpacity>
+                {onToggleLike && (
+                  <View style={styles.actionsRow}>
+                    <TouchableOpacity 
+                      style={styles.actionBtn} 
+                      onPress={onToggleLike}
+                      activeOpacity={0.7}
+                    >
+                      <Feather 
+                        name="thumbs-up" 
+                        size={20} 
+                        color={isLiked ? '#3B82F6' : '#FFFFFF'} 
+                      />
+                      {likeCount > 0 && (
+                        <Text style={[styles.actionCountText, isLiked && styles.likedText]}>
+                          {likeCount}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
 
-                  <TouchableOpacity 
-                    style={styles.actionBtn} 
-                    onPress={() => {
-                      onClose();
-                      if (onCommentPress) onCommentPress();
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Feather name="message-circle" size={20} color="#FFFFFF" />
-                    {commentCount > 0 && (
-                      <Text style={styles.actionCountText}>{commentCount}</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
+                    <TouchableOpacity 
+                      style={styles.actionBtn} 
+                      onPress={() => {
+                        onClose();
+                        if (onCommentPress) onCommentPress();
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Feather name="message-circle" size={20} color="#FFFFFF" />
+                      {commentCount > 0 && (
+                        <Text style={styles.actionCountText}>{commentCount}</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
             </SafeAreaView>
           </Animated.View>
         ) : null}
 
-        {/* 5. Liquid Glass (iOS) & Frosted Blur (Android) Action Sheet Modal */}
+        {/* 5. Options Action Sheet Modal */}
         <Modal
           visible={isOptionsModalVisible}
           transparent={true}
@@ -425,7 +446,6 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
             <View style={styles.optionsBackdrop}>
               <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
                 <View style={styles.optionsContainer}>
-                  {/* Action Group Card with Glass Effect */}
                   <GlassCardContainer>
                     <TouchableOpacity 
                       style={styles.optionItem} 
@@ -448,7 +468,7 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
                       }}
                       activeOpacity={0.6}
                     >
-                      <Text style={styles.optionTextBlue}>Sao chép ảnh</Text>
+                      <Text style={styles.optionTextBlue}>Sao chép link ảnh</Text>
                     </TouchableOpacity>
 
                     <View style={styles.optionDivider} />
@@ -476,22 +496,8 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
                     >
                       <Text style={styles.optionTextBlue}>Báo cáo ảnh</Text>
                     </TouchableOpacity>
-
-                    <View style={styles.optionDivider} />
-
-                    <TouchableOpacity 
-                      style={styles.optionItem} 
-                      onPress={() => {
-                        setIsOptionsModalVisible(false);
-                        Alert.alert('Thông báo', 'Đã bật thông báo cho bài viết này.');
-                      }}
-                      activeOpacity={0.6}
-                    >
-                      <Text style={styles.optionTextBlue}>Bật thông báo</Text>
-                    </TouchableOpacity>
                   </GlassCardContainer>
 
-                  {/* Cancel Card with Glass Effect */}
                   <GlassCardContainer style={{ marginTop: 8 }}>
                     <TouchableOpacity 
                       style={styles.optionItem} 
@@ -532,38 +538,27 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 100,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)'
+    backgroundColor: 'transparent'
   },
   topHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 10 : 16,
     paddingBottom: 10
   },
   headerBtn: {
-    width: 36,
-    height: 36,
+    width: 38,
+    height: 38,
+    backgroundColor: 'transparent',
     justifyContent: 'center',
-    alignItems: 'center'
+    alignItems: 'center',
   },
   animatedImageWrapper: {
     ...StyleSheet.absoluteFill,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10
-  },
-  scrollContainer: {
-    width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT,
-    backgroundColor: 'transparent'
-  },
-  scrollContent: {
-    width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT,
-    justifyContent: 'center',
-    alignItems: 'center'
   },
   fullImage: {
     width: SCREEN_WIDTH,
@@ -660,7 +655,6 @@ const styles = StyleSheet.create({
     color: '#3B82F6',
     fontWeight: '800'
   },
-  // Liquid Glass & Frosted Blur Action Sheet Styles
   optionsBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.45)',

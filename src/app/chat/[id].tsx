@@ -1,41 +1,421 @@
-import React, { useEffect, useState, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TextInput,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-  Image,
-  ActivityIndicator
-} from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
-  collection,
   addDoc,
-  query,
-  orderBy,
-  onSnapshot,
-  serverTimestamp,
+  collection,
   doc,
   getDoc,
+  getDocs,
+  limitToLast,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
   setDoc,
-  updateDoc
+  updateDoc,
+  where
 } from 'firebase/firestore';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Animated,
+  FlatList,
+  Image,
+  KeyboardAvoidingView,
+  Linking,
+  Modal,
+  PanResponder,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { PhoneMissIcon, PhoneReceiveIcon, PhoneSendIcon, VideoReceiveIcon } from '../../components/CallIcons';
+import { ImageViewerModal } from '../../components/ImageViewerModal';
+import { InAppCallModal } from '../../components/InAppCallModal';
+import { IncomingCallModal } from '../../components/IncomingCallModal';
 import { auth, db } from '../../config/firebase';
-import { getPosterDetails } from '../../services/firebaseService';
-import { subscribeUserPresence } from '../../services/presenceService';
 import { ChatMessage } from '../../models/types';
+import { getLevelFromPoints, getPosterDetails } from '../../services/firebaseService';
+import { subscribeUserPresence } from '../../services/presenceService';
+import { startWebRTCCall, stopWebRTCCall } from '../../services/webrtcService';
+
+type MessagePosition = 'SINGLE' | 'TOP' | 'MIDDLE' | 'BOTTOM';
+const MESSAGES_PAGE_SIZE = 25;
+
+const getMessagePosition = (index: number, list: ChatMessage[]): MessagePosition => {
+  if (!list || list.length === 0 || index < 0) return 'SINGLE';
+  const current = list[index];
+  const hasPrev = index > 0;
+  const hasNext = index < list.length - 1;
+
+  const getMillis = (ts: any) => {
+    if (!ts) return Date.now();
+    if (ts.seconds) return ts.seconds * 1000;
+    if (typeof ts === 'number') return ts;
+    const parsed = new Date(ts).getTime();
+    return isNaN(parsed) ? Date.now() : parsed;
+  };
+
+  const isWithinTimeGroup = (t1: any, t2: any) => {
+    return Math.abs(getMillis(t1) - getMillis(t2)) < 10 * 60 * 1000; // 10 mins
+  };
+
+  let samePrev = false;
+  let sameNext = false;
+
+  if (hasPrev) {
+    const prev = list[index - 1];
+    samePrev = prev.senderId === current.senderId && isWithinTimeGroup(prev.timestamp, current.timestamp);
+  }
+  if (hasNext) {
+    const next = list[index + 1];
+    sameNext = next.senderId === current.senderId && isWithinTimeGroup(current.timestamp, next.timestamp);
+  }
+
+  if (!samePrev && !sameNext) return 'SINGLE';
+  if (!samePrev) return 'TOP';
+  if (!sameNext) return 'BOTTOM';
+  return 'MIDDLE';
+};
+
+const getBubbleBorderRadius = (isMe: boolean, position: MessagePosition) => {
+  const radius = 18;
+  const smallRadius = 4;
+
+  if (isMe) {
+    switch (position) {
+      case 'TOP':
+        return {
+          borderTopLeftRadius: radius,
+          borderTopRightRadius: radius,
+          borderBottomLeftRadius: radius,
+          borderBottomRightRadius: smallRadius,
+        };
+      case 'MIDDLE':
+        return {
+          borderTopLeftRadius: radius,
+          borderTopRightRadius: smallRadius,
+          borderBottomLeftRadius: radius,
+          borderBottomRightRadius: smallRadius,
+        };
+      case 'BOTTOM':
+        return {
+          borderTopLeftRadius: radius,
+          borderTopRightRadius: smallRadius,
+          borderBottomLeftRadius: radius,
+          borderBottomRightRadius: radius,
+        };
+      case 'SINGLE':
+      default:
+        return {
+          borderTopLeftRadius: radius,
+          borderTopRightRadius: radius,
+          borderBottomLeftRadius: radius,
+          borderBottomRightRadius: smallRadius,
+        };
+    }
+  } else {
+    switch (position) {
+      case 'TOP':
+        return {
+          borderTopLeftRadius: radius,
+          borderTopRightRadius: radius,
+          borderBottomLeftRadius: smallRadius,
+          borderBottomRightRadius: radius,
+        };
+      case 'MIDDLE':
+        return {
+          borderTopLeftRadius: smallRadius,
+          borderTopRightRadius: radius,
+          borderBottomLeftRadius: smallRadius,
+          borderBottomRightRadius: radius,
+        };
+      case 'BOTTOM':
+        return {
+          borderTopLeftRadius: smallRadius,
+          borderTopRightRadius: radius,
+          borderBottomLeftRadius: radius,
+          borderBottomRightRadius: radius,
+        };
+      case 'SINGLE':
+      default:
+        return {
+          borderTopLeftRadius: radius,
+          borderTopRightRadius: radius,
+          borderBottomLeftRadius: smallRadius,
+          borderBottomRightRadius: radius,
+        };
+    }
+  }
+};
+
+const formatSeparatorTimestamp = (rawTs: any): string => {
+  if (!rawTs) return '';
+  let date: Date;
+  if (rawTs.seconds) {
+    date = new Date(rawTs.seconds * 1000);
+  } else if (typeof rawTs === 'number') {
+    date = new Date(rawTs);
+  } else {
+    date = new Date(rawTs);
+  }
+  if (isNaN(date.getTime())) return '';
+
+  const hours = date.getHours().toString().padStart(2, '0');
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  const day = date.getDate();
+  const month = date.getMonth() + 1;
+  const year = date.getFullYear();
+
+  return `${hours}:${minutes} ${day} Tháng ${month}, ${year}`;
+};
+
+const formatMessageTime = (rawTs: any): string => {
+  if (!rawTs) return '';
+  let date: Date;
+  if (rawTs.seconds) {
+    date = new Date(rawTs.seconds * 1000);
+  } else if (typeof rawTs === 'number') {
+    date = new Date(rawTs);
+  } else {
+    date = new Date(rawTs);
+  }
+  if (isNaN(date.getTime())) return '';
+
+  const hours = date.getHours().toString().padStart(2, '0');
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  return `${hours}:${minutes}`;
+};
+
+const formatRelativeTime = (rawTs: any): string => {
+  if (!rawTs) return 'Đã gửi';
+  let date: Date;
+  if (rawTs.seconds) {
+    date = new Date(rawTs.seconds * 1000);
+  } else if (typeof rawTs === 'number') {
+    date = new Date(rawTs);
+  } else {
+    date = new Date(rawTs);
+  }
+  if (isNaN(date.getTime())) return 'Đã gửi';
+
+  const now = Date.now();
+  const diff = now - date.getTime();
+
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  const weeks = Math.floor(days / 7);
+
+  if (minutes < 1) {
+    return 'Đã gửi';
+  } else if (minutes < 60) {
+    return `Đã gửi ${minutes} phút trước`;
+  } else if (hours < 24) {
+    return `Đã gửi ${hours} giờ trước`;
+  } else if (days < 7) {
+    return `Đã gửi ${days} ngày trước`;
+  } else {
+    return `Đã gửi ${weeks} tuần trước`;
+  }
+};
+
+const formatLastActive = (lastChanged?: number, fallbackTs?: any): string => {
+  let millis = lastChanged;
+  if (!millis && fallbackTs) {
+    if (fallbackTs.seconds) {
+      millis = fallbackTs.seconds * 1000;
+    } else if (typeof fallbackTs === 'number') {
+      millis = fallbackTs;
+    } else {
+      const parsed = new Date(fallbackTs).getTime();
+      if (!isNaN(parsed)) millis = parsed;
+    }
+  }
+
+  if (!millis) return 'Hoạt động gần đây';
+
+  const now = Date.now();
+  const diff = Math.max(0, now - millis);
+
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  const weeks = Math.floor(days / 7);
+
+  if (minutes < 1) {
+    return 'Vừa mới hoạt động';
+  } else if (minutes < 60) {
+    return `Hoạt động ${minutes} phút trước`;
+  } else if (hours < 24) {
+    return `Hoạt động ${hours} giờ trước`;
+  } else if (days < 7) {
+    return `Hoạt động ${days} ngày trước`;
+  } else {
+    return `Hoạt động ${weeks} tuần trước`;
+  }
+};
+
+const getUserBadgeDetails = (levelName?: string, points: number = 0) => {
+  const lvl = levelName || getLevelFromPoints(points);
+
+  if (lvl === 'Huyền thoại' || points >= 1000) {
+    return {
+      iconAsset: require('../../../assets/images/ic_legendary.png'),
+      name: 'Huyền thoại',
+      bgColor: '#FEF3C7',
+      textColor: '#B45309'
+    };
+  } else if (lvl === 'Thiên thần' || points >= 500) {
+    return {
+      iconAsset: require('../../../assets/images/ic_angel.png'),
+      name: 'Thiên thần',
+      bgColor: '#DCFCE7',
+      textColor: '#15803D'
+    };
+  } else if (lvl === 'Người tốt' || points >= 100) {
+    return {
+      iconAsset: require('../../../assets/images/ic_good.png'),
+      name: 'Người tốt',
+      bgColor: '#DBEAFE',
+      textColor: '#1D4ED8'
+    };
+  } else {
+    return {
+      iconAsset: require('../../../assets/images/ic_newbie.png'),
+      name: 'Tân thủ',
+      bgColor: '#F1F5F9',
+      textColor: '#475569'
+    };
+  }
+};
+
+const shouldShowDateHeader = (index: number, list: ChatMessage[]) => {
+  if (index <= 0) return true;
+  const current = list[index];
+  const previous = list[index - 1];
+  if (!current?.timestamp || !previous?.timestamp) return false;
+
+  const getMillis = (ts: any) => {
+    if (!ts) return 0;
+    if (ts.seconds) return ts.seconds * 1000;
+    if (typeof ts === 'number') return ts;
+    const parsed = new Date(ts).getTime();
+    return isNaN(parsed) ? 0 : parsed;
+  };
+
+  const diff = Math.abs(getMillis(current.timestamp) - getMillis(previous.timestamp));
+  return diff > 15 * 60 * 1000; // 15 minutes
+};
+
+// Component dynamically calculating aspect ratio for portrait vs landscape photos
+function AutoAspectImage({
+  uri,
+  borderRadiusStyle
+}: {
+  uri: string;
+  borderRadiusStyle: any;
+}) {
+  const [aspectRatio, setAspectRatio] = useState<number>(4 / 3);
+
+  useEffect(() => {
+    if (!uri) return;
+    Image.getSize(
+      uri,
+      (width, height) => {
+        if (width > 0 && height > 0) {
+          const ratio = width / height;
+          const clampedRatio = Math.max(0.55, Math.min(ratio, 1.8));
+          setAspectRatio(clampedRatio);
+        }
+      },
+      (error) => console.log('Error getting image size:', error)
+    );
+  }, [uri]);
+
+  return (
+    <Image
+      source={{ uri }}
+      style={[
+        {
+          width: 220,
+          aspectRatio: aspectRatio,
+          maxHeight: 320,
+        },
+        borderRadiusStyle
+      ]}
+      resizeMode="cover"
+    />
+  );
+}
+
+// Swipeable wrapper for swipe-to-reply action
+function SwipeableMessageRow({
+  item,
+  isMe,
+  onReply,
+  children
+}: {
+  item: ChatMessage;
+  isMe: boolean;
+  onReply: (msg: ChatMessage) => void;
+  children: React.ReactNode;
+}) {
+  const panX = useRef(new Animated.Value(0)).current;
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dx) > 15 && Math.abs(gestureState.dy) < 15;
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (isMe) {
+          if (gestureState.dx < 0) {
+            panX.setValue(Math.max(gestureState.dx, -70));
+          }
+        } else {
+          if (gestureState.dx > 0) {
+            panX.setValue(Math.min(gestureState.dx, 70));
+          }
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        const threshold = 40;
+        if ((isMe && gestureState.dx < -threshold) || (!isMe && gestureState.dx > threshold)) {
+          onReply(item);
+        }
+        Animated.spring(panX, {
+          toValue: 0,
+          useNativeDriver: true,
+          friction: 6,
+        }).start();
+      },
+    })
+  ).current;
+
+  return (
+    <Animated.View
+      {...panResponder.panHandlers}
+      style={{ transform: [{ translateX: panX }] }}
+    >
+      {children}
+    </Animated.View>
+  );
+}
 
 export default function ChatRoomScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { id: otherUserId, postId, postTitle } = useLocalSearchParams<{
+  const { id: otherUserId, chatId: paramChatId, postId, postTitle } = useLocalSearchParams<{
     id: string;
+    chatId?: string;
     postId?: string;
     postTitle?: string;
   }>();
@@ -43,96 +423,450 @@ export default function ChatRoomScreen() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [isOnline, setIsOnline] = useState(false);
-  const [otherUser, setOtherUser] = useState<{ name: string; avatarUrl: string }>({
-    name: 'Người dùng',
+  const [lastChanged, setLastChanged] = useState<number | undefined>(undefined);
+  const [firestoreLastActive, setFirestoreLastActive] = useState<any>(null);
+  const [userBadgeInfo, setUserBadgeInfo] = useState(getUserBadgeDetails('Tân thủ', 0));
+  const [activeChatId, setActiveChatId] = useState<string>(paramChatId || '');
+  const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
+  const [expandedMsgId, setExpandedMsgId] = useState<string | null>(null);
+  const [selectedViewerImage, setSelectedViewerImage] = useState<string | null>(null);
+
+  // Call feature states
+  const [isCallOptionVisible, setIsCallOptionVisible] = useState<boolean>(false);
+  const [isInAppCallVisible, setIsInAppCallVisible] = useState<boolean>(false);
+  const [isIncomingCallVisible, setIsIncomingCallVisible] = useState<boolean>(false);
+  const [callStatus, setCallStatus] = useState<'RINGING' | 'CONNECTED'>('RINGING');
+  const [callerDetails, setCallerDetails] = useState<{ name: string; avatarUrl: string }>({
+    name: 'Người dùng Findora',
     avatarUrl: ''
+  });
+
+  // Pagination & Inverted Scrolling performance optimization states
+  const [messageLimit, setMessageLimit] = useState<number>(MESSAGES_PAGE_SIZE);
+  const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
+  const [hasMoreMessages, setHasMoreMessages] = useState<boolean>(true);
+
+  const [otherUser, setOtherUser] = useState<{ name: string; avatarUrl: string; phone?: string }>({
+    name: 'Người dùng',
+    avatarUrl: '',
+    phone: ''
   });
   const flatListRef = useRef<FlatList>(null);
 
-  useEffect(() => {
-    if (!otherUserId) return;
+  // Invert messages array so latest message is at index 0 (bottom of screen)
+  const reversedMessages = useMemo(() => {
+    return [...messages].reverse();
+  }, [messages]);
 
-    // Load other user info
-    getPosterDetails(otherUserId).then((details) => {
+  // Load more older messages when scrolling UP towards top
+  const loadMoreOlderMessages = useCallback(() => {
+    if (isLoadingMore || !hasMoreMessages) return;
+    setIsLoadingMore(true);
+    setMessageLimit((prev) => prev + MESSAGES_PAGE_SIZE);
+  }, [isLoadingMore, hasMoreMessages]);
+
+  const sendCallRecordMessage = async (
+    callType: 'voice' | 'video',
+    durationSecs: number,
+    status: 'ended' | 'missed' | 'rejected'
+  ) => {
+    const currentUser = auth.currentUser;
+    if (!currentUser || !otherUserId) return;
+    const chatId = activeChatId || paramChatId || [currentUser.uid, otherUserId].sort().join('_');
+
+    let callText = 'Cuộc gọi thoại đã kết thúc';
+    if (status === 'missed') callText = 'Cuộc gọi nhỡ';
+    if (status === 'rejected') callText = 'Cuộc gọi bị từ chối';
+
+    try {
+      await setDoc(
+        doc(db, 'chats', chatId),
+        {
+          participants: [currentUser.uid, otherUserId],
+          lastMessage: callText,
+          lastTimestamp: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        },
+        { merge: true }
+      );
+
+      await addDoc(collection(db, 'chats', chatId, 'messages'), {
+        senderId: currentUser.uid,
+        receiverId: otherUserId,
+        type: 'call',
+        callType,
+        callDuration: durationSecs,
+        callStatus: status,
+        text: callText,
+        message: callText,
+        read: false,
+        timestamp: serverTimestamp()
+      });
+    } catch (e) {
+      console.log('Error saving call record:', e);
+    }
+  };
+
+  useEffect(() => {
+    const currentUser = auth.currentUser;
+    if (!currentUser || !otherUserId) return;
+
+    let unsubChatMessages = () => { };
+    let unsubRootMessages = () => { };
+    let unsubChatDoc = () => { };
+    const messageMap = new Map<string, ChatMessage>();
+
+    const updateMessagesState = () => {
+      const sorted = Array.from(messageMap.values()).sort((a, b) => {
+        const getMillis = (ts: any) => {
+          if (!ts) return Date.now();
+          if (ts.seconds) return ts.seconds * 1000;
+          if (typeof ts === 'number') return ts;
+          const parsed = new Date(ts).getTime();
+          return isNaN(parsed) ? Date.now() : parsed;
+        };
+        return getMillis(a.timestamp) - getMillis(b.timestamp);
+      });
+      setMessages(sorted);
+    };
+
+    // Load other user details & profile level from Firestore doc
+    getPosterDetails(otherUserId).then((details: any) => {
       if (details) {
-        setOtherUser({
-          name: details.name || 'Người dùng Findora',
-          avatarUrl: details.avatarUrl || ''
-        });
+        setOtherUser((prev) => ({
+          ...prev,
+          name: details.name || prev.name,
+          avatarUrl: details.avatarUrl || prev.avatarUrl,
+          phone: details.phone || prev.phone
+        }));
       }
     });
 
-    // Presence listener
-    const unsubPresence = subscribeUserPresence(otherUserId, (online) => {
+    getDoc(doc(db, 'users', otherUserId)).then((userSnap) => {
+      if (userSnap.exists()) {
+        const uData = userSnap.data();
+        const pts = typeof uData.points === 'number' ? uData.points : 0;
+        const fallback = uData.lastActive || uData.updatedAt || uData.createdAt;
+        const phone = uData.phone || uData.phoneNumber || uData.mobile || '';
+
+        if (fallback) {
+          setFirestoreLastActive(fallback);
+        }
+        const lvl = uData.level || getLevelFromPoints(pts);
+        setUserBadgeInfo(getUserBadgeDetails(lvl, pts));
+        setOtherUser((prev) => ({
+          ...prev,
+          name: uData.fullName || uData.name || prev.name,
+          avatarUrl: uData.photoUrl || uData.avatarUrl || prev.avatarUrl,
+          phone: phone || prev.phone
+        }));
+      } else {
+        setUserBadgeInfo(getUserBadgeDetails('Tân thủ', 0));
+      }
+    }).catch(() => { });
+
+    // Presence listener with lastChanged timestamp
+    const unsubPresence = subscribeUserPresence(otherUserId, (online, changed) => {
       setIsOnline(online);
+      if (changed) {
+        setLastChanged(changed);
+      }
     });
 
-    const currentUser = auth.currentUser;
-    if (!currentUser) return;
+    // Determine target chatId strictly for this post topic
+    const initChatRoom = async () => {
+      try {
+        let targetChatId = paramChatId || '';
 
-    // Determine unique chatId for direct messages
-    const chatId = [currentUser.uid, otherUserId].sort().join('_');
+        if (!targetChatId) {
+          const chatsRef = collection(db, 'chats');
+          const qChats = query(chatsRef, where('participants', 'array-contains', currentUser.uid));
+          const chatsSnap = await getDocs(qChats);
 
-    // Listen to real-time chat messages in chats subcollection
-    const messagesRef = collection(db, 'chats', chatId, 'messages');
-    const q = query(messagesRef, orderBy('timestamp', 'asc'));
+          for (const docSnap of chatsSnap.docs) {
+            const data = docSnap.data();
+            const participants: string[] = data.participants || [];
+            const docPostId = data.postId || '';
 
-    const unsubMessages = onSnapshot(
-      q,
-      (snapshot) => {
-        const list: ChatMessage[] = [];
-        snapshot.forEach((docSnap) => {
-          const data = docSnap.data();
-          list.push({
-            id: docSnap.id,
-            senderId: data.senderId,
-            receiverId: data.receiverId,
-            message: data.message || data.text || '',
-            timestamp: data.timestamp
-          });
-        });
-        setMessages(list);
+            if (participants.includes(otherUserId)) {
+              if (postId && docPostId === postId) {
+                targetChatId = docSnap.id;
+                break;
+              } else if (!postId && !targetChatId) {
+                targetChatId = docSnap.id;
+              }
+            }
+          }
+        }
 
-        // Mark messages as read
-        snapshot.docs.forEach((docSnap) => {
-          const data = docSnap.data();
-          if (data.receiverId === currentUser.uid && data.read === false) {
-            updateDoc(doc(db, 'chats', chatId, 'messages', docSnap.id), { read: true }).catch(() => {});
+        if (!targetChatId) {
+          targetChatId = [currentUser.uid, otherUserId].sort().join('_');
+        }
+
+        setActiveChatId(targetChatId);
+
+        // Real-time Firestore Call Listener on chats/{targetChatId}
+        unsubChatDoc = onSnapshot(doc(db, 'chats', targetChatId), (docSnap) => {
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            const callData = data.callState;
+
+            if (callData) {
+              if (callData.status === 'calling') {
+                if (callData.receiverId === currentUser.uid) {
+                  // Incoming call for current user!
+                  setCallerDetails({
+                    name: callData.callerName || otherUser.name || 'Người dùng Findora',
+                    avatarUrl: callData.callerAvatar || otherUser.avatarUrl || ''
+                  });
+                  setIsIncomingCallVisible(true);
+                } else if (callData.callerId === currentUser.uid) {
+                  // Outgoing call for current user
+                  setIsInAppCallVisible(true);
+                  setCallStatus('RINGING');
+                }
+              } else if (callData.status === 'connected') {
+                // Both sides connected
+                setIsIncomingCallVisible(false);
+                setIsInAppCallVisible(true);
+                setCallStatus('CONNECTED');
+              } else if (callData.status === 'ended' || callData.status === 'rejected') {
+                // Call closed
+                setIsIncomingCallVisible(false);
+                setIsInAppCallVisible(false);
+                setCallStatus('RINGING');
+              }
+            }
           }
         });
-      },
-      () => {
-        // Fallback to legacy messages collection query if subcollection is empty
-        const legacyRef = collection(db, 'messages');
-        const legacyQ = query(legacyRef, orderBy('timestamp', 'asc'));
-        onSnapshot(legacyQ, (legacySnap) => {
-          const list: ChatMessage[] = [];
-          legacySnap.forEach((docSnap) => {
-            const data = docSnap.data();
-            const isParticipant =
-              (data.senderId === currentUser.uid && data.receiverId === otherUserId) ||
-              (data.senderId === otherUserId && data.receiverId === currentUser.uid);
 
-            if (isParticipant) {
-              list.push({
-                id: docSnap.id,
-                senderId: data.senderId,
-                receiverId: data.receiverId,
-                message: data.message || data.text || '',
-                timestamp: data.timestamp
-              });
+        // Mark all existing unread messages from other user as READ immediately
+        const markAllUnreadAsRead = async (chatId: string) => {
+          try {
+            const unreadQuery = query(
+              collection(db, 'chats', chatId, 'messages'),
+              where('senderId', '==', otherUserId),
+              where('read', '==', false)
+            );
+            const unreadSnap = await getDocs(unreadQuery);
+            unreadSnap.forEach((dSnap) => {
+              updateDoc(doc(db, 'chats', chatId, 'messages', dSnap.id), { read: true }).catch(() => { });
+            });
+          } catch (e) {
+            console.log('Error marking unread as read:', e);
+          }
+        };
+
+        markAllUnreadAsRead(targetChatId);
+
+        // Listen to paginated subcollection chats/{targetChatId}/messages
+        const subMsgsQuery = query(
+          collection(db, 'chats', targetChatId, 'messages'),
+          orderBy('timestamp', 'asc'),
+          limitToLast(messageLimit)
+        );
+
+        unsubChatMessages = onSnapshot(subMsgsQuery, (snapshot) => {
+          if (snapshot.docs.length < messageLimit) {
+            setHasMoreMessages(false);
+          } else {
+            setHasMoreMessages(true);
+          }
+
+          snapshot.forEach((docSnap) => {
+            const data = docSnap.data();
+            messageMap.set(docSnap.id, {
+              id: docSnap.id,
+              senderId: data.senderId,
+              receiverId: data.receiverId || otherUserId,
+              message: data.text || data.message || '',
+              type: data.type || 'text',
+              callType: data.callType || 'voice',
+              callDuration: data.callDuration || 0,
+              callStatus: data.callStatus || 'ended',
+              imageUrl: data.imageUrl || '',
+              replyToId: data.replyToId || null,
+              replyToText: data.replyToText || null,
+              replyToSender: data.replyToSender || null,
+              read: data.read ?? true,
+              timestamp: data.timestamp
+            });
+
+            // Mark unread messages from other user as READ!
+            if (data.senderId === otherUserId && data.read === false) {
+              updateDoc(doc(db, 'chats', targetChatId, 'messages', docSnap.id), { read: true }).catch(() => { });
             }
           });
-          setMessages(list);
+          updateMessagesState();
+          setIsLoadingMore(false);
         });
+      } catch (err) {
+        console.log('Error initializing chat room:', err);
       }
-    );
+    };
+
+    initChatRoom();
+
+    // 2. Listen to root 'messages' collection filtered by senderId
+    try {
+      const rootMsgsQuery = query(
+        collection(db, 'messages'),
+        where('senderId', '==', currentUser.uid),
+        limitToLast(messageLimit)
+      );
+
+      unsubRootMessages = onSnapshot(
+        rootMsgsQuery,
+        (snapshot) => {
+          snapshot.forEach((docSnap) => {
+            const data = docSnap.data();
+            if (data.receiverId === otherUserId) {
+              const matchesPost = !postId || !data.postId || data.postId === postId;
+
+              if (matchesPost) {
+                messageMap.set(docSnap.id, {
+                  id: docSnap.id,
+                  senderId: data.senderId,
+                  receiverId: data.receiverId,
+                  message: data.text || data.message || '',
+                  type: data.type || 'text',
+                  callType: data.callType || 'voice',
+                  callDuration: data.callDuration || 0,
+                  callStatus: data.callStatus || 'ended',
+                  imageUrl: data.imageUrl || '',
+                  replyToId: data.replyToId || null,
+                  replyToText: data.replyToText || null,
+                  replyToSender: data.replyToSender || null,
+                  read: data.read ?? true,
+                  timestamp: data.timestamp
+                });
+              }
+            }
+          });
+          updateMessagesState();
+          setIsLoadingMore(false);
+        },
+        (error) => {
+          console.log('Notice: root messages listener skipped:', error?.message);
+        }
+      );
+    } catch (err) {
+      console.log('Error listening to root messages:', err);
+    }
 
     return () => {
       unsubPresence();
-      unsubMessages();
+      unsubChatMessages();
+      unsubRootMessages();
+      unsubChatDoc();
     };
-  }, [otherUserId]);
+  }, [otherUserId, paramChatId, postId, messageLimit]);
+
+  const handleCellularCall = () => {
+    setIsCallOptionVisible(false);
+    if (otherUser.phone && otherUser.phone.trim() !== '') {
+      Linking.openURL(`tel:${otherUser.phone.trim()}`);
+    } else {
+      Alert.alert(
+        'Chưa có số điện thoại',
+        `${otherUser.name} chưa cập nhật số điện thoại di động trên hệ thống.`,
+        [{ text: 'Đóng', style: 'cancel' }]
+      );
+    }
+  };
+
+  const handleInAppCall = async () => {
+    setIsCallOptionVisible(false);
+    const currentUser = auth.currentUser;
+    if (!currentUser || !otherUserId) return;
+
+    const chatId = activeChatId || paramChatId || [currentUser.uid, otherUserId].sort().join('_');
+
+    const callPayload = {
+      chatId,
+      callerId: currentUser.uid,
+      callerName: currentUser.displayName || 'Bạn',
+      callerAvatar: currentUser.photoURL || '',
+      receiverId: otherUserId,
+      status: 'calling',
+      createdAt: new Date().toISOString()
+    };
+
+    try {
+      await setDoc(doc(db, 'chats', chatId), { callState: callPayload }, { merge: true });
+      await setDoc(doc(db, 'calls', chatId), callPayload).catch(() => { });
+      setIsInAppCallVisible(true);
+      setCallStatus('RINGING');
+      startWebRTCCall(chatId, true);
+    } catch (e) {
+      console.error('Error starting call:', e);
+    }
+  };
+
+  const handleAcceptIncomingCall = async () => {
+    const currentUser = auth.currentUser;
+    if (!currentUser || !otherUserId) return;
+
+    const chatId = activeChatId || paramChatId || [currentUser.uid, otherUserId].sort().join('_');
+
+    try {
+      await updateDoc(doc(db, 'chats', chatId), {
+        'callState.status': 'connected',
+        'callState.connectedAt': new Date().toISOString()
+      });
+      await updateDoc(doc(db, 'calls', chatId), { status: 'connected' }).catch(() => { });
+      setIsIncomingCallVisible(false);
+      setIsInAppCallVisible(true);
+      setCallStatus('CONNECTED');
+      startWebRTCCall(chatId, false);
+    } catch (e) {
+      console.error('Error accepting call:', e);
+    }
+  };
+
+  const handleRejectIncomingCall = async () => {
+    const currentUser = auth.currentUser;
+    if (!currentUser || !otherUserId) return;
+
+    const chatId = activeChatId || paramChatId || [currentUser.uid, otherUserId].sort().join('_');
+
+    try {
+      await updateDoc(doc(db, 'chats', chatId), {
+        'callState.status': 'rejected'
+      });
+      await updateDoc(doc(db, 'calls', chatId), { status: 'rejected' }).catch(() => { });
+      await sendCallRecordMessage('voice', 0, 'rejected');
+      stopWebRTCCall();
+    } catch (e) {
+      console.error('Error rejecting call:', e);
+    } finally {
+      setIsIncomingCallVisible(false);
+    }
+  };
+
+  const handleEndCall = async (callDurationSecs?: number) => {
+    const currentUser = auth.currentUser;
+    if (!currentUser || !otherUserId) return;
+
+    const chatId = activeChatId || paramChatId || [currentUser.uid, otherUserId].sort().join('_');
+    const finalDuration = typeof callDurationSecs === 'number' ? callDurationSecs : 0;
+
+    try {
+      await updateDoc(doc(db, 'chats', chatId), {
+        'callState.status': 'ended'
+      });
+      await updateDoc(doc(db, 'calls', chatId), { status: 'ended' }).catch(() => { });
+      await sendCallRecordMessage('voice', finalDuration, 'ended');
+      stopWebRTCCall();
+    } catch (e) {
+      console.error('Error ending call:', e);
+    } finally {
+      setIsInAppCallVisible(false);
+      setIsIncomingCallVisible(false);
+      setCallStatus('RINGING');
+      stopWebRTCCall();
+    }
+  };
 
   const handleSend = async () => {
     if (!inputText.trim() || !otherUserId) return;
@@ -142,10 +876,20 @@ export default function ChatRoomScreen() {
     const textToSend = inputText.trim();
     setInputText('');
 
-    const chatId = [currentUser.uid, otherUserId].sort().join('_');
+    const chatId = activeChatId || paramChatId || [currentUser.uid, otherUserId].sort().join('_');
+
+    const replyData = replyingTo
+      ? {
+        replyToId: replyingTo.id,
+        replyToText: replyingTo.imageUrl ? '[Hình ảnh]' : replyingTo.message,
+        replyToSender: replyingTo.senderId === currentUser.uid ? 'Bạn' : otherUser.name
+      }
+      : {};
+
+    setReplyingTo(null);
 
     try {
-      // 1. Ensure parent chat document exists in 'chats'
+      // 1. Update/create parent chat document in 'chats'
       const chatDocRef = doc(db, 'chats', chatId);
       await setDoc(
         chatDocRef,
@@ -160,29 +904,118 @@ export default function ChatRoomScreen() {
         { merge: true }
       );
 
-      // 2. Add message to subcollection
-      const messagesRef = collection(db, 'chats', chatId, 'messages');
-      await addDoc(messagesRef, {
+      // 2. Add message to subcollection chats/{chatId}/messages
+      const subMsgsRef = collection(db, 'chats', chatId, 'messages');
+      await addDoc(subMsgsRef, {
         senderId: currentUser.uid,
         receiverId: otherUserId,
-        postId: postId || null,
+        text: textToSend,
         message: textToSend,
+        type: 'text',
+        postId: postId || null,
         read: false,
-        timestamp: serverTimestamp()
+        timestamp: serverTimestamp(),
+        ...replyData
       });
 
-      // Also mirror to root messages collection for backward compatibility
+      // 3. Mirror message to root 'messages' collection
       await addDoc(collection(db, 'messages'), {
         senderId: currentUser.uid,
         receiverId: otherUserId,
-        postId: postId || null,
+        text: textToSend,
         message: textToSend,
-        timestamp: serverTimestamp()
+        type: 'text',
+        postId: postId || null,
+        timestamp: serverTimestamp(),
+        ...replyData
       });
     } catch (e) {
       console.error('Error sending message:', e);
     }
   };
+
+  const isLastSent = (index: number) => {
+    const current = messages[index];
+    if (!current || current.senderId !== auth.currentUser?.uid) return false;
+    for (let i = index + 1; i < messages.length; i++) {
+      if (messages[i].senderId === auth.currentUser?.uid) return false;
+    }
+    return true;
+  };
+
+  const isLastReadSent = (index: number) => {
+    const current = messages[index];
+    if (!current || current.senderId !== auth.currentUser?.uid) return false;
+    if (!current.read) return false;
+    for (let i = index + 1; i < messages.length; i++) {
+      const m = messages[i];
+      if (m.senderId === auth.currentUser?.uid && m.read) return false;
+    }
+    return true;
+  };
+
+  const otherUserLastMsg = [...messages].reverse().find(m => m.senderId === otherUserId);
+  const fallbackPresenceTs = firestoreLastActive || otherUserLastMsg?.timestamp;
+
+  // In Inverted FlatList, ListFooterComponent renders at top of screen above oldest message!
+  const renderInvertedTopHeader = () => (
+    <View>
+      {/* Loading Spinner for Older Messages at top */}
+      {isLoadingMore ? (
+        <View style={styles.loadingOlderContainer}>
+          <ActivityIndicator size="small" color="#0084FF" />
+          <Text style={styles.loadingOlderText}>Đang tải tin nhắn cũ hơn...</Text>
+        </View>
+      ) : null}
+
+      {/* Profile Card rendered at top of history */}
+      <View style={styles.chatProfileHeader}>
+        <TouchableOpacity
+          style={styles.headerProfileAvatarContainer}
+          onPress={() => router.push(`/profile/${otherUserId}` as any)}
+          activeOpacity={0.8}
+        >
+          {otherUser.avatarUrl ? (
+            <Image source={{ uri: otherUser.avatarUrl }} style={styles.headerProfileAvatar} />
+          ) : (
+            <View style={styles.headerProfileAvatarPlaceholder}>
+              <Ionicons name="person" size={40} color="#64748B" />
+            </View>
+          )}
+        </TouchableOpacity>
+
+        <Text style={styles.headerProfileName}>{otherUser.name}</Text>
+
+        {/* Dynamic Personal Badge Pill using Custom PNG Assets */}
+        <View style={[styles.badgePillContainer, { backgroundColor: userBadgeInfo.bgColor }]}>
+          <Image source={userBadgeInfo.iconAsset} style={styles.badgePillImage} resizeMode="contain" />
+          <Text style={[styles.badgePillText, { color: userBadgeInfo.textColor }]}>
+            {userBadgeInfo.name}
+          </Text>
+        </View>
+
+        <Text style={styles.headerProfileSubtext}>
+          Thành viên cộng đồng Findora
+        </Text>
+
+        <TouchableOpacity
+          style={styles.viewProfileBtn}
+          onPress={() => router.push(`/profile/${otherUserId}` as any)}
+          activeOpacity={0.75}
+        >
+          <Ionicons name="person-circle-outline" size={18} color="#0F172A" />
+          <Text style={styles.viewProfileBtnText}>Trang cá nhân</Text>
+        </TouchableOpacity>
+
+        <View style={styles.headerNoticeContainer}>
+          <Ionicons name="lock-closed" size={12} color="#94A3B8" style={{ marginRight: 4 }} />
+          <Text style={styles.headerNoticeText}>
+            Giờ đây hai bạn có thể nhắn tin cho nhau, xem thông tin như trạng thái hoạt động và thời điểm đọc tin nhắn.
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -204,19 +1037,23 @@ export default function ChatRoomScreen() {
           <View style={[styles.onlineIndicator, { backgroundColor: isOnline ? '#16A34A' : '#CBD5E1' }]} />
         </View>
 
-        {/* Name & Presence Info */}
+        {/* Name & Dynamic Presence / Relative Offline Time */}
         <View style={styles.headerTextCol}>
           <Text style={styles.headerNameText} numberOfLines={1}>
             {otherUser.name}
           </Text>
           <Text style={[styles.headerStatusText, { color: isOnline ? '#16A34A' : '#94A3B8' }]}>
-            {isOnline ? 'Đang hoạt động' : 'Ngoại tuyến'}
+            {isOnline ? 'Đang hoạt động' : formatLastActive(lastChanged, fallbackPresenceTs)}
           </Text>
         </View>
 
         {/* Header Action Buttons */}
         <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.iconActionBtn} activeOpacity={0.7}>
+          <TouchableOpacity
+            style={styles.iconActionBtn}
+            onPress={() => setIsCallOptionVisible(true)}
+            activeOpacity={0.7}
+          >
             <Ionicons name="call" size={20} color="#0084FF" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.iconActionBtn} activeOpacity={0.7}>
@@ -225,14 +1062,23 @@ export default function ChatRoomScreen() {
         </View>
       </View>
 
-      {/* Post Context Bar if present */}
+      {/* Post Context Banner - Clickable to open Post Detail */}
       {postTitle ? (
-        <View style={styles.postContextBanner}>
+        <TouchableOpacity
+          style={styles.postContextBanner}
+          onPress={() => {
+            if (postId) {
+              router.push(`/post/${postId}`);
+            }
+          }}
+          activeOpacity={0.8}
+        >
           <Ionicons name="link-outline" size={16} color="#0084FF" />
           <Text style={styles.postContextBannerText} numberOfLines={1}>
             Về bài đăng: "{postTitle}"
           </Text>
-        </View>
+          <Ionicons name="chevron-forward" size={16} color="#0084FF" />
+        </TouchableOpacity>
       ) : null}
 
       <KeyboardAvoidingView
@@ -242,36 +1088,258 @@ export default function ChatRoomScreen() {
       >
         <FlatList
           ref={flatListRef}
-          data={messages}
+          data={reversedMessages}
           keyExtractor={(item) => item.id || Math.random().toString()}
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-          onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
+          inverted={true}
+          ListFooterComponent={renderInvertedTopHeader}
+          onEndReached={loadMoreOlderMessages}
+          onEndReachedThreshold={0.5}
+          initialNumToRender={25}
+          maxToRenderPerBatch={15}
+          windowSize={10}
           renderItem={({ item }) => {
+            const origIndex = messages.findIndex((m) => m.id === item.id);
             const isMe = item.senderId === auth.currentUser?.uid;
+            const isCallMsg = item.type === 'call';
+            const isMissedOrRejected = isCallMsg && (!item.callDuration || item.callDuration === 0);
+            const hasImage = item.imageUrl && typeof item.imageUrl === 'string' && item.imageUrl.trim() !== '';
+            const position = getMessagePosition(origIndex, messages);
+            const borderRadiusStyle = getBubbleBorderRadius(isMe, position);
+            const isExpanded = expandedMsgId === item.id;
+            const showDateHeader = shouldShowDateHeader(origIndex, messages);
+            const isLastInGroup = position === 'BOTTOM' || position === 'SINGLE';
+
+            const lastReadSent = isLastReadSent(origIndex);
+            const lastSent = isLastSent(origIndex);
+            const showMetaRow = isExpanded || (isMe && lastSent && !item.read) || (isMe && lastReadSent);
+
             return (
-              <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
-                {!isMe && (
-                  <View style={styles.msgAvatarContainer}>
-                    {otherUser.avatarUrl ? (
-                      <Image source={{ uri: otherUser.avatarUrl }} style={styles.msgAvatar} />
-                    ) : (
-                      <View style={styles.msgAvatarPlaceholder}>
-                        <Ionicons name="person" size={14} color="#64748B" />
-                      </View>
-                    )}
+              <View style={styles.msgItemContainer}>
+                {/* Full Date Header Header centered ABOVE clicked or separator message */}
+                {showDateHeader && (
+                  <View style={styles.dateHeaderContainer}>
+                    <Text style={styles.dateHeaderText}>
+                      {formatSeparatorTimestamp(item.timestamp)}
+                    </Text>
                   </View>
                 )}
 
-                <View style={[styles.msgBubble, isMe ? styles.msgBubbleMe : styles.msgBubbleOther]}>
-                  <Text style={[styles.msgText, isMe ? styles.msgTextMe : styles.msgTextOther]}>
-                    {item.message}
-                  </Text>
-                </View>
+                <SwipeableMessageRow item={item} isMe={isMe} onReply={setReplyingTo}>
+                  <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
+                    {!isMe && (
+                      <View style={styles.msgAvatarContainer}>
+                        {isLastInGroup ? (
+                          otherUser.avatarUrl ? (
+                            <Image source={{ uri: otherUser.avatarUrl }} style={styles.msgAvatar} />
+                          ) : (
+                            <View style={styles.msgAvatarPlaceholder}>
+                              <Ionicons name="person" size={14} color="#64748B" />
+                            </View>
+                          )
+                        ) : null}
+                      </View>
+                    )}
+
+                    <View style={isMe ? styles.bubbleColMe : styles.bubbleColOther}>
+                      {/* Call Card Message Rendering */}
+                      {isCallMsg ? (() => {
+                        const isMissed = isMissedOrRejected;
+                        const isIncomingMissed = isMissed && !isMe; // they called me, I didn't answer → RED
+                        const isOutgoingMissed = isMissed && isMe;  // I called them, they didn't answer → normal
+                        const isIncoming = !isMe && !isMissed;      // incoming answered → arrow in
+                        const isOutgoing = isMe && !isMissed;       // outgoing answered → arrow out
+                        const isVideo = item.callType === 'video';
+
+                        // Determine card title
+                        let cardTitle = isVideo ? 'Cuộc gọi video' : 'Cuộc gọi thoại';
+                        if (isIncomingMissed) cardTitle = `Đã nhỡ cuộc gọi ${isVideo ? 'video' : 'thoại'}`;
+
+                        // Render the appropriate SVG icon
+                        const renderCallIcon = () => {
+                          const iconSize = 22;
+                          if (isMissed) {
+                            return <PhoneMissIcon size={iconSize} color={isIncomingMissed ? '#FFFFFF' : '#0F172A'} />;
+                          }
+                          if (isVideo) {
+                            return <VideoReceiveIcon size={iconSize} color="#0F172A" />;
+                          }
+                          if (isIncoming) {
+                            return <PhoneReceiveIcon size={iconSize} color="#0F172A" />;
+                          }
+                          return <PhoneSendIcon size={iconSize} color="#0F172A" />;
+                        };
+
+                        return (
+                          <View style={[
+                            styles.callCardContainer,
+                            isIncomingMissed && styles.callCardContainerMissed
+                          ]}>
+                            <View style={styles.callCardHeaderRow}>
+                              <View style={[
+                                styles.callCardIconCircle,
+                                isIncomingMissed && styles.callCardIconCircleMissed
+                              ]}>
+                                {renderCallIcon()}
+                              </View>
+                              <View style={styles.callCardTextCol}>
+                                <Text style={[
+                                  styles.callCardTitle,
+                                  isIncomingMissed && styles.callCardTitleMissed
+                                ]}>
+                                  {cardTitle}
+                                </Text>
+                                <Text style={[
+                                  styles.callCardSubtitle,
+                                  isIncomingMissed && { color: '#94A3B8' }
+                                ]}>
+                                  {isMissed
+                                    ? formatMessageTime(item.timestamp)
+                                    : item.callDuration && item.callDuration > 0
+                                      ? item.callDuration < 60
+                                        ? `${item.callDuration} giây`
+                                        : `${Math.floor(item.callDuration / 60)} phút ${item.callDuration % 60} giây`
+                                      : formatMessageTime(item.timestamp)}
+                                </Text>
+                              </View>
+                            </View>
+
+                            <TouchableOpacity
+                              style={[
+                                styles.callBackBtn,
+                                isIncomingMissed && styles.callBackBtnMissed
+                              ]}
+                              onPress={handleInAppCall}
+                              activeOpacity={0.8}
+                            >
+                              <Text style={[
+                                styles.callBackBtnText,
+                                isIncomingMissed && styles.callBackBtnTextMissed
+                              ]}>Gọi lại</Text>
+                            </TouchableOpacity>
+                          </View>
+                        );
+                      })() : (
+                        <>
+                          {/* Messenger Style Reply Header + Quoted Bubble */}
+                          {item.replyToText ? (
+                            <View style={[styles.replyContainer, isMe ? styles.replyContainerMe : styles.replyContainerOther]}>
+                              <View style={[styles.replyLabelRow, isMe ? styles.replyLabelRowMe : styles.replyLabelRowOther]}>
+                                <Ionicons name="return-up-back" size={13} color="#64748B" style={{ marginRight: 4 }} />
+                                <Text style={styles.replyLabelText}>
+                                  {isMe
+                                    ? `Bạn đã trả lời ${item.replyToSender || ''}`
+                                    : `${otherUser.name} đã trả lời ${item.replyToSender || ''}`}
+                                </Text>
+                              </View>
+
+                              <View style={[styles.replyQuoteBubble, isMe ? styles.replyQuoteBubbleMe : styles.replyQuoteBubbleOther]}>
+                                <Text style={styles.replyQuoteMessageText} numberOfLines={2} ellipsizeMode="tail">
+                                  {item.replyToText}
+                                </Text>
+                              </View>
+                            </View>
+                          ) : null}
+
+                          {/* Main Message Bubble */}
+                          {hasImage ? (
+                            <TouchableOpacity
+                              activeOpacity={0.9}
+                              onPress={() => setSelectedViewerImage(item.imageUrl!)}
+                              style={[
+                                styles.imageMsgContainer,
+                                borderRadiusStyle,
+                                item.replyToText ? styles.msgBubbleOverlapping : null
+                              ]}
+                            >
+                              <AutoAspectImage
+                                uri={item.imageUrl!}
+                                borderRadiusStyle={borderRadiusStyle}
+                              />
+                            </TouchableOpacity>
+                          ) : (
+                            <TouchableOpacity
+                              activeOpacity={0.9}
+                              onPress={() => setExpandedMsgId(isExpanded ? null : item.id)}
+                              style={[
+                                styles.msgBubble,
+                                isMe ? styles.msgBubbleMe : styles.msgBubbleOther,
+                                borderRadiusStyle,
+                                item.replyToText ? styles.msgBubbleOverlapping : null
+                              ]}
+                            >
+                              <Text style={[styles.msgText, isMe ? styles.msgTextMe : styles.msgTextOther]}>
+                                {item.message}
+                              </Text>
+                            </TouchableOpacity>
+                          )}
+                        </>
+                      )}
+
+                      {/* Time + Ticks / Status / Seen Avatar Row below bubble */}
+                      {showMetaRow && (
+                        <View style={[styles.metaRow, isMe ? styles.metaRowMe : styles.metaRowOther]}>
+                          {isExpanded && (
+                            <View style={styles.timeTickContainer}>
+                              <Text style={styles.timeTickText}>
+                                {item.read ? 'Đã xem ' : 'Đã gửi '}
+                                {formatMessageTime(item.timestamp)}
+                              </Text>
+                              {isMe && (
+                                <Ionicons
+                                  name={item.read ? 'checkmark-done' : 'checkmark'}
+                                  size={14}
+                                  color={item.read ? '#0084FF' : '#94A3B8'}
+                                  style={styles.tickIcon}
+                                />
+                              )}
+                            </View>
+                          )}
+
+                          {!isExpanded && isMe && lastSent && !item.read && (
+                            <View style={styles.timeTickContainer}>
+                              <Text style={styles.timeTickText}>{formatRelativeTime(item.timestamp)}</Text>
+                              <Ionicons name="checkmark" size={14} color="#94A3B8" style={styles.tickIcon} />
+                            </View>
+                          )}
+
+                          {isMe && lastReadSent && (
+                            <View style={styles.seenAvatarContainer}>
+                              {otherUser.avatarUrl ? (
+                                <Image source={{ uri: otherUser.avatarUrl }} style={styles.seenAvatar} />
+                              ) : (
+                                <View style={styles.seenAvatarPlaceholder}>
+                                  <Ionicons name="person" size={8} color="#64748B" />
+                                </View>
+                              )}
+                            </View>
+                          )}
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                </SwipeableMessageRow>
               </View>
             );
           }}
           contentContainerStyle={styles.messagesListContent}
         />
+
+        {/* Reply Preview Bar above Input Bar */}
+        {replyingTo ? (
+          <View style={styles.replyPreviewBar}>
+            <View style={styles.replyPreviewBarContent}>
+              <Text style={styles.replyPreviewTitle}>
+                Đang trả lời {replyingTo.senderId === auth.currentUser?.uid ? 'chính mình' : otherUser.name}
+              </Text>
+              <Text style={styles.replyPreviewText} numberOfLines={1}>
+                {replyingTo.imageUrl ? '[Hình ảnh]' : replyingTo.message}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={() => setReplyingTo(null)} style={styles.closeReplyBtn}>
+              <Ionicons name="close-circle" size={22} color="#64748B" />
+            </TouchableOpacity>
+          </View>
+        ) : null}
 
         {/* Messenger Style Input Bar */}
         <View style={[styles.inputBarContainer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
@@ -312,6 +1380,83 @@ export default function ChatRoomScreen() {
           </View>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Fullscreen Image Viewer Modal with Close X + Options Menu ... */}
+      <ImageViewerModal
+        visible={selectedViewerImage !== null}
+        imageUrl={selectedViewerImage || ''}
+        hideBottomOverlay={true}
+        onClose={() => setSelectedViewerImage(null)}
+      />
+
+      {/* Call Option Modal (Bottom Action Sheet) */}
+      <Modal
+        visible={isCallOptionVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setIsCallOptionVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setIsCallOptionVisible(false)}
+        >
+          <View style={styles.actionSheetContainer}>
+            <View style={styles.actionSheetHeader}>
+              <Text style={styles.actionSheetTitle}>Tùy chọn cuộc gọi</Text>
+              <Text style={styles.actionSheetSubtitle}>Liên hệ với {otherUser.name}</Text>
+            </View>
+
+            <TouchableOpacity style={styles.actionSheetOption} onPress={handleCellularCall} activeOpacity={0.75}>
+              <View style={[styles.actionSheetIconWrapper, { backgroundColor: '#EFF6FF' }]}>
+                <Ionicons name="call" size={22} color="#0084FF" />
+              </View>
+              <View style={styles.actionSheetTextCol}>
+                <Text style={styles.actionSheetOptionTitle}>Gọi di động</Text>
+                <Text style={styles.actionSheetOptionSubtitle}>
+                  {otherUser.phone ? otherUser.phone : 'Sử dụng số điện thoại cá nhân'}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.actionSheetOption} onPress={handleInAppCall} activeOpacity={0.75}>
+              <View style={[styles.actionSheetIconWrapper, { backgroundColor: '#F0FDF4' }]}>
+                <Ionicons name="wifi" size={22} color="#16A34A" />
+              </View>
+              <View style={styles.actionSheetTextCol}>
+                <Text style={styles.actionSheetOptionTitle}>Gọi qua App (Findora Voice)</Text>
+                <Text style={styles.actionSheetOptionSubtitle}>Cuộc gọi thoại miễn phí qua internet</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionSheetCancelBtn}
+              onPress={() => setIsCallOptionVisible(false)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.actionSheetCancelText}>Hủy</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Outgoing / Active Voice Call Overlay Modal */}
+      <InAppCallModal
+        visible={isInAppCallVisible}
+        otherUser={otherUser}
+        status={callStatus}
+        onClose={handleEndCall}
+      />
+
+      {/* Real-time Incoming Voice Call Modal */}
+      <IncomingCallModal
+        visible={isIncomingCallVisible}
+        caller={callerDetails}
+        onAccept={handleAcceptIncomingCall}
+        onReject={handleRejectIncomingCall}
+      />
     </SafeAreaView>
   );
 }
@@ -413,11 +1558,124 @@ const styles = StyleSheet.create({
   },
   messagesListContent: {
     paddingHorizontal: 16,
-    paddingVertical: 16,
-    flexGrow: 1,
+    paddingTop: 12,
+    paddingBottom: 12,
+  },
+  chatProfileHeader: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    paddingHorizontal: 20,
+    marginBottom: 16,
+  },
+  headerProfileAvatarContainer: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    borderWidth: 3,
+    borderColor: '#22C55E',
+    padding: 2,
+    marginBottom: 12,
+  },
+  headerProfileAvatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#F1F5F9',
+  },
+  headerProfileAvatarPlaceholder: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerProfileName: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  badgePillContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginBottom: 10,
+  },
+  badgePillImage: {
+    width: 18,
+    height: 18,
+    marginRight: 6,
+  },
+  badgePillText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  headerProfileSubtext: {
+    fontSize: 13,
+    color: '#64748B',
+    marginBottom: 14,
+  },
+  viewProfileBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginBottom: 16,
+  },
+  viewProfileBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0F172A',
+    marginLeft: 6,
+  },
+  headerNoticeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    marginTop: 4,
+    marginBottom: 12,
+  },
+  headerNoticeText: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 17,
+  },
+  loadingOlderContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    marginHorizontal: 20,
+    marginBottom: 12,
+  },
+  loadingOlderText: {
+    fontSize: 12,
+    color: '#64748B',
+    marginLeft: 8,
+    fontWeight: '500',
+  },
+  msgItemContainer: {
+    marginBottom: 2,
+  },
+  dateHeaderContainer: {
+    alignItems: 'center',
+    marginVertical: 14,
+  },
+  dateHeaderText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#64748B',
   },
   msgRow: {
-    marginBottom: 10,
     flexDirection: 'row',
     alignItems: 'flex-end',
   },
@@ -446,19 +1704,152 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  msgBubble: {
-    maxWidth: '75%',
+  bubbleColMe: {
+    alignItems: 'flex-end',
+    maxWidth: '82%',
+  },
+  bubbleColOther: {
+    alignItems: 'flex-start',
+    maxWidth: '82%',
+  },
+  callCardContainer: {
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     borderRadius: 20,
+    padding: 14,
+    width: 240,
+    marginVertical: 4,
+  },
+  callCardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  callCardIconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  callCardTextCol: {
+    flex: 1,
+  },
+  callCardTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  callCardSubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  callBackBtn: {
+    backgroundColor: '#E2E8F0',
+    borderRadius: 12,
+    paddingVertical: 9,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  callBackBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  // Missed / Rejected Call Card overrides
+  callCardContainerMissed: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
+  },
+  callCardIconCircleMissed: {
+    backgroundColor: '#EF4444',
+  },
+  callDirectionBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  callCardTitleMissed: {
+    color: '#DC2626',
+  },
+  callBackBtnMissed: {
+    backgroundColor: '#CBD5E1',
+  },
+  callBackBtnTextMissed: {
+    color: '#0F172A',
+  },
+  replyContainer: {
+    marginBottom: -12,
+    zIndex: 1,
+  },
+  replyContainerMe: {
+    alignItems: 'flex-end',
+  },
+  replyContainerOther: {
+    alignItems: 'flex-start',
+  },
+  replyLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  replyLabelRowMe: {
+    justifyContent: 'flex-end',
+  },
+  replyLabelRowOther: {
+    justifyContent: 'flex-start',
+  },
+  replyLabelText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#64748B',
+  },
+  replyQuoteBubble: {
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 26,
+    borderRadius: 16,
+    maxWidth: '100%',
+  },
+  replyQuoteBubbleMe: {
+    backgroundColor: '#E2E8F0',
+  },
+  replyQuoteBubbleOther: {
+    backgroundColor: '#E2E8F0',
+  },
+  replyQuoteMessageText: {
+    fontSize: 14,
+    color: '#475569',
+    lineHeight: 19,
+  },
+  msgBubbleOverlapping: {
+    marginTop: -10,
+    zIndex: 2,
+  },
+  imageMsgContainer: {
+    backgroundColor: 'transparent',
+    padding: 0,
+    overflow: 'hidden',
+  },
+  msgBubble: {
     paddingHorizontal: 16,
     paddingVertical: 10,
+    overflow: 'hidden',
   },
   msgBubbleMe: {
-    backgroundColor: '#0084FF', // Messenger Brand Signature Blue
-    borderBottomRightRadius: 4,
+    backgroundColor: '#0084FF',
   },
   msgBubbleOther: {
     backgroundColor: '#F1F5F9',
-    borderBottomLeftRadius: 4,
   },
   msgText: {
     fontSize: 15,
@@ -469,6 +1860,74 @@ const styles = StyleSheet.create({
   },
   msgTextOther: {
     color: '#0F172A',
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+    marginBottom: 4,
+  },
+  metaRowMe: {
+    justifyContent: 'flex-end',
+  },
+  metaRowOther: {
+    justifyContent: 'flex-start',
+  },
+  timeTickContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  timeTickText: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  tickIcon: {
+    marginLeft: 3,
+  },
+  seenAvatarContainer: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    overflow: 'hidden',
+    marginLeft: 4,
+  },
+  seenAvatar: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+  },
+  seenAvatarPlaceholder: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  replyPreviewBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+  },
+  replyPreviewBarContent: {
+    flex: 1,
+  },
+  replyPreviewTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0084FF',
+  },
+  replyPreviewText: {
+    fontSize: 13,
+    color: '#475569',
+    marginTop: 1,
+  },
+  closeReplyBtn: {
+    padding: 4,
   },
   inputBarContainer: {
     backgroundColor: '#FFFFFF',
@@ -506,5 +1965,74 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 4,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  actionSheetContainer: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 30,
+  },
+  actionSheetHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  actionSheetTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  actionSheetSubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 4,
+  },
+  actionSheetOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    backgroundColor: '#F8FAFC',
+    marginBottom: 10,
+  },
+  actionSheetIconWrapper: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  actionSheetTextCol: {
+    flex: 1,
+  },
+  actionSheetOptionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  actionSheetOptionSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  actionSheetCancelBtn: {
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 14,
+    borderRadius: 20,
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  actionSheetCancelText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#64748B',
   },
 });

@@ -11,9 +11,8 @@ export default function TabLayout() {
       }}
     >
       <Tabs.Screen name="index" options={{ title: 'Trang Chủ' }} />
-      <Tabs.Screen name="matches" options={{ title: 'Gợi Ý AI' }} />
       <Tabs.Screen name="map" options={{ title: 'Bản Đồ' }} />
-      <Tabs.Screen name="notifications" options={{ title: 'Thông Báo' }} />
+      <Tabs.Screen name="chat" options={{ title: 'Trò Chuyện' }} />
       <Tabs.Screen name="profile" options={{ title: 'Cá Nhân' }} />
     </Tabs>
   );

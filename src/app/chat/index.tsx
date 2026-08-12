@@ -15,7 +15,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { collection, query, where, onSnapshot, getDocs, doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../../config/firebase';
 import { getPosterDetails } from '../../services/firebaseService';
-import { COLORS, SPACING } from '../../constants/theme';
 
 export interface Conversation {
   id: string;
@@ -23,8 +22,10 @@ export interface Conversation {
   otherUserName: string;
   otherUserAvatar: string;
   lastMessage: string;
+  postId?: string;
   postTitle?: string;
   timestamp: string;
+  rawTimestamp?: any;
   unreadCount: number;
 }
 
@@ -34,6 +35,14 @@ export default function ChatListScreen() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  const getTimestampMillis = (rawTs: any): number => {
+    if (!rawTs) return 0;
+    if (rawTs.seconds) return rawTs.seconds * 1000;
+    if (typeof rawTs === 'number') return rawTs;
+    const parsed = new Date(rawTs).getTime();
+    return isNaN(parsed) ? 0 : parsed;
+  };
 
   const formatTimestamp = (rawTs: any): string => {
     if (!rawTs) return '';
@@ -89,30 +98,29 @@ export default function ChatListScreen() {
           let userDetails = { name: 'Người dùng', avatarUrl: '' };
           try {
             userDetails = await getPosterDetails(otherId);
-          } catch (e) {
-            console.log('Error fetching user details:', e);
-          }
+          } catch (e) {}
 
-          // Count unread messages for current user
+          // Count unread messages for current user in this specific chat
           let unread = 0;
           try {
             const msgsRef = collection(db, 'chats', docSnap.id, 'messages');
             const unreadQuery = query(msgsRef, where('receiverId', '==', user.uid), where('read', '==', false));
             const unreadSnap = await getDocs(unreadQuery);
             unread = unreadSnap.size;
-          } catch (e) {
-            // Safe fallback if subcollection query is omitted
-          }
+          } catch (e) {}
 
           let postTitleVal = data.postTitle || '';
-          if (!postTitleVal && data.postId) {
+          const postIdVal = data.postId || '';
+          if (!postTitleVal && postIdVal) {
             try {
-              const postDoc = await getDoc(doc(db, 'posts', data.postId));
+              const postDoc = await getDoc(doc(db, 'posts', postIdVal));
               if (postDoc.exists()) {
                 postTitleVal = postDoc.data().title || '';
               }
             } catch (e) {}
           }
+
+          const rawTs = data.lastTimestamp || data.timestamp || data.updatedAt;
 
           list.push({
             id: docSnap.id,
@@ -120,14 +128,19 @@ export default function ChatListScreen() {
             otherUserName: userDetails.name || data.otherUserName || 'Người dùng Findora',
             otherUserAvatar: userDetails.avatarUrl || data.otherUserAvatar || '',
             lastMessage: data.lastMessage || data.message || 'Bắt đầu trò chuyện',
+            postId: postIdVal,
             postTitle: postTitleVal,
-            timestamp: formatTimestamp(data.lastTimestamp || data.timestamp || data.updatedAt),
+            timestamp: formatTimestamp(rawTs),
+            rawTimestamp: rawTs,
             unreadCount: unread
           });
         }
+
+        // Sort descending: newest conversation on top
+        list.sort((a, b) => getTimestampMillis(b.rawTimestamp) - getTimestampMillis(a.rawTimestamp));
         setConversations(list);
       } else {
-        // Fallback fallback querying 'messages' directly
+        // Fallback querying 'messages' directly
         const msgsRef = collection(db, 'messages');
         const snap = await getDocs(msgsRef);
         const map = new Map<string, Conversation>();
@@ -136,36 +149,46 @@ export default function ChatListScreen() {
           const data = docSnap.data();
           if (data.senderId === user.uid || data.receiverId === user.uid) {
             const otherId = data.senderId === user.uid ? data.receiverId : data.senderId;
-            if (otherId && !map.has(otherId)) {
+            const postIdVal = data.postId || '';
+            const key = `${otherId}_${postIdVal}`;
+
+            if (otherId && !map.has(key)) {
               let userDetails = { name: 'Người dùng', avatarUrl: '' };
               try {
                 userDetails = await getPosterDetails(otherId);
               } catch (e) {}
 
               let postTitleVal = data.postTitle || '';
-              if (!postTitleVal && data.postId) {
+              if (!postTitleVal && postIdVal) {
                 try {
-                  const postDoc = await getDoc(doc(db, 'posts', data.postId));
+                  const postDoc = await getDoc(doc(db, 'posts', postIdVal));
                   if (postDoc.exists()) {
                     postTitleVal = postDoc.data().title || '';
                   }
                 } catch (e) {}
               }
 
-              map.set(otherId, {
+              const rawTs = data.timestamp;
+
+              map.set(key, {
                 id: docSnap.id,
                 otherUserId: otherId,
                 otherUserName: userDetails.name || 'Người dùng Findora',
                 otherUserAvatar: userDetails.avatarUrl || '',
                 lastMessage: data.message || data.text || 'Bắt đầu trò chuyện',
+                postId: postIdVal,
                 postTitle: postTitleVal,
-                timestamp: formatTimestamp(data.timestamp),
+                timestamp: formatTimestamp(rawTs),
+                rawTimestamp: rawTs,
                 unreadCount: data.read === false && data.receiverId === user.uid ? 1 : 0
               });
             }
           }
         }
-        setConversations(Array.from(map.values()));
+
+        const list = Array.from(map.values());
+        list.sort((a, b) => getTimestampMillis(b.rawTimestamp) - getTimestampMillis(a.rawTimestamp));
+        setConversations(list);
       }
     } catch (err) {
       console.log('Error loading chat list:', err);
@@ -182,7 +205,6 @@ export default function ChatListScreen() {
       return;
     }
 
-    // Subscribe to real-time chats updates
     let unsub = () => {};
     try {
       const chatsRef = collection(db, 'chats');
@@ -232,7 +254,17 @@ export default function ChatListScreen() {
             return (
               <TouchableOpacity
                 style={styles.chatItemRow}
-                onPress={() => router.push({ pathname: '/chat/[id]', params: { id: item.otherUserId, postTitle: item.postTitle || '' } })}
+                onPress={() =>
+                  router.push({
+                    pathname: '/chat/[id]',
+                    params: {
+                      id: item.otherUserId,
+                      chatId: item.id,
+                      postId: item.postId || '',
+                      postTitle: item.postTitle || ''
+                    }
+                  })
+                }
                 activeOpacity={0.7}
               >
                 {/* Avatar Container with Messenger Blue Unread Dot */}
@@ -374,7 +406,7 @@ const styles = StyleSheet.create({
     width: 15,
     height: 15,
     borderRadius: 7.5,
-    backgroundColor: '#0084FF', // Messenger Brand Signature Blue
+    backgroundColor: '#0084FF',
     borderWidth: 2.5,
     borderColor: '#FFFFFF',
   },
@@ -422,7 +454,7 @@ const styles = StyleSheet.create({
     minWidth: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: '#0084FF', // Messenger Brand Signature Blue
+    backgroundColor: '#0084FF',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 6,

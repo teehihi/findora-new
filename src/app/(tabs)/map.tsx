@@ -1,10 +1,10 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, Platform, TouchableOpacity, Modal, TouchableWithoutFeedback, Animated, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker } from 'react-native-maps';
 import Svg, { Path, Circle, ClipPath, Image as SvgImage, Text as SvgText, Defs, Rect } from 'react-native-svg';
 import * as Location from 'expo-location';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { fetchPosts } from '../../services/firebaseService';
 import { Post } from '../../models/types';
@@ -13,6 +13,10 @@ import { COLORS, SPACING } from '../../constants/theme';
 const IC_DEFAULT = require('../../../assets/ic_default.png');
 const IC_VETINH = require('../../../assets/ic_vetinh.png');
 const IC_DIAHINH = require('../../../assets/ic_diahinh.png');
+
+// Global persistent state across tab navigations & unmounts
+let savedMapType: 'standard' | 'hybrid' | 'terrain' = 'standard';
+let savedFilter: 'all' | 'lost' | 'found' = 'all';
 
 class MapErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
   constructor(props: any) {
@@ -145,10 +149,29 @@ export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
   const [posts, setPosts] = useState<Post[]>([]);
-  const [filter, setFilter] = useState<'all' | 'lost' | 'found'>('all');
-  const [mapType, setMapType] = useState<'standard' | 'hybrid' | 'terrain'>('standard');
+  const [filter, setFilterState] = useState<'all' | 'lost' | 'found'>(savedFilter);
+  const [mapType, setMapTypeState] = useState<'standard' | 'hybrid' | 'terrain'>(savedMapType);
   const [modalVisible, setModalVisible] = useState(false);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+
+  // Persistent setters
+  const setFilter = (val: 'all' | 'lost' | 'found') => {
+    savedFilter = val;
+    setFilterState(val);
+  };
+
+  const setMapType = (val: 'standard' | 'hybrid' | 'terrain') => {
+    savedMapType = val;
+    setMapTypeState(val);
+  };
+
+  // Re-sync on screen focus (tab switching)
+  useFocusEffect(
+    useCallback(() => {
+      setMapTypeState(savedMapType);
+      setFilterState(savedFilter);
+    }, [])
+  );
 
   // Post Preview Modal State
   const [previewPost, setPreviewPost] = useState<Post | null>(null);
@@ -317,6 +340,7 @@ export default function MapScreen() {
     <View style={styles.container}>
       <MapErrorBoundary>
         <MapView 
+          key={`map_canvas_${mapType}`}
           ref={mapRef}
           style={styles.map} 
           initialRegion={region} 
