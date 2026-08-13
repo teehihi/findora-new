@@ -1,43 +1,27 @@
 import { AppState, AppStateStatus } from 'react-native';
-import { ref, onValue, set, onDisconnect, serverTimestamp as rtdbTimestamp } from 'firebase/database';
 import { doc, updateDoc, onSnapshot, serverTimestamp as firestoreTimestamp } from 'firebase/firestore';
-import { db, rtdb } from '../config/firebase';
+import { db } from '../config/firebase';
 
 export function setupOnlinePresence(userId: string) {
   if (!userId) return () => {};
 
   try {
     const userDocRef = doc(db, 'users', userId);
-    const userStatusDatabaseRef = ref(rtdb, `/status/${userId}`);
 
-    const isOfflineForDatabase = {
-      state: 'offline',
-      last_changed: rtdbTimestamp(),
-    };
-
-    const isOnlineForDatabase = {
-      state: 'online',
-      last_changed: rtdbTimestamp(),
-    };
-
-    // Mark online in Firestore & RTDB
+    // Mark online in Firestore. RTDB presence is disabled because current database rules deny /status writes.
     const markOnline = () => {
       updateDoc(userDocRef, {
         isOnline: true,
         lastActive: firestoreTimestamp()
       }).catch(() => {});
-
-      set(userStatusDatabaseRef, isOnlineForDatabase).catch(() => {});
     };
 
-    // Mark offline in Firestore & RTDB
+    // Mark offline in Firestore.
     const markOffline = () => {
       updateDoc(userDocRef, {
         isOnline: false,
         lastActive: firestoreTimestamp()
       }).catch(() => {});
-
-      set(userStatusDatabaseRef, isOfflineForDatabase).catch(() => {});
     };
 
     // Initial mark online when entering app
@@ -54,22 +38,8 @@ export function setupOnlinePresence(userId: string) {
 
     const appStateSub = AppState.addEventListener('change', handleAppStateChange);
 
-    // RTDB Disconnect hook
-    const connectedRef = ref(rtdb, '.info/connected');
-    const rtdbSub = onValue(connectedRef, (snapshot) => {
-      if (snapshot.val() === true) {
-        onDisconnect(userStatusDatabaseRef)
-          .set(isOfflineForDatabase)
-          .then(() => {
-            set(userStatusDatabaseRef, isOnlineForDatabase).catch(() => {});
-          })
-          .catch(() => {});
-      }
-    });
-
     return () => {
       appStateSub.remove();
-      rtdbSub();
       markOffline();
     };
   } catch (e) {
@@ -111,22 +81,8 @@ export function subscribeUserPresence(
       () => {}
     );
 
-    // 2. Secondary listener: RTDB /status/{userId}
-    const userStatusRef = ref(rtdb, `/status/${userId}`);
-    const unsubRTDB = onValue(
-      userStatusRef,
-      (snapshot) => {
-        const data = snapshot.val();
-        if (data && data.state) {
-          callback(data.state === 'online', data.last_changed);
-        }
-      },
-      () => {}
-    );
-
     return () => {
       unsubFirestore();
-      unsubRTDB();
     };
   } catch (e) {
     return () => {};

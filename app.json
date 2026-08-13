@@ -13,6 +13,7 @@
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "NSCameraUsageDescription": "Findora cần quyền truy cập Camera để chụp ảnh đồ thất lạc.",
+        "NSMicrophoneUsageDescription": "Findora cần quyền truy cập Microphone để thực hiện cuộc gọi thoại.",
         "NSPhotoLibraryUsageDescription": "Findora cần quyền truy cập thư viện ảnh để đính kèm hình ảnh đồ vật.",
         "NSLocationWhenInUseUsageDescription": "Findora sử dụng vị trí của bạn để hiển thị và ghép đôi các bài đăng gần bạn."
       }
@@ -33,6 +34,7 @@
       },
       "permissions": [
         "CAMERA",
+        "RECORD_AUDIO",
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE",
         "ACCESS_FINE_LOCATION",
@@ -76,7 +78,8 @@
         {
           "iosUrlScheme": "com.googleusercontent.apps.32712775834-jvbe5dqn6vjvlj1cv9ot8qrmijjp8r3t"
         }
-      ]
+      ],
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true

@@ -11,13 +11,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { CallStatus } from '../models/callTypes';
 import {
-  playOutgoingRing,
-  playConnectedTone,
-  playEndCallTone,
-  stopAllRingtones,
   toggleSpeakerphone
 } from '../services/voiceCallService';
+import { setMicrophoneMuted } from '../services/webrtcService';
 
 interface InAppCallModalProps {
   visible: boolean;
@@ -26,12 +24,12 @@ interface InAppCallModalProps {
     avatarUrl: string;
     phone?: string;
   };
-  status?: 'RINGING' | 'CONNECTED';
+  status?: CallStatus;
   onClose: (durationSecs?: number) => void;
 }
 
 export function InAppCallModal({ visible, otherUser, status = 'RINGING', onClose }: InAppCallModalProps) {
-  const [callState, setCallState] = useState<'RINGING' | 'CONNECTED'>(status);
+  const [callState, setCallState] = useState<CallStatus>(status);
   const [duration, setDuration] = useState<number>(0);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [isSpeaker, setIsSpeaker] = useState<boolean>(false);
@@ -42,8 +40,16 @@ export function InAppCallModal({ visible, otherUser, status = 'RINGING', onClose
 
   useEffect(() => {
     setCallState(status);
-    if (status === 'CONNECTED') {
-      playConnectedTone();
+    if (
+      status === 'ENDED' ||
+      status === 'REJECTED' ||
+      status === 'CANCELLED' ||
+      status === 'FAILED'
+    ) {
+      const timer = setTimeout(() => {
+        onClose(duration);
+      }, 1200);
+      return () => clearTimeout(timer);
     }
   }, [status]);
 
@@ -54,10 +60,6 @@ export function InAppCallModal({ visible, otherUser, status = 'RINGING', onClose
       setIsMuted(false);
       setIsSpeaker(false);
       setIsVideoOn(false);
-
-      if (status === 'RINGING') {
-        playOutgoingRing();
-      }
 
       pulseLoop = Animated.loop(
         Animated.sequence([
@@ -79,10 +81,7 @@ export function InAppCallModal({ visible, otherUser, status = 'RINGING', onClose
 
       return () => {
         if (pulseLoop) pulseLoop.stop();
-        stopAllRingtones();
       };
-    } else {
-      stopAllRingtones();
     }
   }, [visible]);
 
@@ -105,8 +104,13 @@ export function InAppCallModal({ visible, otherUser, status = 'RINGING', onClose
     await toggleSpeakerphone(nextState);
   };
 
-  const handleEndCallAction = async () => {
-    await playEndCallTone();
+  const handleToggleMic = () => {
+    const nextState = !isMuted;
+    setIsMuted(nextState);
+    setMicrophoneMuted(nextState);
+  };
+
+  const handleEndCallAction = () => {
     onClose(duration);
   };
 
@@ -116,6 +120,17 @@ export function InAppCallModal({ visible, otherUser, status = 'RINGING', onClose
     const mStr = mins.toString().padStart(2, '0');
     const sStr = remainingSecs.toString().padStart(2, '0');
     return `${mStr}:${sStr}`;
+  };
+
+  const getStatusLabel = () => {
+    if (callState === 'CONNECTED') return formatDuration(duration);
+    if (callState === 'CONNECTING' || callState === 'ACCEPTING') return 'Đang kết nối âm thanh...';
+    if (callState === 'FAILED') return 'Không thể kết nối cuộc gọi';
+    if (callState === 'REJECTED') return 'Cuộc gọi bị từ chối';
+    if (callState === 'CANCELLED') return 'Đã hủy cuộc gọi';
+    if (callState === 'ENDING' || callState === 'ENDED') return 'Cuộc gọi đã kết thúc';
+    if (callState === 'OUTGOING_CALL') return 'Đang gọi...';
+    return 'Đang đổ chuông...';
   };
 
   if (!visible) return null;
@@ -134,89 +149,93 @@ export function InAppCallModal({ visible, otherUser, status = 'RINGING', onClose
           <View style={styles.avatarWrapper}>
             <Animated.View
               style={[
-                styles.pulseRingOuter,
-                { transform: [{ scale: pulseAnim }], opacity: 0.3 }
+                styles.pulseRing,
+                {
+                  transform: [{ scale: pulseAnim }],
+                  opacity: pulseAnim.interpolate({
+                    inputRange: [1, 1.25],
+                    outputRange: [0.3, 0],
+                  }),
+                },
               ]}
             />
-            <Animated.View
-              style={[
-                styles.pulseRingInner,
-                { transform: [{ scale: pulseAnim }], opacity: 0.45 }
-              ]}
-            />
-
             {otherUser.avatarUrl ? (
               <Image source={{ uri: otherUser.avatarUrl }} style={styles.avatar} />
             ) : (
-              <View style={styles.avatarPlaceholder}>
-                <Ionicons name="person" size={60} color="#94A3B8" />
+              <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                <Text style={styles.avatarInitial}>
+                  {otherUser.name ? otherUser.name.charAt(0).toUpperCase() : 'U'}
+                </Text>
               </View>
             )}
           </View>
 
-          <Text style={styles.callerName}>{otherUser.name}</Text>
-
-          <Text style={[styles.statusText, callState === 'CONNECTED' ? styles.statusConnected : null]}>
-            {callState === 'CONNECTED' ? formatDuration(duration) : 'Đang đổ chuông...'}
-          </Text>
+          <Text style={styles.callerName}>{otherUser.name || 'Người dùng Findora'}</Text>
+          <Text style={styles.statusLabel}>{getStatusLabel()}</Text>
         </View>
 
-        {/* Call Control Buttons Bar */}
-        <View style={styles.controlsContainer}>
-          <View style={styles.controlsRow}>
-            {/* Mic Toggle */}
+        {/* Bottom Call Action Bar */}
+        <View style={styles.bottomBar}>
+          <View style={styles.actionRow}>
+            {/* Speaker Button */}
             <TouchableOpacity
-              style={[styles.controlBtn, isMuted ? styles.controlBtnActive : null]}
-              onPress={() => setIsMuted(!isMuted)}
-              activeOpacity={0.8}
-            >
-              <Ionicons
-                name={isMuted ? 'mic-off' : 'mic'}
-                size={26}
-                color={isMuted ? '#0F172A' : '#FFFFFF'}
-              />
-              <Text style={[styles.controlText, isMuted ? styles.controlTextActive : null]}>
-                {isMuted ? 'Đã tắt mic' : 'Mic'}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Speaker Toggle */}
-            <TouchableOpacity
-              style={[styles.controlBtn, isSpeaker ? styles.controlBtnActive : null]}
+              style={[styles.actionBtn, isSpeaker && styles.actionBtnActive]}
               onPress={handleToggleSpeaker}
               activeOpacity={0.8}
             >
               <Ionicons
-                name={isSpeaker ? 'volume-high' : 'volume-medium'}
+                name={isSpeaker ? 'volume-high' : 'volume-high-outline'}
                 size={26}
                 color={isSpeaker ? '#0F172A' : '#FFFFFF'}
               />
-              <Text style={[styles.controlText, isSpeaker ? styles.controlTextActive : null]}>
+              <Text style={[styles.actionBtnText, isSpeaker && styles.actionBtnTextActive]}>
                 {isSpeaker ? 'Loa ngoài' : 'Loa'}
               </Text>
             </TouchableOpacity>
 
-            {/* Video Toggle */}
+            {/* Video Toggle (Placeholder) */}
             <TouchableOpacity
-              style={[styles.controlBtn, isVideoOn ? styles.controlBtnActive : null]}
+              style={[styles.actionBtn, isVideoOn && styles.actionBtnActive]}
               onPress={() => setIsVideoOn(!isVideoOn)}
               activeOpacity={0.8}
             >
               <Ionicons
-                name={isVideoOn ? 'videocam' : 'videocam-off'}
+                name={isVideoOn ? 'videocam' : 'videocam-outline'}
                 size={26}
                 color={isVideoOn ? '#0F172A' : '#FFFFFF'}
               />
-              <Text style={[styles.controlText, isVideoOn ? styles.controlTextActive : null]}>
-                Video
+              <Text style={[styles.actionBtnText, isVideoOn && styles.actionBtnTextActive]}>
+                {isVideoOn ? 'Camera Bật' : 'Camera'}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Mic Mute Button */}
+            <TouchableOpacity
+              style={[styles.actionBtn, isMuted && styles.actionBtnActive]}
+              onPress={handleToggleMic}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name={isMuted ? 'mic-off' : 'mic-outline'}
+                size={26}
+                color={isMuted ? '#0F172A' : '#FFFFFF'}
+              />
+              <Text style={[styles.actionBtnText, isMuted && styles.actionBtnTextActive]}>
+                {isMuted ? 'Đã tắt mic' : 'Micro'}
               </Text>
             </TouchableOpacity>
           </View>
 
-          {/* Red End Call Button */}
-          <TouchableOpacity style={styles.endCallBtn} onPress={handleEndCallAction} activeOpacity={0.85}>
-            <Ionicons name="call" size={32} color="#FFFFFF" style={{ transform: [{ rotate: '135deg' }] }} />
-          </TouchableOpacity>
+          {/* End Call Button */}
+          <View style={styles.endCallContainer}>
+            <TouchableOpacity
+              style={styles.endCallBtn}
+              onPress={handleEndCallAction}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="call" size={32} color="#FFFFFF" style={{ transform: [{ rotate: '135deg' }] }} />
+            </TouchableOpacity>
+          </View>
         </View>
       </SafeAreaView>
     </Modal>
@@ -226,20 +245,19 @@ export function InAppCallModal({ visible, otherUser, status = 'RINGING', onClose
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#0F172A', // Slate 900 dark theme
     justifyContent: 'space-between',
-    paddingVertical: 20,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 10,
+    paddingVertical: 16,
   },
   headerText: {
     fontSize: 13,
+    fontWeight: '500',
     color: '#94A3B8',
-    fontWeight: '600',
   },
   centerContent: {
     alignItems: 'center',
@@ -247,25 +265,17 @@ const styles = StyleSheet.create({
     marginVertical: 40,
   },
   avatarWrapper: {
-    position: 'relative',
+    width: 140,
+    height: 140,
     alignItems: 'center',
     justifyContent: 'center',
-    width: 180,
-    height: 180,
-    marginBottom: 24,
+    marginBottom: 28,
   },
-  pulseRingOuter: {
+  pulseRing: {
     position: 'absolute',
-    width: 190,
-    height: 190,
-    borderRadius: 95,
-    backgroundColor: '#0084FF',
-  },
-  pulseRingInner: {
-    position: 'absolute',
-    width: 155,
-    height: 155,
-    borderRadius: 77.5,
+    width: 140,
+    height: 140,
+    borderRadius: 70,
     backgroundColor: '#38BDF8',
   },
   avatar: {
@@ -273,75 +283,72 @@ const styles = StyleSheet.create({
     height: 120,
     borderRadius: 60,
     borderWidth: 3,
-    borderColor: '#FFFFFF',
+    borderColor: '#38BDF8',
   },
   avatarPlaceholder: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    backgroundColor: '#334155',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitial: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  callerName: {
+    fontSize: 26,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 8,
+    textAlign: 'center',
+    paddingHorizontal: 20,
+  },
+  statusLabel: {
+    fontSize: 16,
+    color: '#38BDF8',
+    fontWeight: '600',
+  },
+  bottomBar: {
+    paddingHorizontal: 24,
+    paddingBottom: 40,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 36,
+  },
+  actionBtn: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     backgroundColor: '#1E293B',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
   },
-  callerName: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  statusText: {
-    fontSize: 16,
-    color: '#94A3B8',
-    fontWeight: '600',
-  },
-  statusConnected: {
-    color: '#38BDF8',
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  controlsContainer: {
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
-  controlsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    width: '100%',
-    marginBottom: 40,
-  },
-  controlBtn: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-  },
-  controlBtnActive: {
+  actionBtnActive: {
     backgroundColor: '#FFFFFF',
   },
-  controlText: {
+  actionBtnText: {
     fontSize: 11,
     color: '#94A3B8',
-    marginTop: 6,
+    marginTop: 4,
+  },
+  actionBtnTextActive: {
+    color: '#0F172A',
     fontWeight: '600',
   },
-  controlTextActive: {
-    color: '#0F172A',
+  endCallContainer: {
+    alignItems: 'center',
   },
   endCallBtn: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
     backgroundColor: '#EF4444',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#EF4444',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.4,
     shadowRadius: 10,
     elevation: 8,

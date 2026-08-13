@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { playIncomingRing, playConnectedTone, stopAllRingtones } from '../services/voiceCallService';
+import { playIncomingRing, stopAllRingtones } from '../services/voiceCallService';
 
 interface IncomingCallModalProps {
   visible: boolean;
@@ -26,6 +26,16 @@ interface IncomingCallModalProps {
 
 export function IncomingCallModal({ visible, caller, onAccept, onReject }: IncomingCallModalProps) {
   const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (visible) {
+      console.log('[CALL:MODAL_RENDER]', {
+        callerName: caller?.name,
+        visible,
+        timestamp: Date.now(),
+      });
+    }
+  }, [visible, caller]);
 
   useEffect(() => {
     let pulseLoop: Animated.CompositeAnimation | null = null;
@@ -60,7 +70,7 @@ export function IncomingCallModal({ visible, caller, onAccept, onReject }: Incom
   }, [visible]);
 
   const handleAcceptAction = async () => {
-    await playConnectedTone();
+    await stopAllRingtones();
     onAccept();
   };
 

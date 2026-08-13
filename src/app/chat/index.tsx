@@ -140,55 +140,7 @@ export default function ChatListScreen() {
         list.sort((a, b) => getTimestampMillis(b.rawTimestamp) - getTimestampMillis(a.rawTimestamp));
         setConversations(list);
       } else {
-        // Fallback querying 'messages' directly
-        const msgsRef = collection(db, 'messages');
-        const snap = await getDocs(msgsRef);
-        const map = new Map<string, Conversation>();
-
-        for (const docSnap of snap.docs) {
-          const data = docSnap.data();
-          if (data.senderId === user.uid || data.receiverId === user.uid) {
-            const otherId = data.senderId === user.uid ? data.receiverId : data.senderId;
-            const postIdVal = data.postId || '';
-            const key = `${otherId}_${postIdVal}`;
-
-            if (otherId && !map.has(key)) {
-              let userDetails = { name: 'Người dùng', avatarUrl: '' };
-              try {
-                userDetails = await getPosterDetails(otherId);
-              } catch (e) {}
-
-              let postTitleVal = data.postTitle || '';
-              if (!postTitleVal && postIdVal) {
-                try {
-                  const postDoc = await getDoc(doc(db, 'posts', postIdVal));
-                  if (postDoc.exists()) {
-                    postTitleVal = postDoc.data().title || '';
-                  }
-                } catch (e) {}
-              }
-
-              const rawTs = data.timestamp;
-
-              map.set(key, {
-                id: docSnap.id,
-                otherUserId: otherId,
-                otherUserName: userDetails.name || 'Người dùng Findora',
-                otherUserAvatar: userDetails.avatarUrl || '',
-                lastMessage: data.message || data.text || 'Bắt đầu trò chuyện',
-                postId: postIdVal,
-                postTitle: postTitleVal,
-                timestamp: formatTimestamp(rawTs),
-                rawTimestamp: rawTs,
-                unreadCount: data.read === false && data.receiverId === user.uid ? 1 : 0
-              });
-            }
-          }
-        }
-
-        const list = Array.from(map.values());
-        list.sort((a, b) => getTimestampMillis(b.rawTimestamp) - getTimestampMillis(a.rawTimestamp));
-        setConversations(list);
+        setConversations([]);
       }
     } catch (err) {
       console.log('Error loading chat list:', err);

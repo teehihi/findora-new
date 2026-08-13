@@ -42,7 +42,8 @@ import { auth, db } from '../../config/firebase';
 import { ChatMessage } from '../../models/types';
 import { getLevelFromPoints, getPosterDetails } from '../../services/firebaseService';
 import { subscribeUserPresence } from '../../services/presenceService';
-import { startWebRTCCall, stopWebRTCCall } from '../../services/webrtcService';
+import { CallStatus } from '../../models/callTypes';
+import { callManager } from '../../services/callManager';
 
 type MessagePosition = 'SINGLE' | 'TOP' | 'MIDDLE' | 'BOTTOM';
 const MESSAGES_PAGE_SIZE = 25;
@@ -413,11 +414,13 @@ function SwipeableMessageRow({
 export default function ChatRoomScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { id: otherUserId, chatId: paramChatId, postId, postTitle } = useLocalSearchParams<{
+  const { id: otherUserId, chatId: paramChatId, postId, postTitle, acceptCall, activeCallId } = useLocalSearchParams<{
     id: string;
     chatId?: string;
     postId?: string;
     postTitle?: string;
+    acceptCall?: string;
+    activeCallId?: string;
   }>();
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -435,7 +438,8 @@ export default function ChatRoomScreen() {
   const [isCallOptionVisible, setIsCallOptionVisible] = useState<boolean>(false);
   const [isInAppCallVisible, setIsInAppCallVisible] = useState<boolean>(false);
   const [isIncomingCallVisible, setIsIncomingCallVisible] = useState<boolean>(false);
-  const [callStatus, setCallStatus] = useState<'RINGING' | 'CONNECTED'>('RINGING');
+  const [callStatus, setCallStatus] = useState<CallStatus>('IDLE');
+  const [currentCallId, setCurrentCallId] = useState<string | null>(null);
   const [callerDetails, setCallerDetails] = useState<{ name: string; avatarUrl: string }>({
     name: 'Người dùng Findora',
     avatarUrl: ''
@@ -452,6 +456,7 @@ export default function ChatRoomScreen() {
     phone: ''
   });
   const flatListRef = useRef<FlatList>(null);
+  const autoAcceptHandledRef = useRef(false);
 
   // Invert messages array so latest message is at index 0 (bottom of screen)
   const reversedMessages = useMemo(() => {
@@ -623,18 +628,26 @@ export default function ChatRoomScreen() {
                 } else if (callData.callerId === currentUser.uid) {
                   // Outgoing call for current user
                   setIsInAppCallVisible(true);
-                  setCallStatus('RINGING');
+                  setCallStatus('CALLING');
                 }
+              } else if (callData.status === 'connecting') {
+                setIsIncomingCallVisible(false);
+                setIsInAppCallVisible(true);
+                setCallStatus('CONNECTING');
               } else if (callData.status === 'connected') {
                 // Both sides connected
                 setIsIncomingCallVisible(false);
                 setIsInAppCallVisible(true);
                 setCallStatus('CONNECTED');
+              } else if (callData.status === 'failed') {
+                setIsIncomingCallVisible(false);
+                setIsInAppCallVisible(true);
+                setCallStatus('FAILED');
               } else if (callData.status === 'ended' || callData.status === 'rejected') {
                 // Call closed
                 setIsIncomingCallVisible(false);
                 setIsInAppCallVisible(false);
-                setCallStatus('RINGING');
+                setCallStatus('IDLE');
               }
             }
           }
@@ -707,60 +720,14 @@ export default function ChatRoomScreen() {
 
     initChatRoom();
 
-    // 2. Listen to root 'messages' collection filtered by senderId
-    try {
-      const rootMsgsQuery = query(
-        collection(db, 'messages'),
-        where('senderId', '==', currentUser.uid),
-        limitToLast(messageLimit)
-      );
-
-      unsubRootMessages = onSnapshot(
-        rootMsgsQuery,
-        (snapshot) => {
-          snapshot.forEach((docSnap) => {
-            const data = docSnap.data();
-            if (data.receiverId === otherUserId) {
-              const matchesPost = !postId || !data.postId || data.postId === postId;
-
-              if (matchesPost) {
-                messageMap.set(docSnap.id, {
-                  id: docSnap.id,
-                  senderId: data.senderId,
-                  receiverId: data.receiverId,
-                  message: data.text || data.message || '',
-                  type: data.type || 'text',
-                  callType: data.callType || 'voice',
-                  callDuration: data.callDuration || 0,
-                  callStatus: data.callStatus || 'ended',
-                  imageUrl: data.imageUrl || '',
-                  replyToId: data.replyToId || null,
-                  replyToText: data.replyToText || null,
-                  replyToSender: data.replyToSender || null,
-                  read: data.read ?? true,
-                  timestamp: data.timestamp
-                });
-              }
-            }
-          });
-          updateMessagesState();
-          setIsLoadingMore(false);
-        },
-        (error) => {
-          console.log('Notice: root messages listener skipped:', error?.message);
-        }
-      );
-    } catch (err) {
-      console.log('Error listening to root messages:', err);
-    }
-
     return () => {
       unsubPresence();
       unsubChatMessages();
-      unsubRootMessages();
       unsubChatDoc();
     };
   }, [otherUserId, paramChatId, postId, messageLimit]);
+
+
 
   const handleCellularCall = () => {
     setIsCallOptionVisible(false);
@@ -780,24 +747,37 @@ export default function ChatRoomScreen() {
     const currentUser = auth.currentUser;
     if (!currentUser || !otherUserId) return;
 
-    const chatId = activeChatId || paramChatId || [currentUser.uid, otherUserId].sort().join('_');
+    // Microphone Permission Pre-Check UX
+    try {
+      const webrtc = require('react-native-webrtc');
+      if (webrtc?.mediaDevices?.getUserMedia) {
+        const testStream = await webrtc.mediaDevices.getUserMedia({ audio: true, video: false });
+        testStream.getTracks().forEach((track: any) => track.stop());
+      }
+    } catch (permError) {
+      Alert.alert('Không thể thực hiện cuộc gọi', 'Cần cấp quyền truy cập Micro trong Cài đặt thiết bị để gọi điện.');
+      return;
+    }
 
-    const callPayload = {
-      chatId,
-      callerId: currentUser.uid,
-      callerName: currentUser.displayName || 'Bạn',
-      callerAvatar: currentUser.photoURL || '',
-      receiverId: otherUserId,
-      status: 'calling',
-      createdAt: new Date().toISOString()
-    };
+    const chatId = activeChatId || paramChatId || [currentUser.uid, otherUserId].sort().join('_');
+    const callId = `${chatId}_${Date.now()}`;
+    setCurrentCallId(callId);
 
     try {
-      await setDoc(doc(db, 'chats', chatId), { callState: callPayload }, { merge: true });
-      await setDoc(doc(db, 'calls', chatId), callPayload).catch(() => { });
       setIsInAppCallVisible(true);
-      setCallStatus('RINGING');
-      startWebRTCCall(chatId, true);
+      setCallStatus('OUTGOING_CALL');
+
+      await callManager.startCall({
+        callId,
+        chatId,
+        callerId: currentUser.uid,
+        callerName: currentUser.displayName || 'Bạn',
+        callerAvatar: currentUser.photoURL || '',
+        receiverId: otherUserId,
+        isCaller: true,
+        onStatusChange: setCallStatus,
+        onError: (error) => Alert.alert('Lỗi cuộc gọi', error instanceof Error ? error.message : String(error)),
+      });
     } catch (e) {
       console.error('Error starting call:', e);
     }
@@ -808,63 +788,65 @@ export default function ChatRoomScreen() {
     if (!currentUser || !otherUserId) return;
 
     const chatId = activeChatId || paramChatId || [currentUser.uid, otherUserId].sort().join('_');
+    const callId = activeCallId || currentCallId || `${chatId}_${Date.now()}`;
+    setCurrentCallId(callId);
 
     try {
-      await updateDoc(doc(db, 'chats', chatId), {
-        'callState.status': 'connected',
-        'callState.connectedAt': new Date().toISOString()
-      });
-      await updateDoc(doc(db, 'calls', chatId), { status: 'connected' }).catch(() => { });
       setIsIncomingCallVisible(false);
       setIsInAppCallVisible(true);
-      setCallStatus('CONNECTED');
-      startWebRTCCall(chatId, false);
+      setCallStatus('ACCEPTING');
+
+      await callManager.acceptCall({
+        callId,
+        chatId,
+        callerId: otherUserId,
+        callerName: otherUser.name,
+        callerAvatar: otherUser.avatarUrl,
+        receiverId: currentUser.uid,
+        isCaller: false,
+        onStatusChange: setCallStatus,
+        onError: (error) => Alert.alert('Lỗi cuộc gọi', error instanceof Error ? error.message : String(error)),
+      });
     } catch (e) {
       console.error('Error accepting call:', e);
     }
   };
 
+  useEffect(() => {
+    if (acceptCall !== '1' || autoAcceptHandledRef.current || !activeChatId) return;
+    autoAcceptHandledRef.current = true;
+    handleAcceptIncomingCall();
+  }, [acceptCall, activeChatId]);
+
   const handleRejectIncomingCall = async () => {
-    const currentUser = auth.currentUser;
-    if (!currentUser || !otherUserId) return;
-
-    const chatId = activeChatId || paramChatId || [currentUser.uid, otherUserId].sort().join('_');
-
     try {
-      await updateDoc(doc(db, 'chats', chatId), {
-        'callState.status': 'rejected'
-      });
-      await updateDoc(doc(db, 'calls', chatId), { status: 'rejected' }).catch(() => { });
+      await callManager.rejectCall();
       await sendCallRecordMessage('voice', 0, 'rejected');
-      stopWebRTCCall();
     } catch (e) {
       console.error('Error rejecting call:', e);
     } finally {
       setIsIncomingCallVisible(false);
+      setCallStatus('IDLE');
+      setCurrentCallId(null);
     }
   };
 
   const handleEndCall = async (callDurationSecs?: number) => {
-    const currentUser = auth.currentUser;
-    if (!currentUser || !otherUserId) return;
-
-    const chatId = activeChatId || paramChatId || [currentUser.uid, otherUserId].sort().join('_');
     const finalDuration = typeof callDurationSecs === 'number' ? callDurationSecs : 0;
-
     try {
-      await updateDoc(doc(db, 'chats', chatId), {
-        'callState.status': 'ended'
-      });
-      await updateDoc(doc(db, 'calls', chatId), { status: 'ended' }).catch(() => { });
-      await sendCallRecordMessage('voice', finalDuration, 'ended');
-      stopWebRTCCall();
+      if (callStatus === 'RINGING' || callStatus === 'OUTGOING_CALL') {
+        await callManager.cancelCall();
+      } else {
+        await callManager.endCall('ended', finalDuration);
+        await sendCallRecordMessage('voice', finalDuration, 'ended');
+      }
     } catch (e) {
       console.error('Error ending call:', e);
     } finally {
       setIsInAppCallVisible(false);
       setIsIncomingCallVisible(false);
-      setCallStatus('RINGING');
-      stopWebRTCCall();
+      setCallStatus('IDLE');
+      setCurrentCallId(null);
     }
   };
 
@@ -918,17 +900,6 @@ export default function ChatRoomScreen() {
         ...replyData
       });
 
-      // 3. Mirror message to root 'messages' collection
-      await addDoc(collection(db, 'messages'), {
-        senderId: currentUser.uid,
-        receiverId: otherUserId,
-        text: textToSend,
-        message: textToSend,
-        type: 'text',
-        postId: postId || null,
-        timestamp: serverTimestamp(),
-        ...replyData
-      });
     } catch (e) {
       console.error('Error sending message:', e);
     }

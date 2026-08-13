@@ -4,7 +4,7 @@ import {
   getAuth, 
   Auth 
 } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore, memoryLocalCache } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getDatabase } from 'firebase/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -35,7 +35,10 @@ try {
 }
 
 export { auth };
-export const db = getFirestore(app);
+
+export const db = initializeFirestore(app, {
+  localCache: memoryLocalCache(),
+});
 export const storage = getStorage(app, `gs://${firebaseConfig.storageBucket}`);
 export const rtdb = getDatabase(app);
 export const GEMINI_API_KEY = "AIzaSyAWK3VVS3DCfs05EptzcmaYjnu2WXhDo50";
