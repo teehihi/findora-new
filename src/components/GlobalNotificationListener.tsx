@@ -1,13 +1,19 @@
 import React, { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 import { useRouter } from 'expo-router';
-import * as Notifications from 'expo-notifications';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 import { 
   initializeDeviceNotifications, 
   triggerDeviceNotification 
 } from '../services/deviceNotificationService';
+
+let NotificationsModule: any = null;
+try {
+  NotificationsModule = require('expo-notifications');
+} catch (e) {
+  console.log('Notice: expo-notifications not loaded in GlobalNotificationListener:', e);
+}
 
 export function GlobalNotificationListener() {
   const router = useRouter();
@@ -23,20 +29,22 @@ export function GlobalNotificationListener() {
     // 2. Listen to notification click events from system tray safely
     let responseSubscription: any = null;
     try {
-      responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
-        const data = response.notification.request.content.data;
-        if (!data) return;
+      if (NotificationsModule && typeof NotificationsModule.addNotificationResponseReceivedListener === 'function') {
+        responseSubscription = NotificationsModule.addNotificationResponseReceivedListener((response: any) => {
+          const data = response?.notification?.request?.content?.data;
+          if (!data) return;
 
-        if (data.type === 'chat' && data.senderId) {
-          router.push(`/chat/${data.senderId}`);
-        } else if (data.postId) {
-          router.push(`/post/${data.postId}`);
-        } else if (data.senderId) {
-          router.push(`/chat/${data.senderId}`);
-        } else {
-          router.push('/(tabs)/notifications');
-        }
-      });
+          if (data.type === 'chat' && data.senderId) {
+            router.push(`/chat/${data.senderId}`);
+          } else if (data.postId) {
+            router.push(`/post/${data.postId}`);
+          } else if (data.senderId) {
+            router.push(`/chat/${data.senderId}`);
+          } else {
+            router.push('/(tabs)/notifications');
+          }
+        });
+      }
     } catch (e) {
       console.log('Notice: Notifications response listener notice:', e);
     }

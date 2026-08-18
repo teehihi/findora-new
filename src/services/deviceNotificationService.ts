@@ -1,6 +1,13 @@
 import { Platform } from 'react-native';
-import * as Notifications from 'expo-notifications';
 import { playSoundEffect } from './soundService';
+
+// Safely obtain expo-notifications without crashing module load if native module is unlinked
+let NotificationsModule: any = null;
+try {
+  NotificationsModule = require('expo-notifications');
+} catch (e) {
+  console.log('Notice: expo-notifications native module not linked:', e);
+}
 
 let isHandlerConfigured = false;
 
@@ -9,12 +16,12 @@ let isHandlerConfigured = false;
  * and request notification permissions on iOS and Android
  */
 export async function initializeDeviceNotifications(): Promise<boolean> {
-  if (Platform.OS === 'web') return false;
+  if (Platform.OS === 'web' || !NotificationsModule) return false;
 
   try {
     // 1. Configure foreground notification presentation handler safely inside initialization
-    if (!isHandlerConfigured) {
-      Notifications.setNotificationHandler({
+    if (!isHandlerConfigured && typeof NotificationsModule.setNotificationHandler === 'function') {
+      NotificationsModule.setNotificationHandler({
         handleNotification: async () => ({
           shouldShowBanner: true,
           shouldShowList: true,
@@ -25,34 +32,38 @@ export async function initializeDeviceNotifications(): Promise<boolean> {
       isHandlerConfigured = true;
     }
 
-    if (Platform.OS === 'android') {
+    if (Platform.OS === 'android' && typeof NotificationsModule.setNotificationChannelAsync === 'function') {
       // Channel 1: Messages (Chat incoming)
-      await Notifications.setNotificationChannelAsync('messages', {
+      await NotificationsModule.setNotificationChannelAsync('messages', {
         name: 'Tin nhắn',
-        importance: Notifications.AndroidImportance.MAX,
+        importance: NotificationsModule.AndroidImportance?.MAX ?? 5,
         vibrationPattern: [0, 250, 250, 250],
         lightColor: '#10B981',
         showBadge: true,
       });
 
       // Channel 2: General Notifications (AI Match, Like, Comment, Points, System)
-      await Notifications.setNotificationChannelAsync('general', {
+      await NotificationsModule.setNotificationChannelAsync('general', {
         name: 'Thông báo chung',
-        importance: Notifications.AndroidImportance.HIGH,
+        importance: NotificationsModule.AndroidImportance?.HIGH ?? 4,
         vibrationPattern: [0, 250, 250, 250],
         lightColor: '#3B82F6',
         showBadge: true,
       });
     }
 
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
+    if (typeof NotificationsModule.getPermissionsAsync === 'function') {
+      const { status: existingStatus } = await NotificationsModule.getPermissionsAsync();
+      let finalStatus = existingStatus;
+      if (existingStatus !== 'granted' && typeof NotificationsModule.requestPermissionsAsync === 'function') {
+        const { status } = await NotificationsModule.requestPermissionsAsync();
+        finalStatus = status;
+      }
+
+      return finalStatus === 'granted';
     }
 
-    return finalStatus === 'granted';
+    return true;
   } catch (error) {
     console.log('Notice: Device notifications init notice:', error);
     return false;
@@ -81,22 +92,24 @@ export async function triggerDeviceNotification({
       playSoundEffect('generalNotification');
     }
 
-    if (Platform.OS === 'web') return;
+    if (Platform.OS === 'web' || !NotificationsModule) return;
 
     // 2. Schedule immediate system notification
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title,
-        body,
-        data: {
-          ...data,
-          type,
+    if (typeof NotificationsModule.scheduleNotificationAsync === 'function') {
+      await NotificationsModule.scheduleNotificationAsync({
+        content: {
+          title,
+          body,
+          data: {
+            ...data,
+            type,
+          },
+          sound: true,
+          priority: NotificationsModule.AndroidNotificationPriority?.MAX ?? 'max',
         },
-        sound: true,
-        priority: Notifications.AndroidNotificationPriority.MAX,
-      },
-      trigger: null, // show immediately
-    });
+        trigger: null, // show immediately
+      });
+    }
   } catch (error) {
     console.log('Notice: Trigger device notification notice:', error);
   }

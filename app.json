@@ -38,7 +38,8 @@
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE",
         "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION"
+        "ACCESS_COARSE_LOCATION",
+        "POST_NOTIFICATIONS"
       ]
     },
     "web": {
@@ -79,7 +80,8 @@
           "iosUrlScheme": "com.googleusercontent.apps.32712775834-jvbe5dqn6vjvlj1cv9ot8qrmijjp8r3t"
         }
       ],
-      "expo-audio"
+      "expo-audio",
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true
