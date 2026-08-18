@@ -72,8 +72,12 @@ export interface Notification {
   userId: string;
   title: string;
   message: string;
-  type: 'match' | 'chat' | 'points' | 'resolve' | 'system';
+  type: 'match' | 'chat' | 'points' | 'resolve' | 'system' | 'comment' | 'like';
   postId?: string;
+  senderId?: string;
+  senderName?: string;
+  senderAvatar?: string;
+  imageUrl?: string;
   createdAt?: Timestamp | any;
   read?: boolean;
 }

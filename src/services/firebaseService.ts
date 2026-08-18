@@ -15,7 +15,8 @@ import {
   arrayUnion,
   arrayRemove,
   increment,
-  limit
+  limit,
+  writeBatch
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import * as Location from 'expo-location';
@@ -354,21 +355,58 @@ export async function fetchNotificationsList(userId: string): Promise<Notificati
         message: data.message || '',
         type: data.type || 'system',
         postId: data.postId,
+        senderId: data.senderId,
+        senderName: data.senderName,
+        senderAvatar: data.senderAvatar,
+        imageUrl: data.imageUrl,
         createdAt: data.createdAt,
         read: data.read || false
       });
     });
 
-    list.sort((a, b) => {
-      const tA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0);
-      const tB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0);
-      return tB - tA;
-    });
+    const getMillis = (createdAt: any): number => {
+      if (!createdAt) return 0;
+      if (typeof createdAt === 'number') return createdAt > 1e11 ? createdAt : createdAt * 1000;
+      if (createdAt.toMillis && typeof createdAt.toMillis === 'function') return createdAt.toMillis();
+      if (createdAt.toDate && typeof createdAt.toDate === 'function') return createdAt.toDate().getTime();
+      if (createdAt.seconds != null) return createdAt.seconds * 1000;
+      if (createdAt._seconds != null) return createdAt._seconds * 1000;
+      const d = new Date(createdAt).getTime();
+      return isNaN(d) ? 0 : d;
+    };
+
+    list.sort((a, b) => getMillis(b.createdAt) - getMillis(a.createdAt));
 
     return list;
   } catch (e) {
     console.error('Error fetching notifications list:', e);
     return [];
+  }
+}
+
+export async function markNotificationAsRead(notifId: string): Promise<void> {
+  if (!notifId) return;
+  try {
+    const notifRef = doc(db, 'notifications', notifId);
+    await updateDoc(notifRef, { read: true });
+  } catch (e) {
+    console.log('Error marking notification as read:', e);
+  }
+}
+
+export async function markAllNotificationsAsRead(userId: string): Promise<void> {
+  if (!userId) return;
+  try {
+    const notifRef = collection(db, 'notifications');
+    const q = query(notifRef, where('userId', '==', userId), where('read', '==', false));
+    const snapshot = await getDocs(q);
+    const batch = writeBatch(db);
+    snapshot.forEach((docSnap) => {
+      batch.update(docSnap.ref, { read: true });
+    });
+    await batch.commit();
+  } catch (e) {
+    console.log('Error marking all notifications as read:', e);
   }
 }
 
@@ -634,6 +672,33 @@ export async function addComment(commentData: Omit<Comment, 'id'>): Promise<stri
     ...commentData,
     createdAt: serverTimestamp()
   });
+
+  // Send notification to post author
+  try {
+    const postSnap = await getDoc(doc(db, 'posts', commentData.postId));
+    if (postSnap.exists()) {
+      const postData = postSnap.data();
+      if (postData.userId && postData.userId !== commentData.userId) {
+        const notifRef = collection(db, 'notifications');
+        await addDoc(notifRef, {
+          userId: postData.userId,
+          title: `${commentData.userName} đã bình luận`,
+          message: commentData.content,
+          type: 'comment',
+          postId: commentData.postId,
+          senderId: commentData.userId,
+          senderName: commentData.userName,
+          senderAvatar: commentData.userAvatar || '',
+          imageUrl: postData.imageUrl || '',
+          createdAt: serverTimestamp(),
+          read: false
+        });
+      }
+    }
+  } catch (e) {
+    console.log('Error creating comment notification:', e);
+  }
+
   return docRef.id;
 }
 
