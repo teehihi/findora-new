@@ -197,7 +197,7 @@ export async function fetchPostById(postId: string): Promise<Post | null> {
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
       const data = docSnap.data();
-      const img = data.imageUrl || data.image_url || data.image || data.photoUrl || data.url || '';
+      const img = data.imageUrl || data.image_url || data.image || data.photoUrl || data.url || (data.images && data.images.length > 0 ? data.images[0] : '') || '';
       return {
         id: docSnap.id,
         title: data.title || '',

@@ -520,7 +520,7 @@ export default function PostDetailScreen() {
 
   const handleOpenChat = () => {
     if (!post) return;
-    const firstImg = post.imageUrl || '';
+    const firstImg = post.imageUrl || (post as any).images?.[0] || (post as any).image || (post as any).image_url || '';
     router.push({
       pathname: '/chat/[id]',
       params: {

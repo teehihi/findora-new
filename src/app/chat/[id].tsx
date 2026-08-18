@@ -41,7 +41,7 @@ import { InAppCallModal } from '../../components/InAppCallModal';
 import { IncomingCallModal } from '../../components/IncomingCallModal';
 import { auth, db } from '../../config/firebase';
 import { ChatMessage } from '../../models/types';
-import { getLevelFromPoints, getPosterDetails } from '../../services/firebaseService';
+import { fetchPostById, getLevelFromPoints, getPosterDetails } from '../../services/firebaseService';
 import { subscribeUserPresence } from '../../services/presenceService';
 import { playSoundEffect } from '../../services/soundService';
 import { CallStatus } from '../../models/callTypes';
@@ -463,6 +463,25 @@ export default function ChatRoomScreen() {
     }
     return null;
   });
+
+  // Automatically fetch full post metadata & real image from Firestore
+  useEffect(() => {
+    if (!postId) return;
+    fetchPostById(postId)
+      .then((pData) => {
+        if (pData) {
+          setPendingPostAttachment({
+            id: pData.id || postId || '',
+            title: pData.title || postTitle || 'Bài viết',
+            image: pData.imageUrl || postImage || '',
+            type: pData.type || postType || 'lost'
+          });
+        }
+      })
+      .catch((err) => {
+        console.log('Notice: Could not load post attachment details:', err);
+      });
+  }, [postId]);
 
   // Call feature states
   const [isCallOptionVisible, setIsCallOptionVisible] = useState<boolean>(false);
