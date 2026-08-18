@@ -43,6 +43,7 @@ import { auth, db } from '../../config/firebase';
 import { ChatMessage } from '../../models/types';
 import { getLevelFromPoints, getPosterDetails } from '../../services/firebaseService';
 import { subscribeUserPresence } from '../../services/presenceService';
+import { playSoundEffect } from '../../services/soundService';
 import { CallStatus } from '../../models/callTypes';
 import { callManager } from '../../services/callManager';
 
@@ -908,6 +909,9 @@ export default function ChatRoomScreen() {
       return [...prev, optimisticMsg];
     });
 
+    // Play send sound effect
+    playSoundEffect('chatSend');
+
     // 2. Perform Firestore background writes non-blocking
     (async () => {
       try {
@@ -936,6 +940,21 @@ export default function ChatRoomScreen() {
           read: false,
           timestamp: serverTimestamp(),
           ...replyData
+        });
+
+        // Send realtime notification to receiver
+        const notifRef = collection(db, 'notifications');
+        await addDoc(notifRef, {
+          userId: otherUserId,
+          title: currentUser.displayName || 'Tin nhắn mới',
+          message: textToSend,
+          type: 'chat',
+          senderId: currentUser.uid,
+          senderName: currentUser.displayName || 'Người dùng',
+          senderAvatar: currentUser.photoURL || '',
+          chatId,
+          createdAt: serverTimestamp(),
+          read: false
         });
       } catch (e) {
         console.error('Error sending message in background:', e);

@@ -7,6 +7,7 @@ import { auth } from '../config/firebase';
 import { callManager } from '../services/callManager';
 import { setupOnlinePresence } from '../services/presenceService';
 import { SimpleIncomingCallHandler } from '../components/SimpleIncomingCallHandler';
+import { GlobalNotificationListener } from '../components/GlobalNotificationListener';
 
 LogBox.ignoreLogs([
   'FirebaseError: [code=permission-denied]',
@@ -36,6 +37,7 @@ export default function RootLayout() {
   return (
     <>
       <StatusBar style="dark" />
+      <GlobalNotificationListener />
       <Stack screenOptions={{ headerShown: false }} initialRouteName="index">
         <Stack.Screen name="index" />
         <Stack.Screen name="(auth)" />

@@ -21,15 +21,17 @@ import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import MapView, { Marker } from 'react-native-maps';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { fetchPostById, subscribeComments, addComment, fetchPosts, getPosterDetails, toggleLikePost, deletePost } from '../../services/firebaseService';
 import { findMatches } from '../../services/aiMatching';
-import { Post, Comment, MatchResult } from '../../models/types';
+import { playSoundEffect } from '../../services/soundService';
+import { Post, Comment, MatchResult, User } from '../../models/types';
 import { ResolveModal } from '../../components/ResolveModal';
 import { MatchCard } from '../../components/MatchCard';
 import { ImageViewerModal } from '../../components/ImageViewerModal';
 import { PostDetailSkeleton } from '../../components/PostDetailSkeleton';
 import { getDisplayCategory } from '../../utils/categoryUtils';
-import { auth } from '../../config/firebase';
+import { auth, db } from '../../config/firebase';
 import { COLORS, SPACING, SHADOWS } from '../../constants/theme';
 
 interface CustomTimeModalProps {
@@ -455,8 +457,30 @@ export default function PostDetailScreen() {
     setIsLiked(newIsLiked);
     setLikeCount((prev) => (newIsLiked ? prev + 1 : Math.max(0, prev - 1)));
 
+    if (newIsLiked) {
+      playSoundEffect('like');
+    }
+
     try {
       await toggleLikePost(post.id, currentUser.uid, isLiked);
+
+      // Send notification to post owner if liking
+      if (newIsLiked && post.userId && post.userId !== currentUser.uid) {
+        const notifRef = collection(db, 'notifications');
+        addDoc(notifRef, {
+          userId: post.userId,
+          title: `${currentUser.displayName || 'Người dùng'} đã thích bài viết của bạn`,
+          message: post.title || 'Bài viết nhận được 1 lượt thích mới.',
+          type: 'like',
+          postId: post.id,
+          senderId: currentUser.uid,
+          senderName: currentUser.displayName || 'Người dùng',
+          senderAvatar: currentUser.photoURL || '',
+          imageUrl: post.imageUrl || '',
+          createdAt: serverTimestamp(),
+          read: false
+        }).catch(console.error);
+      }
     } catch (e) {
       console.error('Like toggle error:', e);
     }
