@@ -564,28 +564,29 @@ export default function ChatRoomScreen() {
       }
 
       for (const dSnap of targetDocs) {
-        const cId = dSnap.id;
-        const data = dSnap.data();
-        const existingDeletedBy: string[] = data.deletedBy || [];
+        try {
+          const cId = dSnap.id;
+          const data = dSnap.data();
+          const existingDeletedBy: string[] = data.deletedBy || [];
 
-        const willBeDeletedByBoth =
-          existingDeletedBy.includes(otherUserId) ||
-          (existingDeletedBy.length > 0 && !existingDeletedBy.includes(currentUser.uid));
+          const willBeDeletedByBoth =
+            existingDeletedBy.includes(otherUserId) ||
+            (existingDeletedBy.length > 0 && !existingDeletedBy.includes(currentUser.uid));
 
-        if (willBeDeletedByBoth) {
-          // Hard delete all messages subcollection & chat doc from server permanently
-          const subMsgs = await getDocs(collection(db, 'chats', cId, 'messages'));
-          const deletePromises = subMsgs.docs.map((d) => deleteDoc(d.ref));
-          await Promise.all(deletePromises);
-          await deleteDoc(doc(db, 'chats', cId));
-        } else {
-          // Soft delete for current user
-          await updateDoc(doc(db, 'chats', cId), {
-            deletedBy: arrayUnion(currentUser.uid),
-            ['clearedAt_' + currentUser.uid]: serverTimestamp(),
-            ['lastSeen_' + currentUser.uid]: serverTimestamp(),
-            ['unreadCount_' + currentUser.uid]: 0,
-          });
+          if (willBeDeletedByBoth) {
+            const subMsgs = await getDocs(collection(db, 'chats', cId, 'messages'));
+            await Promise.all(subMsgs.docs.map((d) => deleteDoc(d.ref).catch(() => {})));
+            await deleteDoc(doc(db, 'chats', cId)).catch(() => {});
+          } else {
+            await updateDoc(doc(db, 'chats', cId), {
+              deletedBy: arrayUnion(currentUser.uid),
+              ['clearedAt_' + currentUser.uid]: serverTimestamp(),
+              ['lastSeen_' + currentUser.uid]: serverTimestamp(),
+              ['unreadCount_' + currentUser.uid]: 0,
+            }).catch(() => {});
+          }
+        } catch (singleErr) {
+          console.log('Notice: Single doc deletion skipped in room:', singleErr);
         }
       }
 
@@ -627,10 +628,10 @@ export default function ChatRoomScreen() {
 
   // Load more older messages when scrolling UP towards top
   const loadMoreOlderMessages = useCallback(() => {
-    if (isLoadingMore || !hasMoreMessages) return;
+    if (isLoadingMore || !hasMoreMessages || messages.length < MESSAGES_PAGE_SIZE) return;
     setIsLoadingMore(true);
     setMessageLimit((prev) => prev + MESSAGES_PAGE_SIZE);
-  }, [isLoadingMore, hasMoreMessages]);
+  }, [isLoadingMore, hasMoreMessages, messages.length]);
 
   const sendCallRecordMessage = async (
     callType: 'voice' | 'video',
@@ -1355,7 +1356,7 @@ export default function ChatRoomScreen() {
   const renderInvertedTopHeader = () => (
     <View>
       {/* Loading Spinner for Older Messages at top */}
-      {isLoadingMore ? (
+      {isLoadingMore && hasMoreMessages && messages.length >= MESSAGES_PAGE_SIZE ? (
         <View style={styles.loadingOlderContainer}>
           <ActivityIndicator size="small" color="#0084FF" />
           <Text style={styles.loadingOlderText}>Đang tải tin nhắn cũ hơn...</Text>

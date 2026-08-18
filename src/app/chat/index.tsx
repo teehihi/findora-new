@@ -63,32 +63,33 @@ export default function ChatListScreen() {
       const docIds = entry ? entry.docIds : [item.id];
 
       for (const docId of docIds) {
-        const chatDocRef = doc(db, 'chats', docId);
-        const chatSnap = await getDoc(chatDocRef);
+        try {
+          const chatDocRef = doc(db, 'chats', docId);
+          const chatSnap = await getDoc(chatDocRef);
 
-        if (chatSnap.exists()) {
-          const data = chatSnap.data();
-          const existingDeletedBy: string[] = data.deletedBy || [];
+          if (chatSnap.exists()) {
+            const data = chatSnap.data();
+            const existingDeletedBy: string[] = data.deletedBy || [];
 
-          const willBeDeletedByBoth =
-            existingDeletedBy.includes(item.otherUserId) ||
-            (existingDeletedBy.length > 0 && !existingDeletedBy.includes(user.uid));
+            const willBeDeletedByBoth =
+              existingDeletedBy.includes(item.otherUserId) ||
+              (existingDeletedBy.length > 0 && !existingDeletedBy.includes(user.uid));
 
-          if (willBeDeletedByBoth) {
-            // Hard delete all messages subcollection & chat doc from server permanently
-            const subMsgs = await getDocs(collection(db, 'chats', docId, 'messages'));
-            const deletePromises = subMsgs.docs.map((d) => deleteDoc(d.ref));
-            await Promise.all(deletePromises);
-            await deleteDoc(chatDocRef);
-          } else {
-            // Soft delete for current user
-            await updateDoc(chatDocRef, {
-              deletedBy: arrayUnion(user.uid),
-              ['clearedAt_' + user.uid]: serverTimestamp(),
-              ['lastSeen_' + user.uid]: serverTimestamp(),
-              ['unreadCount_' + user.uid]: 0,
-            });
+            if (willBeDeletedByBoth) {
+              const subMsgs = await getDocs(collection(db, 'chats', docId, 'messages'));
+              await Promise.all(subMsgs.docs.map((d) => deleteDoc(d.ref).catch(() => {})));
+              await deleteDoc(chatDocRef).catch(() => {});
+            } else {
+              await updateDoc(chatDocRef, {
+                deletedBy: arrayUnion(user.uid),
+                ['clearedAt_' + user.uid]: serverTimestamp(),
+                ['lastSeen_' + user.uid]: serverTimestamp(),
+                ['unreadCount_' + user.uid]: 0,
+              }).catch(() => {});
+            }
           }
+        } catch (docErr) {
+          console.log('Notice: Single doc deletion skipped:', docErr);
         }
       }
     } catch (e) {
@@ -202,11 +203,20 @@ export default function ChatListScreen() {
           let totalUnread = 0;
           for (const cId of docIds) {
             try {
+              const chatDocSnap = snapshot.docs.find((sd) => sd.id === cId);
+              const chatData = chatDocSnap?.data();
+              const clearedAt = getTimestampMillis(chatData?.['clearedAt_' + user.uid] || chatData?.clearedAt);
+
               const msgsRef = collection(db, 'chats', cId, 'messages');
               const unreadQuery = query(msgsRef, where('read', '==', false));
               const unreadSnap = await getDocs(unreadQuery);
               unreadSnap.forEach((d) => {
-                if (d.data().senderId !== user.uid) {
+                const msgData = d.data();
+                const msgTs = getTimestampMillis(msgData.timestamp);
+                if (clearedAt > 0 && msgTs > 0 && msgTs <= clearedAt) {
+                  return;
+                }
+                if (msgData.senderId !== user.uid) {
                   totalUnread++;
                 }
               });

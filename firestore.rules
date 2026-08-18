@@ -90,9 +90,7 @@ service cloud.firestore {
       
       // MESSAGES (sub-collection)
       match /messages/{messageId} {
-        allow read: if isAuthenticated();
-        allow create: if isAuthenticated();
-        allow update, delete: if isAuthenticated() && isOwner(resource.data.senderId);
+        allow read, write: if isAuthenticated();
       }
     }
     
