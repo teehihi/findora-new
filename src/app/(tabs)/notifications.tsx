@@ -1,0 +1,189 @@
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { auth } from '../../config/firebase';
+import { fetchNotificationsList } from '../../services/firebaseService';
+import { Notification } from '../../models/types';
+import { COLORS, SPACING, SHADOWS } from '../../constants/theme';
+
+export default function NotificationsScreen() {
+  const router = useRouter();
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadNotifications = async () => {
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        setNotifications([]);
+        setLoading(false);
+        return;
+      }
+
+      const list = await fetchNotificationsList(user.uid);
+      setNotifications(list);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    loadNotifications();
+  }, []);
+
+  const getNotifIcon = (type: string) => {
+    switch (type) {
+      case 'match': return 'sparkles';
+      case 'chat': return 'chatbubbles';
+      case 'points': return 'trophy';
+      case 'resolve': return 'checkmark-circle';
+      default: return 'notifications';
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <Ionicons name="notifications" size={24} color={COLORS.primary} />
+        <Text style={styles.headerTitle}>Thông Báo 🔔</Text>
+      </View>
+
+      {loading ? (
+        <View style={styles.centerLoading}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Đang tải thông báo...</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={notifications}
+          keyExtractor={(item) => item.id || Math.random().toString()}
+          renderItem={({ item }) => (
+            <TouchableOpacity 
+              style={[styles.itemCard, !item.read && styles.unreadCard]}
+              onPress={() => {
+                if (item.postId) router.push(`/post/${item.postId}`);
+              }}
+            >
+              <View style={styles.iconCircle}>
+                <Ionicons name={getNotifIcon(item.type)} size={22} color={COLORS.primary} />
+              </View>
+              <View style={styles.infoCol}>
+                <Text style={styles.title}>{item.title}</Text>
+                <Text style={styles.message}>{item.message}</Text>
+              </View>
+            </TouchableOpacity>
+          )}
+          contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadNotifications(); }} colors={[COLORS.primary]} />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Ionicons name="notifications-off-outline" size={56} color={COLORS.textMuted} />
+              <Text style={styles.emptyTitle}>Chưa có thông báo nào</Text>
+              <Text style={styles.emptySubtitle}>Các cập nhật về ghép đôi AI, tin nhắn và điểm thưởng sẽ xuất hiện tại đây.</Text>
+            </View>
+          }
+        />
+      )}
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    backgroundColor: COLORS.card,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: COLORS.text,
+    marginLeft: SPACING.xs
+  },
+  listContent: {
+    padding: SPACING.md,
+    paddingBottom: 100
+  },
+  centerLoading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 14,
+    color: COLORS.textMuted
+  },
+  itemCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.card,
+    borderRadius: 14,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    ...SHADOWS.small
+  },
+  unreadCard: {
+    backgroundColor: COLORS.primaryLight,
+    borderColor: COLORS.primary
+  },
+  iconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: SPACING.md
+  },
+  infoCol: {
+    flex: 1
+  },
+  title: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 2
+  },
+  message: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    lineHeight: 18
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.xl * 2
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginTop: SPACING.md
+  },
+  emptySubtitle: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    marginTop: 4,
+    paddingHorizontal: SPACING.lg
+  }
+});
