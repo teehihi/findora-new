@@ -528,7 +528,7 @@ export default function ChatRoomScreen() {
         const realMsgs = Array.from(messageMap.values());
         const pendingTemps = prev.filter(
           (m) =>
-            m.id.startsWith('temp_') &&
+            Boolean(m.id && m.id.startsWith('temp_')) &&
             !realMsgs.some((rm) => rm.message === m.message && rm.senderId === m.senderId)
         );
 
@@ -912,39 +912,56 @@ export default function ChatRoomScreen() {
     // Play send sound effect
     playSoundEffect('chatSend');
 
-    // 2. Perform Firestore background writes non-blocking
+    // 2. Perform Firestore background writes in parallel for lightning-fast delivery
     (async () => {
       try {
         const chatDocRef = doc(db, 'chats', chatId);
-        await setDoc(
-          chatDocRef,
-          {
-            participants: [currentUser.uid, otherUserId],
-            lastMessage: textToSend,
-            lastTimestamp: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-            postId: postId || null,
-            postTitle: postTitle || null
-          },
-          { merge: true }
-        );
-
         const subMsgsRef = collection(db, 'chats', chatId, 'messages');
-        await addDoc(subMsgsRef, {
-          senderId: currentUser.uid,
-          receiverId: otherUserId,
-          text: textToSend,
-          message: textToSend,
-          type: 'text',
-          postId: postId || null,
-          read: false,
-          timestamp: serverTimestamp(),
-          ...replyData
-        });
-
-        // Send realtime notification to receiver
         const notifRef = collection(db, 'notifications');
-        await addDoc(notifRef, {
+
+        const [_, docRef] = await Promise.all([
+          setDoc(
+            chatDocRef,
+            {
+              participants: [currentUser.uid, otherUserId],
+              lastMessage: textToSend,
+              lastTimestamp: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+              postId: postId || null,
+              postTitle: postTitle || null
+            },
+            { merge: true }
+          ),
+          addDoc(subMsgsRef, {
+            senderId: currentUser.uid,
+            receiverId: otherUserId,
+            text: textToSend,
+            message: textToSend,
+            type: 'text',
+            postId: postId || null,
+            read: false,
+            timestamp: serverTimestamp(),
+            ...replyData
+          }),
+        ]);
+
+        // Instantly promote optimistic message from temp_... to docRef.id
+        if (docRef?.id) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === tempId
+                ? {
+                    ...m,
+                    id: docRef.id,
+                    timestamp: Date.now(),
+                  }
+                : m
+            )
+          );
+        }
+
+        // Send realtime notification in background
+        addDoc(notifRef, {
           userId: otherUserId,
           title: currentUser.displayName || 'Tin nhắn mới',
           message: textToSend,
@@ -955,7 +972,7 @@ export default function ChatRoomScreen() {
           chatId,
           createdAt: serverTimestamp(),
           read: false
-        });
+        }).catch(() => {});
       } catch (e) {
         console.error('Error sending message in background:', e);
       }
