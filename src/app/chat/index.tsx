@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { collection, getDocs, onSnapshot, query, where, doc, updateDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -76,6 +76,7 @@ export default function ChatListScreen() {
   };
 
   const userDetailsCache = useRef<Record<string, { name: string; avatarUrl: string }>>({});
+  const userChatMapRef = useRef<Map<string, { latestDoc: any; docIds: string[] }>>(new Map());
 
   const loadConversations = async () => {
     const user = auth.currentUser;
@@ -114,6 +115,8 @@ export default function ChatListScreen() {
             }
           }
         });
+
+        userChatMapRef.current = userChatMap;
 
         const list: Conversation[] = [];
         for (const [otherId, { latestDoc, docIds }] of userChatMap.entries()) {
@@ -224,6 +227,7 @@ export default function ChatListScreen() {
             }
           }
         });
+        userChatMapRef.current = userChatMap;
 
         // Clean up listeners for deleted chats
         const currentChatIds = new Set(snapshot.docs.map((d) => d.id));
@@ -346,30 +350,38 @@ export default function ChatListScreen() {
 
   const handleOpenChat = async (item: Conversation) => {
     const user = auth.currentUser;
-    // 1. Optimistic UI update: instantly reset unread counter to 0
+    // 1. Optimistic UI update: instantly reset unread counter to 0 for this user
     setConversations((prev) =>
-      prev.map((c) => (c.id === item.id ? { ...c, unreadCount: 0 } : c))
+      prev.map((c) => (c.otherUserId === item.otherUserId ? { ...c, unreadCount: 0 } : c))
     );
 
-    // 2. Mark unread messages and notifications as read in background
+    // 2. Mark unread messages and notifications as read in background across all docIds for this user
     if (user) {
       (async () => {
         try {
-          // A. Mark messages from other user as read
-          const msgsRef = collection(db, 'chats', item.id, 'messages');
-          const unreadSnap = await getDocs(query(msgsRef, where('read', '==', false)));
-          unreadSnap.forEach((dSnap) => {
-            if (dSnap.data().senderId !== user.uid) {
-              updateDoc(doc(db, 'chats', item.id, 'messages', dSnap.id), { read: true }).catch(() => {});
-            }
-          });
+          const entry = userChatMapRef.current.get(item.otherUserId);
+          const docIds = entry ? entry.docIds : [item.id];
+          for (const cId of docIds) {
+            updateDoc(doc(db, 'chats', cId), {
+              ['lastSeen_' + user.uid]: serverTimestamp(),
+              ['unreadCount_' + user.uid]: 0,
+            }).catch(() => {});
 
-          // B. Clear chat notifications from this sender
+            const msgsRef = collection(db, 'chats', cId, 'messages');
+            const unreadSnap = await getDocs(query(msgsRef, where('read', '==', false)));
+            unreadSnap.forEach((dSnap) => {
+              if (dSnap.data().senderId !== user.uid) {
+                updateDoc(doc(db, 'chats', cId, 'messages', dSnap.id), { read: true }).catch(() => {});
+              }
+            });
+          }
+
+          // Clear chat notifications from this sender
           const notifRef = collection(db, 'notifications');
           const notifSnap = await getDocs(query(notifRef, where('userId', '==', user.uid), where('read', '==', false)));
           notifSnap.forEach((nSnap) => {
             const nData = nSnap.data();
-            if (nData.senderId === item.otherUserId || nData.chatId === item.id) {
+            if (nData.senderId === item.otherUserId || docIds.includes(nData.chatId)) {
               updateDoc(doc(db, 'notifications', nSnap.id), { read: true }).catch(() => {});
             }
           });

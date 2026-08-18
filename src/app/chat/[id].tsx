@@ -668,69 +668,79 @@ export default function ChatRoomScreen() {
           allChatIds.push(targetChatId);
         }
 
-        // Real-time Firestore Call Listener and Live Seen Tracker on chats/{targetChatId}
-        unsubChatDoc = onSnapshot(doc(db, 'chats', targetChatId), (docSnap) => {
-          if (docSnap.exists()) {
-            const data = docSnap.data();
+        // Real-time Firestore Call Listener and Live Seen Tracker on all matching chat documents
+        const unsubDocsList: (() => void)[] = [];
+        allChatIds.forEach((cId) => {
+          const unsubD = onSnapshot(doc(db, 'chats', cId), (docSnap) => {
+            if (docSnap.exists()) {
+              const data = docSnap.data();
 
-            // Live Seen Timestamp synchronization
-            const rawLastSeen = data['lastSeen_' + otherUserId] || data.lastSeen;
-            if (rawLastSeen) {
-              const millis = rawLastSeen.seconds
-                ? rawLastSeen.seconds * 1000
-                : typeof rawLastSeen === 'number'
-                ? rawLastSeen
-                : new Date(rawLastSeen).getTime();
-              if (millis > 0) {
-                setOtherUserLastSeen(millis);
-              }
-            }
-
-            const callData = data.callState;
-            if (callData) {
-              if (callData.callId && callData.callId !== currentCallId) {
-                if (callManager.ActiveCallId !== callData.callId) {
-                  return;
+              // Live Seen Timestamp synchronization across all thread documents
+              const rawLastSeen = data['lastSeen_' + otherUserId] || data.lastSeen;
+              if (rawLastSeen) {
+                const millis = rawLastSeen.seconds
+                  ? rawLastSeen.seconds * 1000
+                  : typeof rawLastSeen === 'number'
+                  ? rawLastSeen
+                  : new Date(rawLastSeen).getTime();
+                if (millis > 0) {
+                  setOtherUserLastSeen((prev) => Math.max(prev, millis));
                 }
-                setCurrentCallId(callData.callId);
               }
 
-              if (callData.status === 'calling' || callData.status === 'ringing') {
-                setIsIncomingCallVisible(false);
-                if (callData.callerId === currentUser.uid && callManager.ActiveCallId === callData.callId) {
+              const callData = data.callState;
+              if (callData) {
+                if (callData.callId && callData.callId !== currentCallId) {
+                  if (callManager.ActiveCallId !== callData.callId) {
+                    return;
+                  }
+                  setCurrentCallId(callData.callId);
+                }
+
+                if (callData.status === 'calling' || callData.status === 'ringing') {
+                  setIsIncomingCallVisible(false);
+                  if (callData.callerId === currentUser.uid && callManager.ActiveCallId === callData.callId) {
+                    setIsInAppCallVisible(true);
+                    setCallStatus('RINGING');
+                  }
+                } else if (callData.status === 'accepted') {
+                  setIsIncomingCallVisible(false);
                   setIsInAppCallVisible(true);
-                  setCallStatus('RINGING');
+                  setCallStatus('CONNECTING');
+                } else if (callData.status === 'connecting') {
+                  setIsIncomingCallVisible(false);
+                  setIsInAppCallVisible(true);
+                  setCallStatus('CONNECTING');
+                } else if (callData.status === 'connected') {
+                  // Both sides connected
+                  setIsIncomingCallVisible(false);
+                  setIsInAppCallVisible(true);
+                  setCallStatus('CONNECTED');
+                } else if (callData.status === 'failed') {
+                  setIsIncomingCallVisible(false);
+                  setIsInAppCallVisible(true);
+                  setCallStatus('FAILED');
+                } else if (callData.status === 'ended' || callData.status === 'rejected') {
+                  // Call closed
+                  setIsIncomingCallVisible(false);
+                  setIsInAppCallVisible(false);
+                  setCallStatus('IDLE');
                 }
-              } else if (callData.status === 'accepted') {
-                setIsIncomingCallVisible(false);
-                setIsInAppCallVisible(true);
-                setCallStatus('CONNECTING');
-              } else if (callData.status === 'connecting') {
-                setIsIncomingCallVisible(false);
-                setIsInAppCallVisible(true);
-                setCallStatus('CONNECTING');
-              } else if (callData.status === 'connected') {
-                // Both sides connected
-                setIsIncomingCallVisible(false);
-                setIsInAppCallVisible(true);
-                setCallStatus('CONNECTED');
-              } else if (callData.status === 'failed') {
-                setIsIncomingCallVisible(false);
-                setIsInAppCallVisible(true);
-                setCallStatus('FAILED');
-              } else if (callData.status === 'ended' || callData.status === 'rejected') {
-                // Call closed
-                setIsIncomingCallVisible(false);
-                setIsInAppCallVisible(false);
-                setCallStatus('IDLE');
               }
             }
-          }
+          });
+          unsubDocsList.push(unsubD);
         });
 
         // Mark all existing unread messages and notifications from other user as READ immediately
         const markAllUnreadAsRead = async (chatId: string) => {
           try {
+            // Update parent document watermark & reset unread counter
+            updateDoc(doc(db, 'chats', chatId), {
+              ['lastSeen_' + currentUser.uid]: serverTimestamp(),
+              ['unreadCount_' + currentUser.uid]: 0,
+            }).catch(() => {});
+
             // 1. Mark unread messages in chat from other user
             const unreadSnap = await getDocs(
               query(collection(db, 'chats', chatId, 'messages'), where('read', '==', false))
@@ -812,6 +822,10 @@ export default function ChatRoomScreen() {
 
           unsubMessagesList.push(unsub);
         });
+
+        unsubChatDoc = () => {
+          unsubDocsList.forEach((c) => c());
+        };
       } catch (err) {
         console.log('Error initializing chat room:', err);
       }
