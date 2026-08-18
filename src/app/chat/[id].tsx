@@ -637,206 +637,188 @@ export default function ChatRoomScreen() {
     });
 
     // Determine target chatId strictly as single canonical conversation between 2 users
-    const initChatRoom = async () => {
-      try {
-        const chatsRef = collection(db, 'chats');
-        const qChats = query(chatsRef, where('participants', 'array-contains', currentUser.uid));
-        const chatsSnap = await getDocs(qChats);
-        const allChatIds: string[] = [];
+    const canonicalChatId = [currentUser.uid, otherUserId].sort().join('_');
+    setActiveChatId(canonicalChatId);
 
-        let targetChatId = paramChatId || '';
+    const activeChatSubIds = new Set<string>();
+    const unsubDocsMap = new Map<string, () => void>();
+    const unsubMsgsMap = new Map<string, () => void>();
 
-        for (const docSnap of chatsSnap.docs) {
+    const attachChatSubListeners = (cId: string) => {
+      if (activeChatSubIds.has(cId)) return;
+      activeChatSubIds.add(cId);
+
+      // 1. Doc listener for presence, lastSeen watermark and calls
+      const unsubDoc = onSnapshot(doc(db, 'chats', cId), (docSnap) => {
+        if (docSnap.exists()) {
           const data = docSnap.data();
-          const participants: string[] = data.participants || [];
-          if (participants.includes(otherUserId)) {
-            allChatIds.push(docSnap.id);
-            if (!targetChatId) {
-              targetChatId = docSnap.id;
+
+          // Live Seen Timestamp synchronization across all thread documents
+          const rawLastSeen = data['lastSeen_' + otherUserId] || data.lastSeen;
+          if (rawLastSeen) {
+            const millis = rawLastSeen.seconds
+              ? rawLastSeen.seconds * 1000
+              : typeof rawLastSeen === 'number'
+              ? rawLastSeen
+              : new Date(rawLastSeen).getTime();
+            if (millis > 0) {
+              setOtherUserLastSeen((prev) => Math.max(prev, millis));
+            }
+          }
+
+          const callData = data.callState;
+          if (callData) {
+            if (callData.callId && callData.callId !== currentCallId) {
+              if (callManager.ActiveCallId !== callData.callId) {
+                return;
+              }
+              setCurrentCallId(callData.callId);
+            }
+
+            if (callData.status === 'calling' || callData.status === 'ringing') {
+              setIsIncomingCallVisible(false);
+              if (callData.callerId === currentUser.uid && callManager.ActiveCallId === callData.callId) {
+                setIsInAppCallVisible(true);
+                setCallStatus('RINGING');
+              }
+            } else if (callData.status === 'accepted') {
+              setIsIncomingCallVisible(false);
+              setIsInAppCallVisible(true);
+              setCallStatus('CONNECTING');
+            } else if (callData.status === 'connecting') {
+              setIsIncomingCallVisible(false);
+              setIsInAppCallVisible(true);
+              setCallStatus('CONNECTING');
+            } else if (callData.status === 'connected') {
+              // Both sides connected
+              setIsIncomingCallVisible(false);
+              setIsInAppCallVisible(true);
+              setCallStatus('CONNECTED');
+            } else if (callData.status === 'failed') {
+              setIsIncomingCallVisible(false);
+              setIsInAppCallVisible(true);
+              setCallStatus('FAILED');
+            } else if (callData.status === 'ended' || callData.status === 'rejected') {
+              // Call closed
+              setIsIncomingCallVisible(false);
+              setIsInAppCallVisible(false);
+              setCallStatus('IDLE');
             }
           }
         }
+      });
+      unsubDocsMap.set(cId, unsubDoc);
 
-        if (!targetChatId) {
-          targetChatId = [currentUser.uid, otherUserId].sort().join('_');
-          allChatIds.push(targetChatId);
-        }
+      // 2. Mark existing unread messages as read
+      const markAllUnreadAsRead = async (chatId: string) => {
+        try {
+          updateDoc(doc(db, 'chats', chatId), {
+            ['lastSeen_' + currentUser.uid]: serverTimestamp(),
+            ['unreadCount_' + currentUser.uid]: 0,
+          }).catch(() => {});
 
-        setActiveChatId(targetChatId);
-
-        if (!allChatIds.includes(targetChatId)) {
-          allChatIds.push(targetChatId);
-        }
-
-        // Real-time Firestore Call Listener and Live Seen Tracker on all matching chat documents
-        const unsubDocsList: (() => void)[] = [];
-        allChatIds.forEach((cId) => {
-          const unsubD = onSnapshot(doc(db, 'chats', cId), (docSnap) => {
-            if (docSnap.exists()) {
-              const data = docSnap.data();
-
-              // Live Seen Timestamp synchronization across all thread documents
-              const rawLastSeen = data['lastSeen_' + otherUserId] || data.lastSeen;
-              if (rawLastSeen) {
-                const millis = rawLastSeen.seconds
-                  ? rawLastSeen.seconds * 1000
-                  : typeof rawLastSeen === 'number'
-                  ? rawLastSeen
-                  : new Date(rawLastSeen).getTime();
-                if (millis > 0) {
-                  setOtherUserLastSeen((prev) => Math.max(prev, millis));
-                }
-              }
-
-              const callData = data.callState;
-              if (callData) {
-                if (callData.callId && callData.callId !== currentCallId) {
-                  if (callManager.ActiveCallId !== callData.callId) {
-                    return;
-                  }
-                  setCurrentCallId(callData.callId);
-                }
-
-                if (callData.status === 'calling' || callData.status === 'ringing') {
-                  setIsIncomingCallVisible(false);
-                  if (callData.callerId === currentUser.uid && callManager.ActiveCallId === callData.callId) {
-                    setIsInAppCallVisible(true);
-                    setCallStatus('RINGING');
-                  }
-                } else if (callData.status === 'accepted') {
-                  setIsIncomingCallVisible(false);
-                  setIsInAppCallVisible(true);
-                  setCallStatus('CONNECTING');
-                } else if (callData.status === 'connecting') {
-                  setIsIncomingCallVisible(false);
-                  setIsInAppCallVisible(true);
-                  setCallStatus('CONNECTING');
-                } else if (callData.status === 'connected') {
-                  // Both sides connected
-                  setIsIncomingCallVisible(false);
-                  setIsInAppCallVisible(true);
-                  setCallStatus('CONNECTED');
-                } else if (callData.status === 'failed') {
-                  setIsIncomingCallVisible(false);
-                  setIsInAppCallVisible(true);
-                  setCallStatus('FAILED');
-                } else if (callData.status === 'ended' || callData.status === 'rejected') {
-                  // Call closed
-                  setIsIncomingCallVisible(false);
-                  setIsInAppCallVisible(false);
-                  setCallStatus('IDLE');
-                }
-              }
-            }
-          });
-          unsubDocsList.push(unsubD);
-        });
-
-        // Mark all existing unread messages and notifications from other user as READ immediately
-        const markAllUnreadAsRead = async (chatId: string) => {
-          try {
-            // Update parent document watermark & reset unread counter
-            updateDoc(doc(db, 'chats', chatId), {
-              ['lastSeen_' + currentUser.uid]: serverTimestamp(),
-              ['unreadCount_' + currentUser.uid]: 0,
-            }).catch(() => {});
-
-            // 1. Mark unread messages in chat from other user
-            const unreadSnap = await getDocs(
-              query(collection(db, 'chats', chatId, 'messages'), where('read', '==', false))
-            );
-            unreadSnap.forEach((dSnap) => {
-              if (dSnap.data().senderId !== currentUser.uid) {
-                updateDoc(doc(db, 'chats', chatId, 'messages', dSnap.id), { read: true }).catch(() => {});
-              }
-            });
-
-            // 2. Mark chat notifications from this sender as read
-            const notifSnap = await getDocs(
-              query(collection(db, 'notifications'), where('userId', '==', currentUser.uid), where('read', '==', false))
-            );
-            notifSnap.forEach((nSnap) => {
-              const nData = nSnap.data();
-              if (nData.senderId === otherUserId || nData.chatId === chatId) {
-                updateDoc(doc(db, 'notifications', nSnap.id), { read: true }).catch(() => {});
-              }
-            });
-          } catch (e) {
-            console.log('Error marking unread as read:', e);
-          }
-        };
-
-        // Attach listeners across all historical chat subcollections between these 2 users
-        allChatIds.forEach((cId) => {
-          markAllUnreadAsRead(cId);
-
-          const subMsgsQuery = query(
-            collection(db, 'chats', cId, 'messages'),
-            orderBy('timestamp', 'asc'),
-            limitToLast(messageLimit)
+          const unreadSnap = await getDocs(
+            query(collection(db, 'chats', chatId, 'messages'), where('read', '==', false))
           );
-
-          const unsub = onSnapshot(subMsgsQuery, (snapshot) => {
-            let hasUnread = false;
-            snapshot.forEach((docSnap) => {
-              const data = docSnap.data();
-              const isRead = Boolean(data.read);
-              messageMap.set(docSnap.id, {
-                id: docSnap.id,
-                senderId: data.senderId,
-                receiverId: data.receiverId || otherUserId,
-                message: data.text || data.message || '',
-                type: data.type || 'text',
-                postId: data.postId || undefined,
-                postTitle: data.postTitle || undefined,
-                postImage: data.postImage || undefined,
-                postType: data.postType || undefined,
-                callType: data.callType || 'voice',
-                callDuration: data.callDuration || 0,
-                callStatus: data.callStatus || 'ended',
-                imageUrl: data.imageUrl || '',
-                replyToId: data.replyToId || null,
-                replyToText: data.replyToText || null,
-                replyToSender: data.replyToSender || null,
-                read: isRead,
-                timestamp: data.timestamp
-              });
-
-              // Mark unread messages from other user as READ in real-time!
-              if (data.senderId === otherUserId && !isRead) {
-                hasUnread = true;
-                updateDoc(doc(db, 'chats', cId, 'messages', docSnap.id), { read: true }).catch(() => {});
-              }
-            });
-
-            if (hasUnread) {
-              updateDoc(doc(db, 'chats', cId), {
-                ['lastSeen_' + currentUser.uid]: serverTimestamp(),
-                ['unreadCount_' + currentUser.uid]: 0,
-              }).catch(() => {});
+          unreadSnap.forEach((dSnap) => {
+            if (dSnap.data().senderId !== currentUser.uid) {
+              updateDoc(doc(db, 'chats', chatId, 'messages', dSnap.id), { read: true }).catch(() => {});
             }
-
-            updateMessagesState();
-            setIsLoadingMore(false);
           });
 
-          unsubMessagesList.push(unsub);
+          const notifSnap = await getDocs(
+            query(collection(db, 'notifications'), where('userId', '==', currentUser.uid), where('read', '==', false))
+          );
+          notifSnap.forEach((nSnap) => {
+            const nData = nSnap.data();
+            if (nData.senderId === otherUserId || nData.chatId === chatId) {
+              updateDoc(doc(db, 'notifications', nSnap.id), { read: true }).catch(() => {});
+            }
+          });
+        } catch (e) {
+          console.log('Error marking unread as read:', e);
+        }
+      };
+
+      markAllUnreadAsRead(cId);
+
+      // 3. Subcollection messages listener
+      const subMsgsQuery = query(
+        collection(db, 'chats', cId, 'messages'),
+        orderBy('timestamp', 'asc'),
+        limitToLast(messageLimit)
+      );
+
+      const unsubMsg = onSnapshot(subMsgsQuery, (snapshot) => {
+        let hasUnread = false;
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          const isRead = Boolean(data.read);
+          messageMap.set(docSnap.id, {
+            id: docSnap.id,
+            senderId: data.senderId,
+            receiverId: data.receiverId || otherUserId,
+            message: data.text || data.message || '',
+            type: data.type || 'text',
+            postId: data.postId || undefined,
+            postTitle: data.postTitle || undefined,
+            postImage: data.postImage || undefined,
+            postType: data.postType || undefined,
+            callType: data.callType || 'voice',
+            callDuration: data.callDuration || 0,
+            callStatus: data.callStatus || 'ended',
+            imageUrl: data.imageUrl || '',
+            replyToId: data.replyToId || null,
+            replyToText: data.replyToText || null,
+            replyToSender: data.replyToSender || null,
+            read: isRead,
+            timestamp: data.timestamp
+          });
+
+          if (data.senderId === otherUserId && !isRead) {
+            hasUnread = true;
+            updateDoc(doc(db, 'chats', cId, 'messages', docSnap.id), { read: true }).catch(() => {});
+          }
         });
 
-        unsubChatDoc = () => {
-          unsubDocsList.forEach((c) => c());
-        };
-      } catch (err) {
-        console.log('Error initializing chat room:', err);
-      }
+        if (hasUnread) {
+          updateDoc(doc(db, 'chats', cId), {
+            ['lastSeen_' + currentUser.uid]: serverTimestamp(),
+            ['unreadCount_' + currentUser.uid]: 0,
+          }).catch(() => {});
+        }
+
+        updateMessagesState();
+        setIsLoadingMore(false);
+      });
+
+      unsubMsgsMap.set(cId, unsubMsg);
     };
 
-    initChatRoom();
+    // Always attach to canonicalChatId first
+    attachChatSubListeners(canonicalChatId);
+    if (paramChatId && paramChatId !== canonicalChatId) {
+      attachChatSubListeners(paramChatId);
+    }
+
+    // Dynamically listen to all chat documents where currentUser is participant
+    const chatsRef = collection(db, 'chats');
+    const qChats = query(chatsRef, where('participants', 'array-contains', currentUser.uid));
+    const unsubChatsQuery = onSnapshot(qChats, (chatsSnap) => {
+      chatsSnap.docs.forEach((docSnap) => {
+        const data = docSnap.data();
+        const participants: string[] = data.participants || [];
+        if (participants.includes(otherUserId)) {
+          attachChatSubListeners(docSnap.id);
+        }
+      });
+    });
 
     return () => {
       unsubPresence();
-      unsubMessagesList.forEach((clean) => clean());
-      unsubChatDoc();
+      unsubChatsQuery();
+      unsubDocsMap.forEach((c) => c());
+      unsubMsgsMap.forEach((c) => c());
     };
   }, [otherUserId, paramChatId, postId, messageLimit]);
 
