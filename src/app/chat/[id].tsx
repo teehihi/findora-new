@@ -669,18 +669,40 @@ export default function ChatRoomScreen() {
           }
         });
 
-        // Mark all existing unread messages from other user as READ immediately
+        // Mark all existing unread messages and notifications from other user as READ immediately
         const markAllUnreadAsRead = async (chatId: string) => {
           try {
+            const batch = writeBatch(db);
+            let hasWrites = false;
+
+            // 1. Mark unread messages in chat
             const unreadQuery = query(
               collection(db, 'chats', chatId, 'messages'),
-              where('senderId', '==', otherUserId),
+              where('receiverId', '==', currentUser.uid),
               where('read', '==', false)
             );
             const unreadSnap = await getDocs(unreadQuery);
             unreadSnap.forEach((dSnap) => {
-              updateDoc(doc(db, 'chats', chatId, 'messages', dSnap.id), { read: true }).catch(() => { });
+              batch.update(doc(db, 'chats', chatId, 'messages', dSnap.id), { read: true });
+              hasWrites = true;
             });
+
+            // 2. Mark chat notifications from this sender as read
+            const notifQuery = query(
+              collection(db, 'notifications'),
+              where('userId', '==', currentUser.uid),
+              where('senderId', '==', otherUserId),
+              where('read', '==', false)
+            );
+            const notifSnap = await getDocs(notifQuery);
+            notifSnap.forEach((nSnap) => {
+              batch.update(doc(db, 'notifications', nSnap.id), { read: true });
+              hasWrites = true;
+            });
+
+            if (hasWrites) {
+              await batch.commit();
+            }
           } catch (e) {
             console.log('Error marking unread as read:', e);
           }

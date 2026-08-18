@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { collection, getDocs, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, getDocs, onSnapshot, query, where, doc, writeBatch } from 'firebase/firestore';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -245,6 +245,62 @@ export default function ChatListScreen() {
     loadConversations();
   };
 
+  const handleOpenChat = async (item: Conversation) => {
+    const user = auth.currentUser;
+    // 1. Optimistic UI update: instantly reset unread counter to 0
+    setConversations((prev) =>
+      prev.map((c) => (c.id === item.id ? { ...c, unreadCount: 0 } : c))
+    );
+
+    // 2. Mark unread messages and notifications as read in background
+    if (user && item.unreadCount > 0) {
+      (async () => {
+        try {
+          const msgsRef = collection(db, 'chats', item.id, 'messages');
+          const q = query(msgsRef, where('receiverId', '==', user.uid), where('read', '==', false));
+          const snap = await getDocs(q);
+          if (!snap.empty) {
+            const batch = writeBatch(db);
+            snap.forEach((dSnap) => {
+              batch.update(doc(db, 'chats', item.id, 'messages', dSnap.id), { read: true });
+            });
+            await batch.commit();
+          }
+
+          // Mark chat notifications from this sender as read
+          const notifRef = collection(db, 'notifications');
+          const notifQ = query(
+            notifRef,
+            where('userId', '==', user.uid),
+            where('senderId', '==', item.otherUserId),
+            where('read', '==', false)
+          );
+          const notifSnap = await getDocs(notifQ);
+          if (!notifSnap.empty) {
+            const notifBatch = writeBatch(db);
+            notifSnap.forEach((nSnap) => {
+              notifBatch.update(doc(db, 'notifications', nSnap.id), { read: true });
+            });
+            await notifBatch.commit();
+          }
+        } catch (err) {
+          console.log('Error marking chat messages as read:', err);
+        }
+      })();
+    }
+
+    // 3. Navigate to chat room
+    router.push({
+      pathname: '/chat/[id]',
+      params: {
+        id: item.otherUserId,
+        chatId: item.id,
+        postId: item.postId || '',
+        postTitle: item.postTitle || ''
+      }
+    });
+  };
+
   return (
     <View style={styles.container}>
       {/* Messenger Large Bold Header */}
@@ -269,17 +325,7 @@ export default function ChatListScreen() {
             return (
               <TouchableOpacity
                 style={styles.chatItemRow}
-                onPress={() =>
-                  router.push({
-                    pathname: '/chat/[id]',
-                    params: {
-                      id: item.otherUserId,
-                      chatId: item.id,
-                      postId: item.postId || '',
-                      postTitle: item.postTitle || ''
-                    }
-                  })
-                }
+                onPress={() => handleOpenChat(item)}
                 activeOpacity={0.7}
               >
                 {/* Avatar Container with Messenger Blue Unread Dot */}
