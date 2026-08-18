@@ -1,11 +1,24 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { collection, doc, getDocs, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
+import {
+  arrayUnion,
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  onSnapshot,
+  query,
+  serverTimestamp,
+  updateDoc,
+  where
+} from 'firebase/firestore';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
   Image,
+  Modal,
   RefreshControl,
   StyleSheet,
   Text,
@@ -35,6 +48,53 @@ export default function ChatListScreen() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedChatForAction, setSelectedChatForAction] = useState<Conversation | null>(null);
+  const [isDeleteConfirmVisible, setIsDeleteConfirmVisible] = useState<boolean>(false);
+
+  const handleDeleteConversation = async (item: Conversation | null) => {
+    const user = auth.currentUser;
+    if (!user || !item) return;
+
+    // Optimistic removal from list
+    setConversations((prev) => prev.filter((c) => c.otherUserId !== item.otherUserId));
+
+    try {
+      const entry = userChatMapRef.current.get(item.otherUserId);
+      const docIds = entry ? entry.docIds : [item.id];
+
+      for (const docId of docIds) {
+        const chatDocRef = doc(db, 'chats', docId);
+        const chatSnap = await getDoc(chatDocRef);
+
+        if (chatSnap.exists()) {
+          const data = chatSnap.data();
+          const existingDeletedBy: string[] = data.deletedBy || [];
+
+          const willBeDeletedByBoth =
+            existingDeletedBy.includes(item.otherUserId) ||
+            (existingDeletedBy.length > 0 && !existingDeletedBy.includes(user.uid));
+
+          if (willBeDeletedByBoth) {
+            // Hard delete all messages subcollection & chat doc from server permanently
+            const subMsgs = await getDocs(collection(db, 'chats', docId, 'messages'));
+            const deletePromises = subMsgs.docs.map((d) => deleteDoc(d.ref));
+            await Promise.all(deletePromises);
+            await deleteDoc(chatDocRef);
+          } else {
+            // Soft delete for current user
+            await updateDoc(chatDocRef, {
+              deletedBy: arrayUnion(user.uid),
+              ['clearedAt_' + user.uid]: serverTimestamp(),
+              ['lastSeen_' + user.uid]: serverTimestamp(),
+              ['unreadCount_' + user.uid]: 0,
+            });
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Error deleting conversation:', e);
+    }
+  };
 
   const getTimestampMillis = (rawTs: any): number => {
     if (!rawTs) return 0;
@@ -211,12 +271,20 @@ export default function ChatListScreen() {
           const participants: string[] = data.participants || [];
           const otherId = participants.find((id) => id !== user.uid) || user.uid;
 
+          // Check if user has cleared this chat and no new message was sent
+          const deletedBy: string[] = data.deletedBy || [];
+          const clearedAt = getTimestampMillis(data['clearedAt_' + user.uid] || data.clearedAt);
+          const currentTs = getTimestampMillis(data.lastTimestamp || data.timestamp || data.updatedAt);
+
+          if (deletedBy.includes(user.uid) && clearedAt > 0 && currentTs <= clearedAt) {
+            return;
+          }
+
           if (!userChatMap.has(otherId)) {
             userChatMap.set(otherId, { latestDoc: docSnap, docIds: [docSnap.id] });
           } else {
             const entry = userChatMap.get(otherId)!;
             entry.docIds.push(docSnap.id);
-            const currentTs = getTimestampMillis(data.lastTimestamp || data.timestamp || data.updatedAt);
             const existingTs = getTimestampMillis(
               entry.latestDoc.data().lastTimestamp ||
               entry.latestDoc.data().timestamp ||
@@ -428,6 +496,7 @@ export default function ChatListScreen() {
               <TouchableOpacity
                 style={styles.chatItemRow}
                 onPress={() => handleOpenChat(item)}
+                onLongPress={() => setSelectedChatForAction(item)}
                 activeOpacity={0.7}
               >
                 {/* Avatar Container with Messenger Blue Unread Dot */}
@@ -500,6 +569,124 @@ export default function ChatListScreen() {
           }
         />
       )}
+
+      {/* Conversation Action Sheet Modal (Long Press on item) */}
+      <Modal
+        visible={selectedChatForAction !== null && !isDeleteConfirmVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setSelectedChatForAction(null)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setSelectedChatForAction(null)}
+        >
+          <View style={styles.actionSheetContainer}>
+            <View style={styles.actionSheetHeader}>
+              <Text style={styles.actionSheetTitle}>Tùy chọn cuộc trò chuyện</Text>
+              <Text style={styles.actionSheetSubtitle} numberOfLines={1}>
+                {selectedChatForAction?.otherUserName || 'Người dùng'}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.actionSheetOption}
+              onPress={() => {
+                const target = selectedChatForAction;
+                setSelectedChatForAction(null);
+                if (target) handleOpenChat(target);
+              }}
+              activeOpacity={0.75}
+            >
+              <View style={[styles.actionSheetIconWrapper, { backgroundColor: '#EFF6FF' }]}>
+                <Ionicons name="chatbubble-ellipses" size={22} color="#0084FF" />
+              </View>
+              <View style={styles.actionSheetTextCol}>
+                <Text style={styles.actionSheetOptionTitle}>Mở cuộc trò chuyện</Text>
+                <Text style={styles.actionSheetOptionSubtitle}>Xem tin nhắn và gửi phản hồi</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionSheetOption}
+              onPress={() => {
+                setIsDeleteConfirmVisible(true);
+              }}
+              activeOpacity={0.75}
+            >
+              <View style={[styles.actionSheetIconWrapper, { backgroundColor: '#FEE2E2' }]}>
+                <Ionicons name="trash-outline" size={22} color="#DC2626" />
+              </View>
+              <View style={styles.actionSheetTextCol}>
+                <Text style={[styles.actionSheetOptionTitle, { color: '#DC2626' }]}>Xóa toàn bộ cuộc trò chuyện</Text>
+                <Text style={styles.actionSheetOptionSubtitle}>Xóa ở phía bạn (Tự động xóa vĩnh viễn trên Server khi cả 2 cùng xóa)</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionSheetCancelBtn}
+              onPress={() => setSelectedChatForAction(null)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.actionSheetCancelText}>Hủy bỏ</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Delete Confirmation Dialog */}
+      <Modal
+        visible={isDeleteConfirmVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setIsDeleteConfirmVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setIsDeleteConfirmVisible(false)}
+        >
+          <View style={styles.confirmDeleteCard}>
+            <View style={styles.confirmDeleteIconCircle}>
+              <Ionicons name="trash" size={28} color="#DC2626" />
+            </View>
+            <Text style={styles.confirmDeleteTitle}>Xóa toàn bộ cuộc trò chuyện?</Text>
+            <Text style={styles.confirmDeleteDesc}>
+              Toàn bộ tin nhắn với {selectedChatForAction?.otherUserName} sẽ bị xóa khỏi danh sách của bạn. Khi cả 2 người cùng xóa, toàn bộ dữ liệu sẽ được xóa vĩnh viễn khỏi hệ thống.
+            </Text>
+
+            <View style={styles.confirmDeleteBtnRow}>
+              <TouchableOpacity
+                style={styles.confirmDeleteCancelBtn}
+                onPress={() => {
+                  setIsDeleteConfirmVisible(false);
+                  setSelectedChatForAction(null);
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.confirmDeleteCancelText}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.confirmDeleteBtn}
+                onPress={() => {
+                  const target = selectedChatForAction;
+                  setIsDeleteConfirmVisible(false);
+                  setSelectedChatForAction(null);
+                  if (target) {
+                    handleDeleteConversation(target);
+                  }
+                }}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.confirmDeleteBtnText}>Xóa</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -659,5 +846,155 @@ const styles = StyleSheet.create({
     color: '#64748B',
     textAlign: 'center',
     lineHeight: 20,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.5)',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
+  actionSheetContainer: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 36,
+    width: '100%',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  actionSheetHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  actionSheetTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 4,
+  },
+  actionSheetSubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+  },
+  actionSheetOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    marginBottom: 8,
+    backgroundColor: '#F8FAFC',
+  },
+  actionSheetIconWrapper: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  actionSheetTextCol: {
+    flex: 1,
+  },
+  actionSheetOptionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 2,
+  },
+  actionSheetOptionSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  actionSheetCancelBtn: {
+    marginTop: 8,
+    paddingVertical: 14,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionSheetCancelText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  confirmDeleteCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 24,
+    alignItems: 'center',
+    width: '85%',
+    maxWidth: 340,
+    marginBottom: 'auto',
+    marginTop: 'auto',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  confirmDeleteIconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  confirmDeleteTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  confirmDeleteDesc: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 20,
+  },
+  confirmDeleteBtnRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    width: '100%',
+  },
+  confirmDeleteCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmDeleteCancelText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  confirmDeleteBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: '#DC2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmDeleteBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

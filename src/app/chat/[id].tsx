@@ -527,6 +527,75 @@ export default function ChatRoomScreen() {
     }
   };
 
+  const [isChatOptionVisible, setIsChatOptionVisible] = useState<boolean>(false);
+  const [isDeleteChatConfirmVisible, setIsDeleteChatConfirmVisible] = useState<boolean>(false);
+  const clearedAtRef = useRef<number>(0);
+
+  const handleDeleteEntireConversation = async () => {
+    const currentUser = auth.currentUser;
+    if (!currentUser || !otherUserId) return;
+
+    // Optimistic UI: clear messages immediately
+    setMessages([]);
+    setIsDeleteChatConfirmVisible(false);
+    setIsChatOptionVisible(false);
+    playSoundEffect('chatSend');
+
+    try {
+      const chatsRef = collection(db, 'chats');
+      const qChats = query(chatsRef, where('participants', 'array-contains', currentUser.uid));
+      const chatsSnap = await getDocs(qChats);
+
+      const targetDocs: any[] = [];
+      chatsSnap.docs.forEach((dSnap) => {
+        const data = dSnap.data();
+        const parts: string[] = data.participants || [];
+        if (parts.includes(otherUserId)) {
+          targetDocs.push(dSnap);
+        }
+      });
+
+      const canonicalId = [currentUser.uid, otherUserId].sort().join('_');
+      if (!targetDocs.some((d) => d.id === canonicalId)) {
+        const cSnap = await getDoc(doc(db, 'chats', canonicalId));
+        if (cSnap.exists()) {
+          targetDocs.push(cSnap);
+        }
+      }
+
+      for (const dSnap of targetDocs) {
+        const cId = dSnap.id;
+        const data = dSnap.data();
+        const existingDeletedBy: string[] = data.deletedBy || [];
+
+        const willBeDeletedByBoth =
+          existingDeletedBy.includes(otherUserId) ||
+          (existingDeletedBy.length > 0 && !existingDeletedBy.includes(currentUser.uid));
+
+        if (willBeDeletedByBoth) {
+          // Hard delete all messages subcollection & chat doc from server permanently
+          const subMsgs = await getDocs(collection(db, 'chats', cId, 'messages'));
+          const deletePromises = subMsgs.docs.map((d) => deleteDoc(d.ref));
+          await Promise.all(deletePromises);
+          await deleteDoc(doc(db, 'chats', cId));
+        } else {
+          // Soft delete for current user
+          await updateDoc(doc(db, 'chats', cId), {
+            deletedBy: arrayUnion(currentUser.uid),
+            ['clearedAt_' + currentUser.uid]: serverTimestamp(),
+            ['lastSeen_' + currentUser.uid]: serverTimestamp(),
+            ['unreadCount_' + currentUser.uid]: 0,
+          });
+        }
+      }
+
+      router.back();
+    } catch (e) {
+      console.error('Error deleting conversation in room:', e);
+      router.back();
+    }
+  };
+
   // Call feature states
   const [isCallOptionVisible, setIsCallOptionVisible] = useState<boolean>(false);
   const [isInAppCallVisible, setIsInAppCallVisible] = useState<boolean>(false);
@@ -710,6 +779,18 @@ export default function ChatRoomScreen() {
             }
           }
 
+          const rawClearedAt = data['clearedAt_' + currentUser.uid] || data.clearedAt;
+          if (rawClearedAt) {
+            const millis = rawClearedAt.seconds
+              ? rawClearedAt.seconds * 1000
+              : typeof rawClearedAt === 'number'
+              ? rawClearedAt
+              : new Date(rawClearedAt).getTime();
+            if (millis > 0) {
+              clearedAtRef.current = Math.max(clearedAtRef.current, millis);
+            }
+          }
+
           const callData = data.callState;
           if (callData) {
             if (callData.callId && callData.callId !== currentCallId) {
@@ -804,6 +885,19 @@ export default function ChatRoomScreen() {
 
         snapshot.forEach((docSnap) => {
           const data = docSnap.data();
+          const msgMillis = data.timestamp?.seconds
+            ? data.timestamp.seconds * 1000
+            : typeof data.timestamp === 'number'
+            ? data.timestamp
+            : data.timestamp
+            ? new Date(data.timestamp).getTime()
+            : 0;
+
+          if (clearedAtRef.current > 0 && msgMillis > 0 && msgMillis <= clearedAtRef.current) {
+            messageMap.delete(docSnap.id);
+            return;
+          }
+
           const deletedBy: string[] = data.deletedBy || [];
 
           if (deletedBy.includes(currentUser.uid)) {
@@ -1356,7 +1450,11 @@ export default function ChatRoomScreen() {
           >
             <Ionicons name="call" size={20} color="#0084FF" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconActionBtn} activeOpacity={0.7}>
+          <TouchableOpacity
+            style={styles.iconActionBtn}
+            onPress={() => setIsChatOptionVisible(true)}
+            activeOpacity={0.7}
+          >
             <Ionicons name="ellipsis-vertical" size={20} color="#0F172A" />
           </TouchableOpacity>
         </View>
@@ -2000,6 +2098,114 @@ export default function ChatRoomScreen() {
                 activeOpacity={0.85}
               >
                 <Text style={styles.confirmDeleteBtnText}>Xóa</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Chat Room Options Modal (Top-right 3 dots) */}
+      <Modal
+        visible={isChatOptionVisible && !isDeleteChatConfirmVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setIsChatOptionVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setIsChatOptionVisible(false)}
+        >
+          <View style={styles.actionSheetContainer}>
+            <View style={styles.actionSheetHeader}>
+              <Text style={styles.actionSheetTitle}>Tùy chọn cuộc trò chuyện</Text>
+              <Text style={styles.actionSheetSubtitle}>Người nhận: {otherUser.name}</Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.actionSheetOption}
+              onPress={() => {
+                setIsChatOptionVisible(false);
+                setIsCallOptionVisible(true);
+              }}
+              activeOpacity={0.75}
+            >
+              <View style={[styles.actionSheetIconWrapper, { backgroundColor: '#EFF6FF' }]}>
+                <Ionicons name="call" size={22} color="#0084FF" />
+              </View>
+              <View style={styles.actionSheetTextCol}>
+                <Text style={styles.actionSheetOptionTitle}>Gọi điện</Text>
+                <Text style={styles.actionSheetOptionSubtitle}>Gọi di động hoặc gọi qua ứng dụng Findora</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionSheetOption}
+              onPress={() => {
+                setIsDeleteChatConfirmVisible(true);
+              }}
+              activeOpacity={0.75}
+            >
+              <View style={[styles.actionSheetIconWrapper, { backgroundColor: '#FEE2E2' }]}>
+                <Ionicons name="trash-outline" size={22} color="#DC2626" />
+              </View>
+              <View style={styles.actionSheetTextCol}>
+                <Text style={[styles.actionSheetOptionTitle, { color: '#DC2626' }]}>Xóa toàn bộ cuộc trò chuyện</Text>
+                <Text style={styles.actionSheetOptionSubtitle}>Xóa ở phía bạn (Tự động xóa vĩnh viễn trên Server khi cả 2 cùng xóa)</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionSheetCancelBtn}
+              onPress={() => setIsChatOptionVisible(false)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.actionSheetCancelText}>Hủy bỏ</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Delete Entire Conversation Confirmation Modal */}
+      <Modal
+        visible={isDeleteChatConfirmVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setIsDeleteChatConfirmVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setIsDeleteChatConfirmVisible(false)}
+        >
+          <View style={styles.confirmDeleteCard}>
+            <View style={styles.confirmDeleteIconCircle}>
+              <Ionicons name="trash" size={28} color="#DC2626" />
+            </View>
+            <Text style={styles.confirmDeleteTitle}>Xóa toàn bộ cuộc trò chuyện?</Text>
+            <Text style={styles.confirmDeleteDesc}>
+              Toàn bộ tin nhắn với {otherUser.name} sẽ bị xóa khỏi lịch sử chat của bạn. Khi cả 2 người cùng xóa, toàn bộ dữ liệu sẽ được xóa vĩnh viễn khỏi máy chủ.
+            </Text>
+
+            <View style={styles.confirmDeleteBtnRow}>
+              <TouchableOpacity
+                style={styles.confirmDeleteCancelBtn}
+                onPress={() => {
+                  setIsDeleteChatConfirmVisible(false);
+                  setIsChatOptionVisible(false);
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.confirmDeleteCancelText}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.confirmDeleteBtn}
+                onPress={handleDeleteEntireConversation}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.confirmDeleteBtnText}>Xóa cuộc trò chuyện</Text>
               </TouchableOpacity>
             </View>
           </View>
