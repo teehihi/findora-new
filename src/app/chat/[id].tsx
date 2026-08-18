@@ -1152,6 +1152,8 @@ export default function ChatRoomScreen() {
               lastMessage: textToSend,
               lastTimestamp: serverTimestamp(),
               updatedAt: serverTimestamp(),
+              deletedBy: [],
+              ['clearedAt_' + currentUser.uid]: null,
               postId: postId || null,
               postTitle: postTitle || null
             },
@@ -1245,6 +1247,8 @@ export default function ChatRoomScreen() {
               lastMessage: `[Bài viết] ${attachment.title}`,
               lastTimestamp: serverTimestamp(),
               updatedAt: serverTimestamp(),
+              deletedBy: [],
+              ['clearedAt_' + currentUser.uid]: null,
               postId: attachment.id,
               postTitle: attachment.title
             },
