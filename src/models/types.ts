@@ -69,6 +69,8 @@ export interface ChatMessage {
   replyToSender?: string | null;
   timestamp?: Timestamp | any;
   read?: boolean;
+  deletedBy?: string[];
+  chatDocId?: string;
 }
 
 export interface Notification {

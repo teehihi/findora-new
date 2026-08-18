@@ -2,7 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   addDoc,
+  arrayUnion,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -464,6 +466,9 @@ export default function ChatRoomScreen() {
     return null;
   });
 
+  const [selectedMsgForAction, setSelectedMsgForAction] = useState<ChatMessage | null>(null);
+  const [isDeleteConfirmVisible, setIsDeleteConfirmVisible] = useState<boolean>(false);
+
   // Automatically fetch full post metadata & real image from Firestore
   useEffect(() => {
     if (!postId) return;
@@ -482,6 +487,45 @@ export default function ChatRoomScreen() {
         console.log('Notice: Could not load post attachment details:', err);
       });
   }, [postId]);
+
+  const handleDeleteMessage = async (msg: ChatMessage | null) => {
+    if (!msg || !msg.id || msg.id.startsWith('temp_')) return;
+    const currentUser = auth.currentUser;
+    if (!currentUser || !otherUserId) return;
+
+    const targetChatDocId = msg.chatDocId || activeChatId || [currentUser.uid, otherUserId].sort().join('_');
+
+    // Optimistic UI update: instantly remove from local state
+    setMessages((prev) => prev.filter((m) => m.id !== msg.id));
+    playSoundEffect('chatSend');
+
+    try {
+      const msgRef = doc(db, 'chats', targetChatDocId, 'messages', msg.id);
+      const msgSnap = await getDoc(msgRef);
+
+      if (msgSnap.exists()) {
+        const msgData = msgSnap.data();
+        const existingDeletedBy: string[] = msgData.deletedBy || [];
+
+        // Check if the other user has already deleted it
+        const willBeDeletedByBoth =
+          existingDeletedBy.includes(otherUserId) ||
+          (existingDeletedBy.length > 0 && !existingDeletedBy.includes(currentUser.uid));
+
+        if (willBeDeletedByBoth) {
+          // Both users deleted this message -> HARD DELETE from server permanently!
+          await deleteDoc(msgRef);
+        } else {
+          // Only current user deleted -> SOFT DELETE by adding currentUser.uid to deletedBy
+          await updateDoc(msgRef, {
+            deletedBy: arrayUnion(currentUser.uid)
+          });
+        }
+      }
+    } catch (e) {
+      console.error('Error deleting message:', e);
+    }
+  };
 
   // Call feature states
   const [isCallOptionVisible, setIsCallOptionVisible] = useState<boolean>(false);
@@ -751,8 +795,22 @@ export default function ChatRoomScreen() {
 
       const unsubMsg = onSnapshot(subMsgsQuery, (snapshot) => {
         let hasUnread = false;
+
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === 'removed') {
+            messageMap.delete(change.doc.id);
+          }
+        });
+
         snapshot.forEach((docSnap) => {
           const data = docSnap.data();
+          const deletedBy: string[] = data.deletedBy || [];
+
+          if (deletedBy.includes(currentUser.uid)) {
+            messageMap.delete(docSnap.id);
+            return;
+          }
+
           const isRead = Boolean(data.read);
           messageMap.set(docSnap.id, {
             id: docSnap.id,
@@ -772,6 +830,8 @@ export default function ChatRoomScreen() {
             replyToText: data.replyToText || null,
             replyToSender: data.replyToSender || null,
             read: isRead,
+            deletedBy,
+            chatDocId: cId,
             timestamp: data.timestamp
           });
 
@@ -1411,10 +1471,14 @@ export default function ChatRoomScreen() {
                         };
 
                         return (
-                          <View style={[
-                            styles.callCardContainer,
-                            isIncomingMissed && styles.callCardContainerMissed
-                          ]}>
+                          <TouchableOpacity
+                            activeOpacity={0.95}
+                            onLongPress={() => setSelectedMsgForAction(item)}
+                            style={[
+                              styles.callCardContainer,
+                              isIncomingMissed && styles.callCardContainerMissed
+                            ]}
+                          >
                             <View style={styles.callCardHeaderRow}>
                               <View style={[
                                 styles.callCardIconCircle,
@@ -1457,15 +1521,20 @@ export default function ChatRoomScreen() {
                                 isIncomingMissed && styles.callBackBtnTextMissed
                               ]}>Gọi lại</Text>
                             </TouchableOpacity>
-                          </View>
+                          </TouchableOpacity>
                         );
                       })() : isPostCardMsg ? (
                         /* 2. TikTok Shop Style Post Item Card Rendering */
-                        <View style={[
-                          styles.postCardBubble,
-                          isMe ? styles.postCardBubbleMe : styles.postCardBubbleOther,
-                          borderRadiusStyle
-                        ]}>
+                        <TouchableOpacity
+                          activeOpacity={0.95}
+                          onLongPress={() => setSelectedMsgForAction(item)}
+                          onPress={() => setExpandedMsgId(isExpanded ? null : item.id)}
+                          style={[
+                            styles.postCardBubble,
+                            isMe ? styles.postCardBubbleMe : styles.postCardBubbleOther,
+                            borderRadiusStyle
+                          ]}
+                        >
                           <View style={styles.postCardHeaderRow}>
                             <Ionicons name="pricetag" size={13} color={isMe ? '#FFFFFF' : '#059669'} />
                             <Text style={[styles.postCardHeaderLabel, isMe && { color: '#FFFFFF' }]}>
@@ -1518,7 +1587,7 @@ export default function ChatRoomScreen() {
                             </Text>
                             <Ionicons name="chevron-forward" size={14} color={isMe ? '#0084FF' : '#059669'} />
                           </TouchableOpacity>
-                        </View>
+                        </TouchableOpacity>
                       ) : (
                         /* 3. Normal Text / Image Bubble Rendering */
                         <>
@@ -1547,6 +1616,7 @@ export default function ChatRoomScreen() {
                             <TouchableOpacity
                               activeOpacity={0.9}
                               onPress={() => setSelectedViewerImage(item.imageUrl!)}
+                              onLongPress={() => setSelectedMsgForAction(item)}
                               style={[
                                 styles.imageMsgContainer,
                                 borderRadiusStyle,
@@ -1562,6 +1632,7 @@ export default function ChatRoomScreen() {
                             <TouchableOpacity
                               activeOpacity={0.9}
                               onPress={() => setExpandedMsgId(isExpanded ? null : item.id)}
+                              onLongPress={() => setSelectedMsgForAction(item)}
                               style={[
                                 styles.msgBubble,
                                 isMe ? styles.msgBubbleMe : styles.msgBubbleOther,
@@ -1816,6 +1887,124 @@ export default function ChatRoomScreen() {
         status={callStatus}
         onClose={handleEndCall}
       />
+
+      {/* Message Actions Modal (Long Press on Message) */}
+      <Modal
+        visible={selectedMsgForAction !== null && !isDeleteConfirmVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setSelectedMsgForAction(null)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setSelectedMsgForAction(null)}
+        >
+          <View style={styles.actionSheetContainer}>
+            <View style={styles.actionSheetHeader}>
+              <Text style={styles.actionSheetTitle}>Tùy chọn tin nhắn</Text>
+              <Text style={styles.actionSheetSubtitle} numberOfLines={1}>
+                {selectedMsgForAction?.message || 'Tin nhắn'}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.actionSheetOption}
+              onPress={() => {
+                const msg = selectedMsgForAction;
+                setSelectedMsgForAction(null);
+                if (msg) setReplyingTo(msg);
+              }}
+              activeOpacity={0.75}
+            >
+              <View style={[styles.actionSheetIconWrapper, { backgroundColor: '#EFF6FF' }]}>
+                <Ionicons name="return-up-back" size={22} color="#0084FF" />
+              </View>
+              <View style={styles.actionSheetTextCol}>
+                <Text style={styles.actionSheetOptionTitle}>Trả lời tin nhắn</Text>
+                <Text style={styles.actionSheetOptionSubtitle}>Trích dẫn tin nhắn này trong cuộc trò chuyện</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionSheetOption}
+              onPress={() => {
+                setIsDeleteConfirmVisible(true);
+              }}
+              activeOpacity={0.75}
+            >
+              <View style={[styles.actionSheetIconWrapper, { backgroundColor: '#FEE2E2' }]}>
+                <Ionicons name="trash-outline" size={22} color="#DC2626" />
+              </View>
+              <View style={styles.actionSheetTextCol}>
+                <Text style={[styles.actionSheetOptionTitle, { color: '#DC2626' }]}>Xóa tin nhắn</Text>
+                <Text style={styles.actionSheetOptionSubtitle}>Xóa ở phía bạn (Xóa vĩnh viễn khi cả 2 cùng xóa)</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionSheetCancelBtn}
+              onPress={() => setSelectedMsgForAction(null)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.actionSheetCancelText}>Hủy bỏ</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        visible={isDeleteConfirmVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setIsDeleteConfirmVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setIsDeleteConfirmVisible(false)}
+        >
+          <View style={styles.confirmDeleteCard}>
+            <View style={styles.confirmDeleteIconCircle}>
+              <Ionicons name="trash" size={28} color="#DC2626" />
+            </View>
+            <Text style={styles.confirmDeleteTitle}>Xóa tin nhắn?</Text>
+            <Text style={styles.confirmDeleteDesc}>
+              Tin nhắn này sẽ bị xóa khỏi cuộc trò chuyện của bạn. Khi cả 2 người cùng xóa, tin nhắn sẽ bị xóa vĩnh viễn khỏi máy chủ.
+            </Text>
+
+            <View style={styles.confirmDeleteBtnRow}>
+              <TouchableOpacity
+                style={styles.confirmDeleteCancelBtn}
+                onPress={() => {
+                  setIsDeleteConfirmVisible(false);
+                  setSelectedMsgForAction(null);
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.confirmDeleteCancelText}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.confirmDeleteBtn}
+                onPress={() => {
+                  const targetMsg = selectedMsgForAction;
+                  setIsDeleteConfirmVisible(false);
+                  setSelectedMsgForAction(null);
+                  if (targetMsg) {
+                    handleDeleteMessage(targetMsg);
+                  }
+                }}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.confirmDeleteBtnText}>Xóa</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Real-time Incoming Voice Call Modal */}
       <IncomingCallModal
@@ -2616,5 +2805,73 @@ const styles = StyleSheet.create({
   },
   closeAttachmentBtn: {
     padding: 4,
+  },
+  confirmDeleteCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 24,
+    alignItems: 'center',
+    width: '85%',
+    maxWidth: 340,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  confirmDeleteIconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  confirmDeleteTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  confirmDeleteDesc: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 20,
+  },
+  confirmDeleteBtnRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    width: '100%',
+  },
+  confirmDeleteCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmDeleteCancelText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  confirmDeleteBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: '#DC2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmDeleteBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });
