@@ -2,22 +2,29 @@ import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { playSoundEffect } from './soundService';
 
-// Configure foreground notification presentation handler for Expo SDK 57
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+let isHandlerConfigured = false;
 
 /**
  * Initialize Android notification channels with high priority & custom sounds
  * and request notification permissions on iOS and Android
  */
 export async function initializeDeviceNotifications(): Promise<boolean> {
+  if (Platform.OS === 'web') return false;
+
   try {
+    // 1. Configure foreground notification presentation handler safely inside initialization
+    if (!isHandlerConfigured) {
+      Notifications.setNotificationHandler({
+        handleNotification: async () => ({
+          shouldShowBanner: true,
+          shouldShowList: true,
+          shouldPlaySound: true,
+          shouldSetBadge: true,
+        }),
+      });
+      isHandlerConfigured = true;
+    }
+
     if (Platform.OS === 'android') {
       // Channel 1: Messages (Chat incoming)
       await Notifications.setNotificationChannelAsync('messages', {
@@ -26,7 +33,6 @@ export async function initializeDeviceNotifications(): Promise<boolean> {
         vibrationPattern: [0, 250, 250, 250],
         lightColor: '#10B981',
         showBadge: true,
-        sound: 'chat_noti_sound',
       });
 
       // Channel 2: General Notifications (AI Match, Like, Comment, Points, System)
@@ -36,7 +42,6 @@ export async function initializeDeviceNotifications(): Promise<boolean> {
         vibrationPattern: [0, 250, 250, 250],
         lightColor: '#3B82F6',
         showBadge: true,
-        sound: 'sound_noti',
       });
     }
 
@@ -49,7 +54,7 @@ export async function initializeDeviceNotifications(): Promise<boolean> {
 
     return finalStatus === 'granted';
   } catch (error) {
-    console.log('Error initializing device notifications:', error);
+    console.log('Notice: Device notifications init notice:', error);
     return false;
   }
 }
@@ -76,6 +81,8 @@ export async function triggerDeviceNotification({
       playSoundEffect('generalNotification');
     }
 
+    if (Platform.OS === 'web') return;
+
     // 2. Schedule immediate system notification
     await Notifications.scheduleNotificationAsync({
       content: {
@@ -91,6 +98,6 @@ export async function triggerDeviceNotification({
       trigger: null, // show immediately
     });
   } catch (error) {
-    console.log('Error triggering device notification:', error);
+    console.log('Notice: Trigger device notification notice:', error);
   }
 }
