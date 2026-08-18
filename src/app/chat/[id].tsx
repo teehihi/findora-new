@@ -591,7 +591,7 @@ export default function ChatRoomScreen() {
       }
     });
 
-    // Determine target chatId strictly for this post topic
+    // Determine target chatId strictly for this post topic or existing conversation
     const initChatRoom = async () => {
       try {
         let targetChatId = paramChatId || '';
@@ -601,6 +601,7 @@ export default function ChatRoomScreen() {
           const qChats = query(chatsRef, where('participants', 'array-contains', currentUser.uid));
           const chatsSnap = await getDocs(qChats);
 
+          let fallbackChatId = '';
           for (const docSnap of chatsSnap.docs) {
             const data = docSnap.data();
             const participants: string[] = data.participants || [];
@@ -610,10 +611,15 @@ export default function ChatRoomScreen() {
               if (postId && docPostId === postId) {
                 targetChatId = docSnap.id;
                 break;
-              } else if (!postId && !targetChatId) {
-                targetChatId = docSnap.id;
+              }
+              if (!fallbackChatId) {
+                fallbackChatId = docSnap.id;
               }
             }
+          }
+
+          if (!targetChatId && fallbackChatId) {
+            targetChatId = fallbackChatId;
           }
         }
 
