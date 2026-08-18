@@ -728,11 +728,11 @@ export default function ChatRoomScreen() {
               replyToId: data.replyToId || null,
               replyToText: data.replyToText || null,
               replyToSender: data.replyToSender || null,
-              read: data.read ?? true,
+              read: Boolean(data.read),
               timestamp: data.timestamp
             });
 
-            // Mark unread messages from other user as READ!
+            // Mark unread messages from other user as READ in real-time!
             if (data.senderId === otherUserId && data.read === false) {
               updateDoc(doc(db, 'chats', targetChatId, 'messages', docSnap.id), { read: true }).catch(() => { });
             }

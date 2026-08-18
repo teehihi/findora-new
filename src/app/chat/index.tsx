@@ -164,6 +164,8 @@ export default function ChatListScreen() {
 
     const chatsRef = collection(db, 'chats');
     const qChats = query(chatsRef, where('participants', 'array-contains', user.uid));
+    const msgUnsubs = new Map<string, () => void>();
+    const unreadCountsMap = new Map<string, number>();
 
     const unsub = onSnapshot(
       qChats,
@@ -174,6 +176,45 @@ export default function ChatListScreen() {
           setRefreshing(false);
           return;
         }
+
+        // Clean up listeners for deleted chats
+        const currentChatIds = new Set(snapshot.docs.map((d) => d.id));
+        for (const [cId, cleanFn] of msgUnsubs.entries()) {
+          if (!currentChatIds.has(cId)) {
+            cleanFn();
+            msgUnsubs.delete(cId);
+            unreadCountsMap.delete(cId);
+          }
+        }
+
+        // Attach realtime unread listener to each conversation (Messenger Real-time Sync)
+        snapshot.docs.forEach((docSnap) => {
+          const chatId = docSnap.id;
+          if (!msgUnsubs.has(chatId)) {
+            const msgsRef = collection(db, 'chats', chatId, 'messages');
+            const unreadQuery = query(msgsRef, where('read', '==', false));
+            const unsubMsg = onSnapshot(
+              unreadQuery,
+              (uSnap) => {
+                let count = 0;
+                uSnap.forEach((d) => {
+                  if (d.data().senderId !== user.uid) {
+                    count++;
+                  }
+                });
+                unreadCountsMap.set(chatId, count);
+                // Realtime UI update for unread badge
+                setConversations((prev) =>
+                  prev.map((c) => (c.id === chatId ? { ...c, unreadCount: count } : c))
+                );
+              },
+              (err) => {
+                console.log('Realtime unread listener notice for chat', chatId, err);
+              }
+            );
+            msgUnsubs.set(chatId, unsubMsg);
+          }
+        });
 
         const list: Conversation[] = await Promise.all(
           snapshot.docs.map(async (docSnap) => {
@@ -197,19 +238,7 @@ export default function ChatListScreen() {
             }
 
             const userDetails = userDetailsCache.current[otherId];
-
-            let unread = 0;
-            try {
-              const msgsRef = collection(db, 'chats', docSnap.id, 'messages');
-              const unreadQuery = query(msgsRef, where('read', '==', false));
-              const unreadSnap = await getDocs(unreadQuery);
-              unreadSnap.forEach((d) => {
-                if (d.data().senderId !== user.uid) {
-                  unread++;
-                }
-              });
-            } catch (e) { }
-
+            const liveUnread = unreadCountsMap.has(docSnap.id) ? unreadCountsMap.get(docSnap.id)! : 0;
             const rawTs = data.lastTimestamp || data.timestamp || data.updatedAt;
 
             return {
@@ -222,7 +251,7 @@ export default function ChatListScreen() {
               postTitle: data.postTitle || '',
               timestamp: formatTimestamp(rawTs),
               rawTimestamp: rawTs,
-              unreadCount: unread,
+              unreadCount: liveUnread,
             };
           })
         );
@@ -239,7 +268,11 @@ export default function ChatListScreen() {
       }
     );
 
-    return () => unsub();
+    return () => {
+      unsub();
+      msgUnsubs.forEach((clean) => clean());
+      msgUnsubs.clear();
+    };
   }, []);
 
   useFocusEffect(
