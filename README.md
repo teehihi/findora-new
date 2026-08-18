@@ -171,6 +171,19 @@ Dự án được phân phối dưới giấy phép mã nguồn mở **MIT Licen
 
 ---
 
-<p align="center">
-  Được phát triển với ❤️ bởi <b>Nhóm phát triển Findora</b> — Mang lại hy vọng cho những món đồ thất lạc.
-</p>
+## 🧑‍💻 Tác giả
+<b>Nguyễn Nhật Thiên (TEE)</b>
+
+- 📧 Email: teeforwork21@gmail.com
+- 🔗 GitHub: [github.com/teehihi](https://github.com/teehihi)
+- 🌐 Linktree: [linktr.ee/nkqt.tee](https://linktr.ee/nkqt.tee)
+- ⭐ My Portfolio: https://nteelab.vercel.app/
+
+---
+
+<div align="center">
+  
+  <b>⭐ Nếu bạn thích dự án này, hãy cho chúng tôi một star! ⭐</b>
+
+  Made with ❤️ by <b>Tee</b> — Mang lại hy vọng cho những món đồ thất lạc.
+</div>
