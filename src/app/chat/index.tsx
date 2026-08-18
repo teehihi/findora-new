@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { collection, getDocs, onSnapshot, query, where, doc, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, onSnapshot, query, where, doc, updateDoc } from 'firebase/firestore';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -117,9 +117,13 @@ export default function ChatListScreen() {
           let unread = 0;
           try {
             const msgsRef = collection(db, 'chats', docSnap.id, 'messages');
-            const unreadQuery = query(msgsRef, where('receiverId', '==', user.uid), where('read', '==', false));
+            const unreadQuery = query(msgsRef, where('read', '==', false));
             const unreadSnap = await getDocs(unreadQuery);
-            unread = unreadSnap.size;
+            unreadSnap.forEach((d) => {
+              if (d.data().senderId !== user.uid) {
+                unread++;
+              }
+            });
           } catch (e) { }
 
           const rawTs = data.lastTimestamp || data.timestamp || data.updatedAt;
@@ -197,9 +201,13 @@ export default function ChatListScreen() {
             let unread = 0;
             try {
               const msgsRef = collection(db, 'chats', docSnap.id, 'messages');
-              const unreadQuery = query(msgsRef, where('receiverId', '==', user.uid), where('read', '==', false));
+              const unreadQuery = query(msgsRef, where('read', '==', false));
               const unreadSnap = await getDocs(unreadQuery);
-              unread = unreadSnap.size;
+              unreadSnap.forEach((d) => {
+                if (d.data().senderId !== user.uid) {
+                  unread++;
+                }
+              });
             } catch (e) { }
 
             const rawTs = data.lastTimestamp || data.timestamp || data.updatedAt;
@@ -253,36 +261,27 @@ export default function ChatListScreen() {
     );
 
     // 2. Mark unread messages and notifications as read in background
-    if (user && item.unreadCount > 0) {
+    if (user) {
       (async () => {
         try {
+          // A. Mark messages from other user as read
           const msgsRef = collection(db, 'chats', item.id, 'messages');
-          const q = query(msgsRef, where('receiverId', '==', user.uid), where('read', '==', false));
-          const snap = await getDocs(q);
-          if (!snap.empty) {
-            const batch = writeBatch(db);
-            snap.forEach((dSnap) => {
-              batch.update(doc(db, 'chats', item.id, 'messages', dSnap.id), { read: true });
-            });
-            await batch.commit();
-          }
+          const unreadSnap = await getDocs(query(msgsRef, where('read', '==', false)));
+          unreadSnap.forEach((dSnap) => {
+            if (dSnap.data().senderId !== user.uid) {
+              updateDoc(doc(db, 'chats', item.id, 'messages', dSnap.id), { read: true }).catch(() => {});
+            }
+          });
 
-          // Mark chat notifications from this sender as read
+          // B. Clear chat notifications from this sender
           const notifRef = collection(db, 'notifications');
-          const notifQ = query(
-            notifRef,
-            where('userId', '==', user.uid),
-            where('senderId', '==', item.otherUserId),
-            where('read', '==', false)
-          );
-          const notifSnap = await getDocs(notifQ);
-          if (!notifSnap.empty) {
-            const notifBatch = writeBatch(db);
-            notifSnap.forEach((nSnap) => {
-              notifBatch.update(doc(db, 'notifications', nSnap.id), { read: true });
-            });
-            await notifBatch.commit();
-          }
+          const notifSnap = await getDocs(query(notifRef, where('userId', '==', user.uid), where('read', '==', false)));
+          notifSnap.forEach((nSnap) => {
+            const nData = nSnap.data();
+            if (nData.senderId === item.otherUserId || nData.chatId === item.id) {
+              updateDoc(doc(db, 'notifications', nSnap.id), { read: true }).catch(() => {});
+            }
+          });
         } catch (err) {
           console.log('Error marking chat messages as read:', err);
         }
