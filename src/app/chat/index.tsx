@@ -91,11 +91,33 @@ export default function ChatListScreen() {
       const snapshot = await getDocs(qChats);
 
       if (!snapshot.empty) {
-        const list: Conversation[] = [];
-        for (const docSnap of snapshot.docs) {
+        // Group conversations by otherUserId so each person appears exactly once
+        const userChatMap = new Map<string, { latestDoc: any; docIds: string[] }>();
+        snapshot.docs.forEach((docSnap) => {
           const data = docSnap.data();
           const participants: string[] = data.participants || [];
           const otherId = participants.find((id) => id !== user.uid) || user.uid;
+
+          if (!userChatMap.has(otherId)) {
+            userChatMap.set(otherId, { latestDoc: docSnap, docIds: [docSnap.id] });
+          } else {
+            const entry = userChatMap.get(otherId)!;
+            entry.docIds.push(docSnap.id);
+            const currentTs = getTimestampMillis(data.lastTimestamp || data.timestamp || data.updatedAt);
+            const existingTs = getTimestampMillis(
+              entry.latestDoc.data().lastTimestamp ||
+              entry.latestDoc.data().timestamp ||
+              entry.latestDoc.data().updatedAt
+            );
+            if (currentTs > existingTs) {
+              entry.latestDoc = docSnap;
+            }
+          }
+        });
+
+        const list: Conversation[] = [];
+        for (const [otherId, { latestDoc, docIds }] of userChatMap.entries()) {
+          const data = latestDoc.data();
 
           if (!userDetailsCache.current[otherId]) {
             try {
@@ -114,22 +136,24 @@ export default function ChatListScreen() {
 
           const userDetails = userDetailsCache.current[otherId];
 
-          let unread = 0;
-          try {
-            const msgsRef = collection(db, 'chats', docSnap.id, 'messages');
-            const unreadQuery = query(msgsRef, where('read', '==', false));
-            const unreadSnap = await getDocs(unreadQuery);
-            unreadSnap.forEach((d) => {
-              if (d.data().senderId !== user.uid) {
-                unread++;
-              }
-            });
-          } catch (e) { }
+          let totalUnread = 0;
+          for (const cId of docIds) {
+            try {
+              const msgsRef = collection(db, 'chats', cId, 'messages');
+              const unreadQuery = query(msgsRef, where('read', '==', false));
+              const unreadSnap = await getDocs(unreadQuery);
+              unreadSnap.forEach((d) => {
+                if (d.data().senderId !== user.uid) {
+                  totalUnread++;
+                }
+              });
+            } catch (e) { }
+          }
 
           const rawTs = data.lastTimestamp || data.timestamp || data.updatedAt;
 
           list.push({
-            id: docSnap.id,
+            id: latestDoc.id,
             otherUserId: otherId,
             otherUserName: userDetails.name,
             otherUserAvatar: userDetails.avatarUrl,
@@ -138,7 +162,7 @@ export default function ChatListScreen() {
             postTitle: data.postTitle || '',
             timestamp: formatTimestamp(rawTs),
             rawTimestamp: rawTs,
-            unreadCount: unread,
+            unreadCount: totalUnread,
           });
         }
 
@@ -177,6 +201,30 @@ export default function ChatListScreen() {
           return;
         }
 
+        // Group conversations by otherUserId
+        const userChatMap = new Map<string, { latestDoc: any; docIds: string[] }>();
+        snapshot.docs.forEach((docSnap) => {
+          const data = docSnap.data();
+          const participants: string[] = data.participants || [];
+          const otherId = participants.find((id) => id !== user.uid) || user.uid;
+
+          if (!userChatMap.has(otherId)) {
+            userChatMap.set(otherId, { latestDoc: docSnap, docIds: [docSnap.id] });
+          } else {
+            const entry = userChatMap.get(otherId)!;
+            entry.docIds.push(docSnap.id);
+            const currentTs = getTimestampMillis(data.lastTimestamp || data.timestamp || data.updatedAt);
+            const existingTs = getTimestampMillis(
+              entry.latestDoc.data().lastTimestamp ||
+              entry.latestDoc.data().timestamp ||
+              entry.latestDoc.data().updatedAt
+            );
+            if (currentTs > existingTs) {
+              entry.latestDoc = docSnap;
+            }
+          }
+        });
+
         // Clean up listeners for deleted chats
         const currentChatIds = new Set(snapshot.docs.map((d) => d.id));
         for (const [cId, cleanFn] of msgUnsubs.entries()) {
@@ -187,7 +235,7 @@ export default function ChatListScreen() {
           }
         }
 
-        // Attach realtime unread listener to each conversation (Messenger Real-time Sync)
+        // Attach realtime unread listener to each conversation document
         snapshot.docs.forEach((docSnap) => {
           const chatId = docSnap.id;
           if (!msgUnsubs.has(chatId)) {
@@ -203,9 +251,18 @@ export default function ChatListScreen() {
                   }
                 });
                 unreadCountsMap.set(chatId, count);
-                // Realtime UI update for unread badge
+
+                // Realtime UI update: recalculate unread per user
                 setConversations((prev) =>
-                  prev.map((c) => (c.id === chatId ? { ...c, unreadCount: count } : c))
+                  prev.map((c) => {
+                    const entry = userChatMap.get(c.otherUserId);
+                    if (!entry) return c;
+                    const sumUnread = entry.docIds.reduce(
+                      (acc, id) => acc + (unreadCountsMap.get(id) || 0),
+                      0
+                    );
+                    return { ...c, unreadCount: sumUnread };
+                  })
                 );
               },
               (err) => {
@@ -217,10 +274,8 @@ export default function ChatListScreen() {
         });
 
         const list: Conversation[] = await Promise.all(
-          snapshot.docs.map(async (docSnap) => {
-            const data = docSnap.data();
-            const participants: string[] = data.participants || [];
-            const otherId = participants.find((id) => id !== user.uid) || user.uid;
+          Array.from(userChatMap.entries()).map(async ([otherId, { latestDoc, docIds }]) => {
+            const data = latestDoc.data();
 
             if (!userDetailsCache.current[otherId]) {
               try {
@@ -238,11 +293,14 @@ export default function ChatListScreen() {
             }
 
             const userDetails = userDetailsCache.current[otherId];
-            const liveUnread = unreadCountsMap.has(docSnap.id) ? unreadCountsMap.get(docSnap.id)! : 0;
+            const sumUnread = docIds.reduce(
+              (acc, id) => acc + (unreadCountsMap.get(id) || 0),
+              0
+            );
             const rawTs = data.lastTimestamp || data.timestamp || data.updatedAt;
 
             return {
-              id: docSnap.id,
+              id: latestDoc.id,
               otherUserId: otherId,
               otherUserName: userDetails.name,
               otherUserAvatar: userDetails.avatarUrl,
@@ -251,7 +309,7 @@ export default function ChatListScreen() {
               postTitle: data.postTitle || '',
               timestamp: formatTimestamp(rawTs),
               rawTimestamp: rawTs,
-              unreadCount: liveUnread,
+              unreadCount: sumUnread,
             };
           })
         );
