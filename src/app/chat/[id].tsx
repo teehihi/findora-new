@@ -546,48 +546,39 @@ export default function ChatRoomScreen() {
       const qChats = query(chatsRef, where('participants', 'array-contains', currentUser.uid));
       const chatsSnap = await getDocs(qChats);
 
-      const targetDocs: any[] = [];
+      const targetDocIds = new Set<string>();
       chatsSnap.docs.forEach((dSnap) => {
-        const data = dSnap.data();
-        const parts: string[] = data.participants || [];
+        const parts: string[] = dSnap.data().participants || [];
         if (parts.includes(otherUserId)) {
-          targetDocs.push(dSnap);
+          targetDocIds.add(dSnap.id);
         }
       });
+      targetDocIds.add([currentUser.uid, otherUserId].sort().join('_'));
+      if (paramChatId) targetDocIds.add(paramChatId);
+      if (activeChatId) targetDocIds.add(activeChatId);
 
-      const canonicalId = [currentUser.uid, otherUserId].sort().join('_');
-      if (!targetDocs.some((d) => d.id === canonicalId)) {
-        const cSnap = await getDoc(doc(db, 'chats', canonicalId));
-        if (cSnap.exists()) {
-          targetDocs.push(cSnap);
-        }
-      }
-
-      for (const dSnap of targetDocs) {
+      for (const cId of targetDocIds) {
         try {
-          const cId = dSnap.id;
-          const data = dSnap.data();
-          const existingDeletedBy: string[] = data.deletedBy || [];
-
-          const willBeDeletedByBoth =
-            existingDeletedBy.includes(otherUserId) ||
-            (existingDeletedBy.length > 0 && !existingDeletedBy.includes(currentUser.uid));
-
-          if (willBeDeletedByBoth) {
-            const subMsgs = await getDocs(collection(db, 'chats', cId, 'messages'));
-            await Promise.all(subMsgs.docs.map((d) => deleteDoc(d.ref).catch(() => {})));
-            await deleteDoc(doc(db, 'chats', cId)).catch(() => {});
-          } else {
-            await updateDoc(doc(db, 'chats', cId), {
-              deletedBy: arrayUnion(currentUser.uid),
-              ['clearedAt_' + currentUser.uid]: serverTimestamp(),
-              ['lastSeen_' + currentUser.uid]: serverTimestamp(),
-              ['unreadCount_' + currentUser.uid]: 0,
-            }).catch(() => {});
-          }
+          const subMsgs = await getDocs(collection(db, 'chats', cId, 'messages'));
+          await Promise.all(subMsgs.docs.map((d) => deleteDoc(d.ref).catch(() => {})));
+          await deleteDoc(doc(db, 'chats', cId)).catch(() => {});
         } catch (singleErr) {
           console.log('Notice: Single doc deletion skipped in room:', singleErr);
         }
+      }
+
+      // Also clean up notifications
+      try {
+        const notifRef = collection(db, 'notifications');
+        const notifSnap = await getDocs(query(notifRef, where('userId', '==', currentUser.uid)));
+        for (const nDoc of notifSnap.docs) {
+          const nData = nDoc.data();
+          if (nData.senderId === otherUserId || targetDocIds.has(nData.chatId)) {
+            await deleteDoc(nDoc.ref).catch(() => {});
+          }
+        }
+      } catch (nErr) {
+        console.log('Notice: Notification cleanup error in room:', nErr);
       }
 
       router.back();

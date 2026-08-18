@@ -60,37 +60,32 @@ export default function ChatListScreen() {
 
     try {
       const entry = userChatMapRef.current.get(item.otherUserId);
-      const docIds = entry ? entry.docIds : [item.id];
+      const docIds = new Set<string>(entry ? entry.docIds : [item.id]);
+      docIds.add(item.id);
+      docIds.add([user.uid, item.otherUserId].sort().join('_'));
 
       for (const docId of docIds) {
         try {
-          const chatDocRef = doc(db, 'chats', docId);
-          const chatSnap = await getDoc(chatDocRef);
-
-          if (chatSnap.exists()) {
-            const data = chatSnap.data();
-            const existingDeletedBy: string[] = data.deletedBy || [];
-
-            const willBeDeletedByBoth =
-              existingDeletedBy.includes(item.otherUserId) ||
-              (existingDeletedBy.length > 0 && !existingDeletedBy.includes(user.uid));
-
-            if (willBeDeletedByBoth) {
-              const subMsgs = await getDocs(collection(db, 'chats', docId, 'messages'));
-              await Promise.all(subMsgs.docs.map((d) => deleteDoc(d.ref).catch(() => {})));
-              await deleteDoc(chatDocRef).catch(() => {});
-            } else {
-              await updateDoc(chatDocRef, {
-                deletedBy: arrayUnion(user.uid),
-                ['clearedAt_' + user.uid]: serverTimestamp(),
-                ['lastSeen_' + user.uid]: serverTimestamp(),
-                ['unreadCount_' + user.uid]: 0,
-              }).catch(() => {});
-            }
-          }
+          const subMsgs = await getDocs(collection(db, 'chats', docId, 'messages'));
+          await Promise.all(subMsgs.docs.map((d) => deleteDoc(d.ref).catch(() => {})));
+          await deleteDoc(doc(db, 'chats', docId)).catch(() => {});
         } catch (docErr) {
           console.log('Notice: Single doc deletion skipped:', docErr);
         }
+      }
+
+      // Also clean up notifications
+      try {
+        const notifRef = collection(db, 'notifications');
+        const notifSnap = await getDocs(query(notifRef, where('userId', '==', user.uid)));
+        for (const nDoc of notifSnap.docs) {
+          const nData = nDoc.data();
+          if (nData.senderId === item.otherUserId || docIds.has(nData.chatId)) {
+            await deleteDoc(nDoc.ref).catch(() => {});
+          }
+        }
+      } catch (nErr) {
+        console.log('Notice: Notification cleanup error:', nErr);
       }
     } catch (e) {
       console.error('Error deleting conversation:', e);
