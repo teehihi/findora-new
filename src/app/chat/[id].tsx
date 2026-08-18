@@ -435,6 +435,7 @@ export default function ChatRoomScreen() {
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
   const [expandedMsgId, setExpandedMsgId] = useState<string | null>(null);
   const [selectedViewerImage, setSelectedViewerImage] = useState<string | null>(null);
+  const [otherUserLastSeen, setOtherUserLastSeen] = useState<number>(0);
 
   // Call feature states
   const [isCallOptionVisible, setIsCallOptionVisible] = useState<boolean>(false);
@@ -622,12 +623,25 @@ export default function ChatRoomScreen() {
 
         setActiveChatId(targetChatId);
 
-        // Real-time Firestore Call Listener on chats/{targetChatId}
+        // Real-time Firestore Call Listener and Live Seen Tracker on chats/{targetChatId}
         unsubChatDoc = onSnapshot(doc(db, 'chats', targetChatId), (docSnap) => {
           if (docSnap.exists()) {
             const data = docSnap.data();
-            const callData = data.callState;
 
+            // Live Seen Timestamp synchronization
+            const rawLastSeen = data['lastSeen_' + otherUserId] || data.lastSeen;
+            if (rawLastSeen) {
+              const millis = rawLastSeen.seconds
+                ? rawLastSeen.seconds * 1000
+                : typeof rawLastSeen === 'number'
+                ? rawLastSeen
+                : new Date(rawLastSeen).getTime();
+              if (millis > 0) {
+                setOtherUserLastSeen(millis);
+              }
+            }
+
+            const callData = data.callState;
             if (callData) {
               if (callData.callId && callData.callId !== currentCallId) {
                 if (callManager.ActiveCallId !== callData.callId) {
@@ -668,6 +682,12 @@ export default function ChatRoomScreen() {
             }
           }
         });
+
+        // Update current user's lastSeen timestamp on chat doc
+        updateDoc(doc(db, 'chats', targetChatId), {
+          ['lastSeen_' + currentUser.uid]: serverTimestamp(),
+          ['unreadCount_' + currentUser.uid]: 0,
+        }).catch(() => {});
 
         // Mark all existing unread messages and notifications from other user as READ immediately
         const markAllUnreadAsRead = async (chatId: string) => {
@@ -713,8 +733,10 @@ export default function ChatRoomScreen() {
             setHasMoreMessages(true);
           }
 
+          let hasUnread = false;
           snapshot.forEach((docSnap) => {
             const data = docSnap.data();
+            const isRead = Boolean(data.read);
             messageMap.set(docSnap.id, {
               id: docSnap.id,
               senderId: data.senderId,
@@ -728,15 +750,24 @@ export default function ChatRoomScreen() {
               replyToId: data.replyToId || null,
               replyToText: data.replyToText || null,
               replyToSender: data.replyToSender || null,
-              read: Boolean(data.read),
+              read: isRead,
               timestamp: data.timestamp
             });
 
             // Mark unread messages from other user as READ in real-time!
-            if (data.senderId === otherUserId && data.read === false) {
-              updateDoc(doc(db, 'chats', targetChatId, 'messages', docSnap.id), { read: true }).catch(() => { });
+            if (data.senderId === otherUserId && !isRead) {
+              hasUnread = true;
+              updateDoc(doc(db, 'chats', targetChatId, 'messages', docSnap.id), { read: true }).catch(() => {});
             }
           });
+
+          if (hasUnread) {
+            updateDoc(doc(db, 'chats', targetChatId), {
+              ['lastSeen_' + currentUser.uid]: serverTimestamp(),
+              ['unreadCount_' + currentUser.uid]: 0,
+            }).catch(() => {});
+          }
+
           updateMessagesState();
           setIsLoadingMore(false);
         });
@@ -990,6 +1021,28 @@ export default function ChatRoomScreen() {
     })();
   };
 
+  const isMessageSeen = useCallback(
+    (msg: ChatMessage): boolean => {
+      if (!msg) return false;
+      if (msg.read === true) return true;
+      if (msg.senderId === auth.currentUser?.uid && otherUserLastSeen > 0) {
+        let msgMillis = 0;
+        if (typeof msg.timestamp === 'number') {
+          msgMillis = msg.timestamp;
+        } else if (msg.timestamp?.seconds) {
+          msgMillis = msg.timestamp.seconds * 1000;
+        } else if (msg.timestamp) {
+          msgMillis = new Date(msg.timestamp).getTime();
+        }
+        if (msgMillis > 0 && otherUserLastSeen >= msgMillis) {
+          return true;
+        }
+      }
+      return false;
+    },
+    [otherUserLastSeen]
+  );
+
   const isLastSent = (index: number) => {
     const current = messages[index];
     if (!current || current.senderId !== auth.currentUser?.uid) return false;
@@ -1002,10 +1055,10 @@ export default function ChatRoomScreen() {
   const isLastReadSent = (index: number) => {
     const current = messages[index];
     if (!current || current.senderId !== auth.currentUser?.uid) return false;
-    if (!current.read) return false;
+    if (!isMessageSeen(current)) return false;
     for (let i = index + 1; i < messages.length; i++) {
       const m = messages[i];
-      if (m.senderId === auth.currentUser?.uid && m.read) return false;
+      if (m.senderId === auth.currentUser?.uid && isMessageSeen(m)) return false;
     }
     return true;
   };
@@ -1339,49 +1392,54 @@ export default function ChatRoomScreen() {
                               <Text style={styles.timeTickText}>
                                 {item.id.startsWith('temp_')
                                   ? 'Đang gửi...'
-                                  : (item.read ? 'Đã xem ' : 'Đã gửi ') + formatMessageTime(item.timestamp)}
+                                  : (isMessageSeen(item) ? 'Đã xem ' : 'Đã gửi ') + formatMessageTime(item.timestamp)}
                               </Text>
                               {isMe && (
                                 <Ionicons
                                   name={
                                     item.id.startsWith('temp_')
                                       ? 'time-outline'
-                                      : item.read
+                                      : isMessageSeen(item)
                                       ? 'checkmark-done'
                                       : 'checkmark'
                                   }
                                   size={14}
-                                  color={item.read ? '#0084FF' : '#94A3B8'}
+                                  color={isMessageSeen(item) ? '#0084FF' : '#94A3B8'}
                                   style={styles.tickIcon}
                                 />
                               )}
                             </View>
                           )}
 
-                          {!isExpanded && isMe && (lastSent || item.id.startsWith('temp_')) && !item.read && (
-                            <View style={styles.timeTickContainer}>
-                              <Text style={styles.timeTickText}>
-                                {item.id.startsWith('temp_') ? 'Đang gửi...' : formatRelativeTime(item.timestamp)}
-                              </Text>
-                              <Ionicons
-                                name={item.id.startsWith('temp_') ? 'time-outline' : 'checkmark'}
-                                size={14}
-                                color="#94A3B8"
-                                style={styles.tickIcon}
-                              />
-                            </View>
-                          )}
-
-                          {isMe && lastReadSent && (
-                            <View style={styles.seenAvatarContainer}>
-                              {otherUser.avatarUrl ? (
-                                <Image source={{ uri: otherUser.avatarUrl }} style={styles.seenAvatar} />
-                              ) : (
-                                <View style={styles.seenAvatarPlaceholder}>
-                                  <Ionicons name="person" size={8} color="#64748B" />
+                          {!isExpanded && isMe && (
+                            <>
+                              {lastReadSent ? (
+                                <View style={styles.seenRowContainer}>
+                                  <Text style={styles.seenLabelText}>Đã xem</Text>
+                                  <View style={styles.seenAvatarContainer}>
+                                    {otherUser.avatarUrl ? (
+                                      <Image source={{ uri: otherUser.avatarUrl }} style={styles.seenAvatar} />
+                                    ) : (
+                                      <View style={styles.seenAvatarPlaceholder}>
+                                        <Ionicons name="person" size={8} color="#64748B" />
+                                      </View>
+                                    )}
+                                  </View>
                                 </View>
-                              )}
-                            </View>
+                              ) : (lastSent || item.id.startsWith('temp_')) && !isMessageSeen(item) ? (
+                                <View style={styles.timeTickContainer}>
+                                  <Text style={styles.timeTickText}>
+                                    {item.id.startsWith('temp_') ? 'Đang gửi...' : 'Đã gửi'}
+                                  </Text>
+                                  <Ionicons
+                                    name={item.id.startsWith('temp_') ? 'time-outline' : 'checkmark'}
+                                    size={14}
+                                    color="#94A3B8"
+                                    style={styles.tickIcon}
+                                  />
+                                </View>
+                              ) : null}
+                            </>
                           )}
                         </View>
                       )}
@@ -1954,12 +2012,22 @@ const styles = StyleSheet.create({
   tickIcon: {
     marginLeft: 3,
   },
+  seenRowContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+  },
+  seenLabelText: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '500',
+    marginRight: 4,
+  },
   seenAvatarContainer: {
     width: 14,
     height: 14,
     borderRadius: 7,
     overflow: 'hidden',
-    marginLeft: 4,
   },
   seenAvatar: {
     width: 14,
