@@ -416,11 +416,22 @@ function SwipeableMessageRow({
 export default function ChatRoomScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { id: otherUserId, chatId: paramChatId, postId, postTitle, acceptCall, activeCallId: paramActiveCallId } = useLocalSearchParams<{
+  const {
+    id: otherUserId,
+    chatId: paramChatId,
+    postId,
+    postTitle,
+    postImage,
+    postType,
+    acceptCall,
+    activeCallId: paramActiveCallId
+  } = useLocalSearchParams<{
     id: string;
     chatId?: string;
     postId?: string;
     postTitle?: string;
+    postImage?: string;
+    postType?: string;
     acceptCall?: string;
     activeCallId?: string;
   }>();
@@ -436,6 +447,22 @@ export default function ChatRoomScreen() {
   const [expandedMsgId, setExpandedMsgId] = useState<string | null>(null);
   const [selectedViewerImage, setSelectedViewerImage] = useState<string | null>(null);
   const [otherUserLastSeen, setOtherUserLastSeen] = useState<number>(0);
+  const [pendingPostAttachment, setPendingPostAttachment] = useState<{
+    id: string;
+    title: string;
+    image?: string;
+    type?: string;
+  } | null>(() => {
+    if (postId && postTitle) {
+      return {
+        id: postId,
+        title: postTitle,
+        image: postImage || '',
+        type: postType || 'lost'
+      };
+    }
+    return null;
+  });
 
   // Call feature states
   const [isCallOptionVisible, setIsCallOptionVisible] = useState<boolean>(false);
@@ -591,7 +618,7 @@ export default function ChatRoomScreen() {
       }
     });
 
-    // Determine target chatId strictly for this post topic or existing conversation
+    // Determine target chatId strictly as single canonical conversation between 2 users
     const initChatRoom = async () => {
       try {
         let targetChatId = paramChatId || '';
@@ -601,25 +628,13 @@ export default function ChatRoomScreen() {
           const qChats = query(chatsRef, where('participants', 'array-contains', currentUser.uid));
           const chatsSnap = await getDocs(qChats);
 
-          let fallbackChatId = '';
           for (const docSnap of chatsSnap.docs) {
             const data = docSnap.data();
             const participants: string[] = data.participants || [];
-            const docPostId = data.postId || '';
-
             if (participants.includes(otherUserId)) {
-              if (postId && docPostId === postId) {
-                targetChatId = docSnap.id;
-                break;
-              }
-              if (!fallbackChatId) {
-                fallbackChatId = docSnap.id;
-              }
+              targetChatId = docSnap.id;
+              break;
             }
-          }
-
-          if (!targetChatId && fallbackChatId) {
-            targetChatId = fallbackChatId;
           }
         }
 
@@ -749,6 +764,10 @@ export default function ChatRoomScreen() {
               receiverId: data.receiverId || otherUserId,
               message: data.text || data.message || '',
               type: data.type || 'text',
+              postId: data.postId || undefined,
+              postTitle: data.postTitle || undefined,
+              postImage: data.postImage || undefined,
+              postType: data.postType || undefined,
               callType: data.callType || 'voice',
               callDuration: data.callDuration || 0,
               callStatus: data.callStatus || 'ended',
@@ -1027,6 +1046,100 @@ export default function ChatRoomScreen() {
     })();
   };
 
+  const handleSendPostCard = async () => {
+    if (!pendingPostAttachment || !otherUserId) return;
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+
+    const attachment = { ...pendingPostAttachment };
+    setPendingPostAttachment(null);
+
+    const chatId = activeChatId || paramChatId || [currentUser.uid, otherUserId].sort().join('_');
+    const tempId = `temp_${Date.now()}`;
+    const cardMsg: ChatMessage = {
+      id: tempId,
+      senderId: currentUser.uid,
+      receiverId: otherUserId,
+      message: `[Bài viết] ${attachment.title}`,
+      type: 'post_card',
+      postId: attachment.id,
+      postTitle: attachment.title,
+      postImage: attachment.image || '',
+      postType: attachment.type || 'lost',
+      read: false,
+      timestamp: Date.now()
+    };
+
+    setMessages((prev) => [...prev, cardMsg]);
+    playSoundEffect('chatSend');
+
+    (async () => {
+      try {
+        const chatDocRef = doc(db, 'chats', chatId);
+        const subMsgsRef = collection(db, 'chats', chatId, 'messages');
+        const notifRef = collection(db, 'notifications');
+
+        const [_, docRef] = await Promise.all([
+          setDoc(
+            chatDocRef,
+            {
+              participants: [currentUser.uid, otherUserId],
+              lastMessage: `[Bài viết] ${attachment.title}`,
+              lastTimestamp: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+              postId: attachment.id,
+              postTitle: attachment.title
+            },
+            { merge: true }
+          ),
+          addDoc(subMsgsRef, {
+            senderId: currentUser.uid,
+            receiverId: otherUserId,
+            text: `[Bài viết] ${attachment.title}`,
+            message: `[Bài viết] ${attachment.title}`,
+            type: 'post_card',
+            postId: attachment.id,
+            postTitle: attachment.title,
+            postImage: attachment.image || '',
+            postType: attachment.type || 'lost',
+            read: false,
+            timestamp: serverTimestamp()
+          })
+        ]);
+
+        if (docRef?.id) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === tempId
+                ? {
+                    ...m,
+                    id: docRef.id,
+                    timestamp: Date.now()
+                  }
+                : m
+            )
+          );
+        }
+
+        addDoc(notifRef, {
+          userId: otherUserId,
+          title: currentUser.displayName || 'Tin nhắn mới',
+          message: `[Bài viết] ${attachment.title}`,
+          type: 'chat',
+          senderId: currentUser.uid,
+          senderName: currentUser.displayName || 'Người dùng',
+          senderAvatar: currentUser.photoURL || '',
+          chatId,
+          postId: attachment.id,
+          createdAt: serverTimestamp(),
+          read: false
+        }).catch(() => {});
+      } catch (e) {
+        console.error('Error sending post card:', e);
+      }
+    })();
+  };
+
   const isMessageSeen = useCallback(
     (msg: ChatMessage): boolean => {
       if (!msg) return false;
@@ -1216,6 +1329,7 @@ export default function ChatRoomScreen() {
             const origIndex = messages.findIndex((m) => m.id === item.id);
             const isMe = item.senderId === auth.currentUser?.uid;
             const isCallMsg = item.type === 'call';
+            const isPostCardMsg = item.type === 'post_card';
             const isMissedOrRejected = isCallMsg && (!item.callDuration || item.callDuration === 0);
             const hasImage = item.imageUrl && typeof item.imageUrl === 'string' && item.imageUrl.trim() !== '';
             const position = getMessagePosition(origIndex, messages);
@@ -1226,7 +1340,7 @@ export default function ChatRoomScreen() {
 
             const lastReadSent = isLastReadSent(origIndex);
             const lastSent = isLastSent(origIndex);
-            const showMetaRow = isExpanded || (isMe && lastSent && !item.read) || (isMe && lastReadSent);
+            const showMetaRow = isExpanded || (isMe && (lastSent || lastReadSent));
 
             return (
               <View style={styles.msgItemContainer}>
@@ -1256,7 +1370,7 @@ export default function ChatRoomScreen() {
                     )}
 
                     <View style={isMe ? styles.bubbleColMe : styles.bubbleColOther}>
-                      {/* Call Card Message Rendering */}
+                      {/* 1. Call Card Message Rendering */}
                       {isCallMsg ? (() => {
                         const isMissed = isMissedOrRejected;
                         const isIncomingMissed = isMissed && !isMe; // they called me, I didn't answer → RED
@@ -1333,7 +1447,68 @@ export default function ChatRoomScreen() {
                             </TouchableOpacity>
                           </View>
                         );
-                      })() : (
+                      })() : isPostCardMsg ? (
+                        /* 2. TikTok Shop Style Post Item Card Rendering */
+                        <View style={[
+                          styles.postCardBubble,
+                          isMe ? styles.postCardBubbleMe : styles.postCardBubbleOther,
+                          borderRadiusStyle
+                        ]}>
+                          <View style={styles.postCardHeaderRow}>
+                            <Ionicons name="pricetag" size={13} color={isMe ? '#FFFFFF' : '#059669'} />
+                            <Text style={[styles.postCardHeaderLabel, isMe && { color: '#FFFFFF' }]}>
+                              Bài viết quan tâm
+                            </Text>
+                            <View style={[styles.postCardTypeBadge, item.postType === 'found' ? styles.badgeFound : styles.badgeLost]}>
+                              <Text style={[styles.postCardTypeBadgeText, item.postType === 'found' ? styles.badgeFoundText : styles.badgeLostText]}>
+                                {item.postType === 'found' ? 'Nhặt được' : 'Thất lạc'}
+                              </Text>
+                            </View>
+                          </View>
+
+                          <View style={styles.postCardBodyRow}>
+                            {item.postImage ? (
+                              <Image source={{ uri: item.postImage }} style={styles.postCardImage} />
+                            ) : (
+                              <View style={styles.postCardImagePlaceholder}>
+                                <Ionicons name="newspaper-outline" size={24} color="#64748B" />
+                              </View>
+                            )}
+                            <View style={styles.postCardInfoCol}>
+                              <Text style={[styles.postCardTitle, isMe && { color: '#FFFFFF' }]} numberOfLines={2}>
+                                {item.postTitle || item.message.replace('[Bài viết] ', '')}
+                              </Text>
+                              {item.postId ? (
+                                <Text style={[styles.postCardIdText, isMe && { color: 'rgba(255,255,255,0.8)' }]}>
+                                  Mã: #{item.postId.slice(-6).toUpperCase()}
+                                </Text>
+                              ) : null}
+                            </View>
+                          </View>
+
+                          <TouchableOpacity
+                            style={[
+                              styles.postCardActionButton,
+                              isMe ? styles.postCardActionButtonMe : styles.postCardActionButtonOther
+                            ]}
+                            onPress={() => {
+                              if (item.postId) {
+                                router.push(`/post/${item.postId}`);
+                              }
+                            }}
+                            activeOpacity={0.85}
+                          >
+                            <Text style={[
+                              styles.postCardActionButtonText,
+                              isMe ? styles.postCardActionButtonTextMe : styles.postCardActionButtonTextOther
+                            ]}>
+                              Xem chi tiết bài viết
+                            </Text>
+                            <Ionicons name="chevron-forward" size={14} color={isMe ? '#0084FF' : '#059669'} />
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        /* 3. Normal Text / Image Bubble Rendering */
                         <>
                           {/* Messenger Style Reply Header + Quoted Bubble */}
                           {item.replyToText ? (
@@ -1474,6 +1649,52 @@ export default function ChatRoomScreen() {
             </TouchableOpacity>
           </View>
         ) : null}
+
+        {/* Floating TikTok Shop Style Post Attachment Bar */}
+        {pendingPostAttachment && (
+          <View style={styles.pendingAttachmentBar}>
+            <View style={styles.pendingAttachmentContent}>
+              {pendingPostAttachment.image ? (
+                <Image source={{ uri: pendingPostAttachment.image }} style={styles.pendingAttachmentThumb} />
+              ) : (
+                <View style={styles.pendingAttachmentThumbPlaceholder}>
+                  <Ionicons name="newspaper-outline" size={18} color="#059669" />
+                </View>
+              )}
+              <View style={styles.pendingAttachmentTextCol}>
+                <View style={styles.pendingAttachmentHeaderRow}>
+                  <Text style={styles.pendingAttachmentLabel}>Bài viết bạn vừa mở</Text>
+                  <View style={[styles.postCardTypeBadgeMini, pendingPostAttachment.type === 'found' ? styles.badgeFound : styles.badgeLost]}>
+                    <Text style={[styles.postCardTypeBadgeTextMini, pendingPostAttachment.type === 'found' ? styles.badgeFoundText : styles.badgeLostText]}>
+                      {pendingPostAttachment.type === 'found' ? 'Nhặt được' : 'Thất lạc'}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.pendingAttachmentTitle} numberOfLines={1}>
+                  {pendingPostAttachment.title}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.pendingAttachmentActions}>
+              <TouchableOpacity
+                style={styles.sendAttachmentBtn}
+                onPress={handleSendPostCard}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="send" size={12} color="#FFFFFF" style={{ marginRight: 4 }} />
+                <Text style={styles.sendAttachmentBtnText}>Gửi thẻ</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.closeAttachmentBtn}
+                onPress={() => setPendingPostAttachment(null)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="close" size={18} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         {/* Messenger Style Input Bar */}
         <View style={[styles.inputBarContainer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
@@ -2178,5 +2399,210 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: '#64748B',
+  },
+
+  // TikTok Shop Style Post Item Card in Message Stream
+  postCardBubble: {
+    width: 250,
+    padding: 12,
+    borderRadius: 18,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  postCardBubbleMe: {
+    backgroundColor: '#0084FF',
+  },
+  postCardBubbleOther: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  postCardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  postCardHeaderLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#059669',
+    marginLeft: 4,
+    flex: 1,
+  },
+  postCardTypeBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  postCardTypeBadgeMini: {
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+    marginLeft: 6,
+  },
+  badgeLost: {
+    backgroundColor: '#FEE2E2',
+  },
+  badgeLostText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  badgeFound: {
+    backgroundColor: '#DCFCE7',
+  },
+  badgeFoundText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#16A34A',
+  },
+  postCardTypeBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  postCardTypeBadgeTextMini: {
+    fontSize: 9,
+    fontWeight: '700',
+  },
+  postCardBodyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  postCardImage: {
+    width: 54,
+    height: 54,
+    borderRadius: 10,
+    backgroundColor: '#E2E8F0',
+    marginRight: 10,
+  },
+  postCardImagePlaceholder: {
+    width: 54,
+    height: 54,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  postCardInfoCol: {
+    flex: 1,
+  },
+  postCardTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    lineHeight: 18,
+  },
+  postCardIdText: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  postCardActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+  },
+  postCardActionButtonMe: {
+    backgroundColor: '#FFFFFF',
+  },
+  postCardActionButtonOther: {
+    backgroundColor: '#F1F5F9',
+  },
+  postCardActionButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginRight: 4,
+  },
+  postCardActionButtonTextMe: {
+    color: '#0084FF',
+  },
+  postCardActionButtonTextOther: {
+    color: '#0F172A',
+  },
+
+  // Floating TikTok Shop Attachment Preview Bar above Input Box
+  pendingAttachmentBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  pendingAttachmentContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 10,
+  },
+  pendingAttachmentThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    backgroundColor: '#E2E8F0',
+    marginRight: 10,
+  },
+  pendingAttachmentThumbPlaceholder: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    backgroundColor: '#ECFDF5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  pendingAttachmentTextCol: {
+    flex: 1,
+  },
+  pendingAttachmentHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  pendingAttachmentLabel: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  pendingAttachmentTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  pendingAttachmentActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  sendAttachmentBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#059669',
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    marginRight: 8,
+  },
+  sendAttachmentBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  closeAttachmentBtn: {
+    padding: 4,
   },
 });

@@ -54,8 +54,12 @@ export interface ChatMessage {
   senderId: string;
   receiverId: string;
   postId?: string;
+  postTitle?: string;
+  postImage?: string;
+  postType?: 'lost' | 'found' | string;
+  postCategory?: string;
   message: string;
-  type?: 'text' | 'image' | 'call';
+  type?: 'text' | 'image' | 'call' | 'post_card';
   callType?: 'voice' | 'video';
   callDuration?: number;
   callStatus?: 'ended' | 'missed' | 'rejected';
