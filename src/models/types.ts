@@ -27,9 +27,11 @@ export interface Post {
 export interface User {
   uid: string;
   name: string;
+  fullName?: string;
   email: string;
   phone?: string;
   avatarUrl?: string;
+  photoUrl?: string;
   points?: number;
   reputationScore?: number;
   resolvedCount?: number;
@@ -93,7 +95,12 @@ export interface Transaction {
   userId: string;
   amount: number;
   type: 'reward' | 'voucher' | 'deposit' | 'withdraw';
+  title?: string;
   description: string;
+  code?: string;
+  brand?: string;
+  discount?: string;
+  expiryDate?: string;
   timestamp?: Timestamp | any;
 }
 
@@ -106,4 +113,33 @@ export interface MatchResult {
   locationScore: number;
   distanceKm?: number;
   reasons?: string[];
+}
+
+export type VoucherCategory = 'ALL' | 'FOOD_BEVERAGE' | 'TRANSPORT' | 'SHOPPING' | 'ENTERTAINMENT' | 'SERVICES';
+
+export interface VoucherItem {
+  id: string;
+  title: string;
+  brand: string;
+  pointsCost: number;
+  discount: string;
+  icon?: string;
+  code: string;
+  image?: any;
+  category?: VoucherCategory;
+  remainingCount?: number;
+  expiryDate?: string;
+}
+
+export interface UserVoucher {
+  id: string;
+  voucherId: string;
+  title: string;
+  brand: string;
+  code: string;
+  discount: string;
+  pointsCost: number;
+  redeemedAt: any;
+  expiryDate: string;
+  status: 'active' | 'used' | 'expired';
 }
