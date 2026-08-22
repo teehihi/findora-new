@@ -10,6 +10,8 @@ interface HeaderBarProps {
   onBackPress?: () => void;
   rightAction?: React.ReactNode;
   subtitle?: string;
+  backgroundColor?: string;
+  style?: any;
 }
 
 export const HeaderBar: React.FC<HeaderBarProps> = ({
@@ -17,12 +19,14 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   showBack = false,
   onBackPress,
   rightAction,
-  subtitle
+  subtitle,
+  backgroundColor,
+  style,
 }) => {
   const router = useRouter();
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, backgroundColor ? { backgroundColor } : null, style]}>
       <View style={styles.leftRow}>
         {showBack && (
           <TouchableOpacity 
