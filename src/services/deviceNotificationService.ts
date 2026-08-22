@@ -33,14 +33,16 @@ export async function initializeDeviceNotifications(): Promise<boolean> {
     }
 
     if (Platform.OS === 'android' && typeof NotificationsModule.setNotificationChannelAsync === 'function') {
-      // Channel 1: Messages (Chat incoming)
+      // Channel 1: Messages (Chat incoming) - High Priority with vibration & lights
       await NotificationsModule.setNotificationChannelAsync('messages', {
         name: 'Tin nhắn',
         importance: NotificationsModule.AndroidImportance?.MAX ?? 5,
         vibrationPattern: [0, 250, 250, 250],
         lightColor: '#10B981',
         showBadge: true,
-      });
+        enableLights: true,
+        enableVibrate: true,
+      }).catch(() => {});
 
       // Channel 2: General Notifications (AI Match, Like, Comment, Points, System)
       await NotificationsModule.setNotificationChannelAsync('general', {
@@ -49,7 +51,9 @@ export async function initializeDeviceNotifications(): Promise<boolean> {
         vibrationPattern: [0, 250, 250, 250],
         lightColor: '#3B82F6',
         showBadge: true,
-      });
+        enableLights: true,
+        enableVibrate: true,
+      }).catch(() => {});
     }
 
     if (typeof NotificationsModule.getPermissionsAsync === 'function') {
@@ -94,6 +98,10 @@ export async function triggerDeviceNotification({
 
     if (Platform.OS === 'web' || !NotificationsModule) return;
 
+    const isChat = type === 'chat';
+    const soundFile = isChat ? 'chat_noti_sound.mp3' : 'sound_noti.mp3';
+    const channelId = isChat ? 'messages' : 'general';
+
     // 2. Schedule immediate system notification
     if (typeof NotificationsModule.scheduleNotificationAsync === 'function') {
       await NotificationsModule.scheduleNotificationAsync({
@@ -106,9 +114,12 @@ export async function triggerDeviceNotification({
           },
           sound: true,
           priority: NotificationsModule.AndroidNotificationPriority?.MAX ?? 'max',
+          categoryIdentifier: channelId,
         },
-        trigger: null, // show immediately
-      });
+        trigger: {
+          channelId,
+        } as any,
+      }).catch(() => {});
     }
   } catch (error) {
     console.log('Notice: Trigger device notification notice:', error);

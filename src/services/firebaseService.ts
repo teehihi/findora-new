@@ -20,8 +20,9 @@ import {
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import * as Location from 'expo-location';
+import * as FileSystem from 'expo-file-system';
 import { auth, db, storage } from '../config/firebase';
-import { Post, User, Comment, Notification, Transaction, ChatMessage } from '../models/types';
+import { Post, User, Comment, Notification, Transaction, ChatMessage, VoucherItem } from '../models/types';
 
 // ==================== LOCATION & REVERSE GEOCODING ====================
 
@@ -415,27 +416,123 @@ export async function markAllNotificationsAsRead(userId: string): Promise<void> 
 export async function fetchUserTransactions(userId: string): Promise<Transaction[]> {
   if (!userId) return [];
   try {
-    const txRef = collection(db, 'transactions');
-    const q = query(txRef, where('userId', '==', userId));
-    const snapshot = await getDocs(q);
     const list: Transaction[] = [];
 
-    snapshot.forEach((docSnap) => {
-      const data = docSnap.data();
-      list.push({
-        id: docSnap.id,
-        userId: data.userId,
-        amount: data.amount || 0,
-        type: data.type || 'reward',
-        description: data.description || '',
-        timestamp: data.timestamp
+    // 1. Fetch from 'transactions' collection
+    try {
+      const txRef = collection(db, 'transactions');
+      const q = query(txRef, where('userId', '==', userId));
+      const snapshot = await getDocs(q);
+
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        const typeStr = (data.type || '').toLowerCase();
+        const isSpend = typeStr === 'spend' || typeStr === 'voucher' || (data.amount !== undefined && data.amount < 0);
+
+        // Extract positive number of points from whichever field exists in Firestore
+        let rawPoints = 0;
+        if (data.amount !== undefined && data.amount !== null && data.amount !== 0) {
+          rawPoints = Math.abs(data.amount);
+        } else if (data.points !== undefined && data.points !== null) {
+          rawPoints = Math.abs(data.points);
+        } else if (data.pointsSpent !== undefined && data.pointsSpent !== null) {
+          rawPoints = Math.abs(data.pointsSpent);
+        } else if (data.pointsCost !== undefined && data.pointsCost !== null) {
+          rawPoints = Math.abs(data.pointsCost);
+        } else if (data.rewardPoints !== undefined && data.rewardPoints !== null) {
+          rawPoints = Math.abs(data.rewardPoints);
+        }
+
+        // Extract separate Title and Description
+        let itemTitle = data.title || '';
+        let itemDesc = data.description || '';
+
+        if (!itemTitle && itemDesc) {
+          if (itemDesc.includes(' - ')) {
+            const parts = itemDesc.split(' - ');
+            itemTitle = parts[0];
+            itemDesc = parts.slice(1).join(' - ');
+          } else {
+            itemTitle = isSpend ? 'Đổi voucher ưu đãi' : 'Thưởng điểm Findo';
+          }
+        } else if (!itemTitle && !itemDesc) {
+          itemTitle = isSpend ? 'Đổi voucher ưu đãi' : 'Thưởng điểm Findo';
+          itemDesc = isSpend ? 'Đổi quà thành công' : 'Đóng góp cho cộng đồng';
+        } else if (itemTitle && !itemDesc) {
+          itemDesc = isSpend ? 'Đổi quà thành công' : 'Trả lại đồ thất lạc cho chủ nhân';
+        }
+
+        if (itemTitle === itemDesc) {
+          itemTitle = isSpend ? 'Đổi voucher ưu đãi' : 'Thưởng trả đồ thất lạc';
+        }
+
+        const signedAmount = isSpend ? -rawPoints : rawPoints;
+
+        list.push({
+          id: docSnap.id,
+          userId: data.userId,
+          amount: signedAmount,
+          type: isSpend ? 'voucher' : 'reward',
+          title: itemTitle,
+          description: itemDesc,
+          code: data.code || data.voucherCode || (isSpend ? `FINDORA_${docSnap.id.substring(0, 6).toUpperCase()}` : undefined),
+          brand: data.brand || data.brandName,
+          discount: data.discount,
+          expiryDate: data.expiryDate,
+          timestamp: data.timestamp || data.createdAt,
+        });
       });
-    });
+    } catch (err) {
+      console.log('Error fetching transactions collection:', err);
+    }
+
+    // 2. Fetch from 'user_vouchers' collection to guarantee voucher redemptions are captured
+    try {
+      const uvRef = collection(db, 'user_vouchers');
+      const uvQ = query(uvRef, where('userId', '==', userId));
+      const uvSnap = await getDocs(uvQ);
+
+      uvSnap.forEach((docSnap) => {
+        const data = docSnap.data();
+        const voucherName = data.voucherName || data.title || 'Voucher ưu đãi';
+        const brandName = data.brandName || data.brand || '';
+        const itemTitle = brandName ? `Đổi voucher ${brandName}` : 'Đổi voucher';
+        const itemDesc = voucherName;
+
+        const alreadyInList = list.some(
+          (t) => t.id === docSnap.id || (t.type === 'voucher' && voucherName && (t.description?.includes(voucherName) || t.title?.includes(voucherName)))
+        );
+        if (!alreadyInList) {
+          const rawCost = data.pointsSpent || data.pointsCost || data.points || 0;
+          list.push({
+            id: `voucher_${docSnap.id}`,
+            userId: data.userId,
+            amount: -Math.abs(rawCost),
+            type: 'voucher',
+            title: itemTitle,
+            description: itemDesc,
+            code: data.voucherCode || data.code || `FINDORA_${docSnap.id.substring(0, 6).toUpperCase()}`,
+            brand: data.brandName || data.brand,
+            discount: data.discount || 'Ưu đãi đặc quyền',
+            expiryDate: data.expiryDate || '31/12/2026',
+            timestamp: data.redeemedAt || data.timestamp || data.createdAt,
+          });
+        }
+      });
+    } catch (err) {
+      console.log('Error fetching user_vouchers for transactions:', err);
+    }
 
     list.sort((a, b) => {
-      const tA = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : (a.timestamp?.seconds ? a.timestamp.seconds * 1000 : 0);
-      const tB = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : (b.timestamp?.seconds ? b.timestamp.seconds * 1000 : 0);
-      return tB - tA;
+      const getMs = (t: any) => {
+        if (!t) return 0;
+        if (t.toDate && typeof t.toDate === 'function') return t.toDate().getTime();
+        if (t.seconds) return t.seconds * 1000;
+        if (typeof t === 'number') return t;
+        if (typeof t === 'string') return new Date(t).getTime();
+        return 0;
+      };
+      return getMs(b.timestamp) - getMs(a.timestamp);
     });
 
     return list;
@@ -447,15 +544,16 @@ export async function fetchUserTransactions(userId: string): Promise<Transaction
 
 // ==================== VOUCHERS ====================
 
-export interface VoucherItem {
-  id: string;
-  title: string;
-  brand: string;
-  pointsCost: number;
-  discount: string;
-  icon: string;
-  code?: string;
-}
+export const VOUCHER_IMAGES: Record<string, any> = {
+  '1': require('../../assets/vouchers/greensm_xanhwin.png'),
+  'XANH_SM': require('../../assets/vouchers/greensm_xanhwin.png'),
+  '2': require('../../assets/vouchers/highland_1uy1get1.png'),
+  'HIGHLANDS': require('../../assets/vouchers/highland_1uy1get1.png'),
+  '3': require('../../assets/vouchers/thecfhouse_donggia39.png'),
+  'COFFEE_HOUSE': require('../../assets/vouchers/thecfhouse_donggia39.png'),
+  '4': require('../../assets/vouchers/jollibee_15per.png'),
+  'JOLLIBEE': require('../../assets/vouchers/jollibee_15per.png'),
+};
 
 export async function fetchVouchers(): Promise<VoucherItem[]> {
   try {
@@ -465,6 +563,7 @@ export async function fetchVouchers(): Promise<VoucherItem[]> {
       const list: VoucherItem[] = [];
       snapshot.forEach((docSnap) => {
         const data = docSnap.data();
+        const brandKey = (data.brand || '').toUpperCase().replace(/\s+/g, '_');
         list.push({
           id: docSnap.id,
           title: data.title || 'Voucher Ưu Đãi',
@@ -472,7 +571,11 @@ export async function fetchVouchers(): Promise<VoucherItem[]> {
           pointsCost: data.pointsCost || data.points || 50,
           discount: data.discount || 'Ưu đãi đặc biệt',
           icon: data.icon || 'gift',
-          code: data.code || 'FINDORA_VIP'
+          code: data.code || 'FINDORA_VIP',
+          image: VOUCHER_IMAGES[docSnap.id] || VOUCHER_IMAGES[brandKey] || VOUCHER_IMAGES['1'],
+          category: (data.category as any) || 'FOOD_BEVERAGE',
+          remainingCount: data.remainingCount || 10,
+          expiryDate: data.expiryDate || '31/12/2026'
         });
       });
       return list;
@@ -481,7 +584,7 @@ export async function fetchVouchers(): Promise<VoucherItem[]> {
     console.log('Fetching Firestore vouchers fallback to catalog:', e);
   }
 
-  // Brand Catalog Fallback matching native VoucherMarketActivity.java lines 143-178
+  // Industry Catalog Fallback (Ăn uống, Đi lại, Mua sắm, ...)
   return [
     {
       id: '1',
@@ -490,7 +593,11 @@ export async function fetchVouchers(): Promise<VoucherItem[]> {
       pointsCost: 20,
       discount: 'Giảm 25% chuyến đi',
       icon: 'car',
-      code: 'XANHWIN'
+      code: 'XANHWIN',
+      image: VOUCHER_IMAGES['1'],
+      category: 'TRANSPORT',
+      remainingCount: 15,
+      expiryDate: '31/12/2026'
     },
     {
       id: '2',
@@ -499,7 +606,11 @@ export async function fetchVouchers(): Promise<VoucherItem[]> {
       pointsCost: 30,
       discount: 'Mua 1 tặng 1',
       icon: 'cafe',
-      code: 'BUY1GET1'
+      code: 'BUY1GET1',
+      image: VOUCHER_IMAGES['2'],
+      category: 'FOOD_BEVERAGE',
+      remainingCount: 20,
+      expiryDate: '31/12/2026'
     },
     {
       id: '3',
@@ -508,7 +619,11 @@ export async function fetchVouchers(): Promise<VoucherItem[]> {
       pointsCost: 50,
       discount: 'Đồng giá 39k',
       icon: 'cafe',
-      code: 'DONGIA39'
+      code: 'DONGIA39',
+      image: VOUCHER_IMAGES['3'],
+      category: 'FOOD_BEVERAGE',
+      remainingCount: 25,
+      expiryDate: '31/12/2026'
     },
     {
       id: '4',
@@ -517,9 +632,67 @@ export async function fetchVouchers(): Promise<VoucherItem[]> {
       pointsCost: 80,
       discount: 'Giảm 15% menu',
       icon: 'restaurant',
-      code: 'JOLLI15PER'
+      code: 'JOLLI15PER',
+      image: VOUCHER_IMAGES['4'],
+      category: 'FOOD_BEVERAGE',
+      remainingCount: 30,
+      expiryDate: '31/12/2026'
     }
   ];
+}
+
+export async function redeemVoucher(userId: string, voucher: VoucherItem): Promise<{ success: boolean; code?: string; message?: string }> {
+  try {
+    const userRef = doc(db, 'users', userId);
+    const userSnap = await getDoc(userRef);
+    if (!userSnap.exists()) return { success: false, message: 'Không tìm thấy thông tin người dùng.' };
+
+    const currentPoints = userSnap.data()?.points || 0;
+    if (currentPoints < voucher.pointsCost) {
+      return { success: false, message: 'Bạn không đủ điểm Findo để đổi voucher này.' };
+    }
+
+    const voucherCode = voucher.code || `FINDORA_${Math.floor(100000 + Math.random() * 900000)}`;
+
+    // 1. Preserve highest level so user is NEVER demoted when spending points
+    const existingLevel = userSnap.data()?.level;
+    const currentPointsLevel = getLevelFromPoints(currentPoints);
+    const lockedLevel = existingLevel || currentPointsLevel;
+
+    // 2. Deduct points & lock user level
+    await updateDoc(userRef, {
+      points: increment(-voucher.pointsCost),
+      level: lockedLevel,
+    });
+
+    // 2. Add to user_vouchers collection
+    await addDoc(collection(db, 'user_vouchers'), {
+      userId,
+      voucherId: voucher.id,
+      title: voucher.title,
+      brand: voucher.brand,
+      code: voucherCode,
+      discount: voucher.discount,
+      pointsCost: voucher.pointsCost,
+      status: 'active',
+      redeemedAt: serverTimestamp(),
+      expiryDate: voucher.expiryDate || '31/12/2026'
+    });
+
+    // 3. Create transaction history record
+    await addDoc(collection(db, 'transactions'), {
+      userId,
+      amount: -voucher.pointsCost,
+      type: 'voucher',
+      description: `Đổi voucher ${voucher.brand} - ${voucher.title}`,
+      timestamp: serverTimestamp()
+    }).catch(() => {});
+
+    return { success: true, code: voucherCode };
+  } catch (error: any) {
+    console.error('Error redeeming voucher:', error);
+    return { success: false, message: error.message || 'Lỗi xử lý đổi voucher' };
+  }
 }
 
 // ==================== USERS & PROFILE ====================
@@ -766,33 +939,175 @@ export async function uploadImageToStorage(uri: string, path: string): Promise<s
   return await getDownloadURL(storageRef);
 }
 
+export async function uploadAvatarImage(uri: string, userId: string): Promise<string> {
+  const candidatePaths = [
+    `images/${userId}/${Date.now()}.jpg`,
+    `post_images/${userId}_avatar_${Date.now()}.jpg`,
+    `avatars/${userId}/${Date.now()}.jpg`,
+  ];
+
+  for (const path of candidatePaths) {
+    try {
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      const storageRef = ref(storage, path);
+      const metadata = { contentType: 'image/jpeg' };
+      await uploadBytes(storageRef, blob, metadata);
+      return await getDownloadURL(storageRef);
+    } catch (err: any) {
+      console.log(`Notice: Upload to ${path} failed:`, err?.code || err?.message);
+    }
+  }
+
+  // Resilient fallback: Convert to Base64 data URI if Firebase Storage security rules reject all write paths
+  try {
+    const base64 = await FileSystem.readAsStringAsync(uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    return `data:image/jpeg;base64,${base64}`;
+  } catch (fsErr) {
+    console.log('Notice: Base64 fallback notice:', fsErr);
+    return uri;
+  }
+}
+
 // ==================== LEADERBOARD ====================
 
-export async function fetchLeaderboard(): Promise<User[]> {
+const LEVEL_WEIGHTS: Record<string, number> = {
+  'Huyền thoại': 4,
+  'Thiên thần': 3,
+  'Người tốt': 2,
+  'Người mới': 1,
+  'Tập sự': 1,
+};
+
+function sortLeaderboardUsers(a: User, b: User): number {
+  const ptsA = a.points || 0;
+  const ptsB = b.points || 0;
+  if (ptsB !== ptsA) {
+    return ptsB - ptsA;
+  }
+  // If points are equal or 0, prioritize users with higher level/rank:
+  const weightA = LEVEL_WEIGHTS[a.level || ''] || LEVEL_WEIGHTS[a.levelBadge || ''] || 0;
+  const weightB = LEVEL_WEIGHTS[b.level || ''] || LEVEL_WEIGHTS[b.levelBadge || ''] || 0;
+  if (weightB !== weightA) {
+    return weightB - weightA;
+  }
+  // Secondary tiebreaker: resolved cases count
+  const resA = a.resolvedCount || 0;
+  const resB = b.resolvedCount || 0;
+  if (resB !== resA) {
+    return resB - resA;
+  }
+  return (a.name || '').localeCompare(b.name || '');
+}
+
+export async function fetchLeaderboard(timeframe: 'WEEK' | 'MONTH' | 'ALL' = 'ALL'): Promise<User[]> {
   try {
     const usersRef = collection(db, 'users');
-    const q = query(usersRef, orderBy('points', 'desc'), limit(20));
-    const snapshot = await getDocs(q);
+    const snapshot = await getDocs(usersRef);
     const leaderboard: User[] = [];
 
     snapshot.forEach((docSnap) => {
       const data = docSnap.data();
-      const level = data.level || getLevelFromPoints(data.points || 0);
+      const rawPoints = data.points !== undefined && data.points !== null ? Number(data.points) : 0;
+      const level = data.level || getLevelFromPoints(rawPoints);
       const returnedCount = data.totalReturned ?? data.resolvedCount ?? 0;
       leaderboard.push({
         uid: docSnap.id,
-        name: data.name || data.fullName || 'User',
+        name: data.name || data.fullName || (data.email ? data.email.split('@')[0] : 'Người dùng Findora'),
         email: data.email || '',
         avatarUrl: data.avatarUrl || data.photoUrl || '',
-        points: data.points || 0,
+        points: rawPoints,
         reputationScore: data.reputationScore || 100,
         resolvedCount: returnedCount,
         level: level,
-        levelBadge: level
+        levelBadge: level,
       });
     });
 
-    return leaderboard;
+    if (timeframe === 'ALL') {
+      return leaderboard.sort(sortLeaderboardUsers);
+    }
+
+    // For WEEK or MONTH: calculate exact earned points in that timeframe
+    try {
+      const days = timeframe === 'WEEK' ? 7 : 30;
+      const thresholdTime = Date.now() - days * 24 * 60 * 60 * 1000;
+      const userEarnedMap = new Map<string, number>();
+
+      // 1. Check current authenticated user's real transactions (allowed by security rules)
+      if (auth.currentUser) {
+        try {
+          const myTxRef = collection(db, 'transactions');
+          const myTxQ = query(myTxRef, where('userId', '==', auth.currentUser.uid));
+          const myTxSnap = await getDocs(myTxQ);
+          let myPointsInTimeframe = 0;
+
+          myTxSnap.forEach((doc) => {
+            const d = doc.data();
+            const pts = Math.abs(d.points || d.amount || d.rewardPoints || 0);
+            const typeStr = (d.type || '').toLowerCase();
+            const isEarn = typeStr === 'reward' || typeStr === 'earn' || (d.amount !== undefined && d.amount > 0);
+
+            if (isEarn && pts > 0) {
+              let txMs = 0;
+              if (d.timestamp?.toDate) txMs = d.timestamp.toDate().getTime();
+              else if (d.timestamp?.seconds) txMs = d.timestamp.seconds * 1000;
+              else if (d.createdAt?.toDate) txMs = d.createdAt.toDate().getTime();
+              else if (d.createdAt?.seconds) txMs = d.createdAt.seconds * 1000;
+              else if (typeof d.timestamp === 'number') txMs = d.timestamp;
+
+              if (txMs >= thresholdTime) {
+                myPointsInTimeframe += pts;
+              }
+            }
+          });
+
+          userEarnedMap.set(auth.currentUser.uid, myPointsInTimeframe);
+        } catch (txErr) {
+          console.log('Notice: My transactions query notice:', txErr);
+        }
+      }
+
+      // 2. Check public resolved posts in that timeframe
+      try {
+        const postsRef = collection(db, 'posts');
+        const postsSnap = await getDocs(postsRef);
+
+        postsSnap.forEach((doc) => {
+          const d = doc.data();
+          const helperId = d.resolvedBy || d.helperId;
+          const status = (d.status || '').toLowerCase();
+
+          if (helperId && (status === 'resolved' || status === 'returned' || d.resolvedAt)) {
+            let resMs = 0;
+            if (d.resolvedAt?.toDate) resMs = d.resolvedAt.toDate().getTime();
+            else if (d.resolvedAt?.seconds) resMs = d.resolvedAt.seconds * 1000;
+            else if (d.updatedAt?.toDate) resMs = d.updatedAt.toDate().getTime();
+            else if (d.updatedAt?.seconds) resMs = d.updatedAt.seconds * 1000;
+
+            if (resMs >= thresholdTime) {
+              const rPts = Number(d.rewardPoints) || 50;
+              userEarnedMap.set(helperId, (userEarnedMap.get(helperId) || 0) + rPts);
+            }
+          }
+        });
+      } catch (postsErr) {
+        console.log('Notice: Resolved posts query notice:', postsErr);
+      }
+
+      return leaderboard
+        .map((u) => ({
+          ...u,
+          points: userEarnedMap.get(u.uid) || 0,
+        }))
+        .sort(sortLeaderboardUsers);
+    } catch (err) {
+      console.log('Error calculating timeframe points:', err);
+    }
+
+    return leaderboard.sort(sortLeaderboardUsers);
   } catch (error) {
     console.error('Error fetching leaderboard:', error);
     return [];

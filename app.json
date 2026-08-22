@@ -81,10 +81,25 @@
         }
       ],
       "expo-audio",
-      "expo-notifications"
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/favicon.png",
+          "color": "#10B981",
+          "sounds": [
+            "./assets/sounds/chat_noti_sound.mp3",
+            "./assets/sounds/sound_noti.mp3"
+          ]
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "findora-138a7"
+      }
     }
   }
 }

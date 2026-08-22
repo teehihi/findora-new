@@ -19,11 +19,23 @@ const SOUND_SOURCES = {
 
 export type SoundEffect = keyof typeof SOUND_SOURCES;
 
+let lastNotificationSoundTime = 0;
+const NOTIFICATION_SOUND_COOLDOWN_MS = 3000; // 3-second cooldown to avoid noisy overlapping sounds
+
 /**
  * Play app sound effects (chat send, like, incoming notification)
  */
 export async function playSoundEffect(effect: SoundEffect): Promise<void> {
   if (Platform.OS === 'web') return;
+
+  // Throttle notification sounds so multiple simultaneous notifications don't make annoying repetitive noise
+  if (effect === 'chatNotification' || effect === 'generalNotification') {
+    const now = Date.now();
+    if (now - lastNotificationSoundTime < NOTIFICATION_SOUND_COOLDOWN_MS) {
+      return;
+    }
+    lastNotificationSoundTime = now;
+  }
 
   try {
     if (typeof createAudioPlayerFn !== 'function') return;

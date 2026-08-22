@@ -7,6 +7,7 @@ import {
   initializeDeviceNotifications, 
   triggerDeviceNotification 
 } from '../services/deviceNotificationService';
+import { registerPushToken } from '../services/pushNotificationService';
 
 let NotificationsModule: any = null;
 try {
@@ -63,6 +64,9 @@ export function GlobalNotificationListener() {
   useEffect(() => {
     const user = auth.currentUser;
     if (!user) return;
+
+    // Register Expo push token for background/killed state delivery
+    registerPushToken(user.uid);
 
     // 3. Realtime listener on Firestore notifications collection (matching native FirebaseMessagingService.java)
     let unsubscribe: (() => void) | null = null;

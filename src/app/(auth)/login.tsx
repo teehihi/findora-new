@@ -129,11 +129,16 @@ export default function LoginScreen() {
             createdAt: serverTimestamp()
           });
         } else {
-          // Always update Firestore with exact name and avatarUrl from Google
-          await updateDoc(userDocRef, {
-            name: realName,
-            avatarUrl: realAvatar
-          }).catch(() => {});
+          // If the user profile already exists, PRESERVE their customized name and avatar!
+          const existingData = userSnap.data();
+          const updatePayload: Record<string, any> = {};
+          if (!existingData.name) updatePayload.name = realName;
+          if (!existingData.avatarUrl && realAvatar) updatePayload.avatarUrl = realAvatar;
+          if (!existingData.email && user.email) updatePayload.email = user.email;
+
+          if (Object.keys(updatePayload).length > 0) {
+            await updateDoc(userDocRef, updatePayload).catch(() => {});
+          }
         }
 
         setGoogleLoading(false);

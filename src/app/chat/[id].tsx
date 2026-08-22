@@ -48,6 +48,7 @@ import { subscribeUserPresence } from '../../services/presenceService';
 import { playSoundEffect } from '../../services/soundService';
 import { CallStatus } from '../../models/callTypes';
 import { callManager } from '../../services/callManager';
+import { sendRemotePushNotification } from '../../services/pushNotificationService';
 
 type MessagePosition = 'SINGLE' | 'TOP' | 'MIDDLE' | 'BOTTOM';
 const MESSAGES_PAGE_SIZE = 25;
@@ -1187,7 +1188,7 @@ export default function ChatRoomScreen() {
           );
         }
 
-        // Send realtime notification in background
+        // Send realtime notification in background & trigger remote push
         addDoc(notifRef, {
           userId: otherUserId,
           title: currentUser.displayName || 'Tin nhắn mới',
@@ -1199,6 +1200,17 @@ export default function ChatRoomScreen() {
           chatId,
           createdAt: serverTimestamp(),
           read: false
+        }).catch(() => {});
+
+        sendRemotePushNotification({
+          targetUserId: otherUserId,
+          title: currentUser.displayName || 'Tin nhắn mới',
+          body: textToSend,
+          type: 'chat',
+          data: {
+            chatId,
+            senderId: currentUser.uid,
+          }
         }).catch(() => {});
       } catch (e) {
         console.error('Error sending message in background:', e);
@@ -1276,7 +1288,7 @@ export default function ChatRoomScreen() {
                 ? {
                     ...m,
                     id: docRef.id,
-                    timestamp: Date.now()
+                    timestamp: Date.now(),
                   }
                 : m
             )
@@ -1295,6 +1307,18 @@ export default function ChatRoomScreen() {
           postId: attachment.id,
           createdAt: serverTimestamp(),
           read: false
+        }).catch(() => {});
+
+        sendRemotePushNotification({
+          targetUserId: otherUserId,
+          title: currentUser.displayName || 'Tin nhắn mới',
+          body: `[Bài viết] ${attachment.title}`,
+          type: 'chat',
+          data: {
+            chatId,
+            senderId: currentUser.uid,
+            postId: attachment.id,
+          }
         }).catch(() => {});
       } catch (e) {
         console.error('Error sending post card:', e);
