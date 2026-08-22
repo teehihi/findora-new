@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { 
   View, 
   Text, 
@@ -14,7 +14,7 @@ import {
   Easing
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { signOut } from 'firebase/auth';
 import { doc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
@@ -42,14 +42,15 @@ export default function ProfileScreen() {
   const progressAnim = useRef(new Animated.Value(0)).current;
 
   const loadData = async () => {
-    if (currentUser) {
+    const user = auth.currentUser;
+    if (user) {
       try {
-        const userProf = await getUserProfile(currentUser.uid);
+        const userProf = await getUserProfile(user.uid);
         setProfile(userProf);
 
         // Fetch user active posts count exactly like native ProfileActivity.java
         const postsRef = collection(db, 'posts');
-        const qPosts = query(postsRef, where('userId', '==', currentUser.uid));
+        const qPosts = query(postsRef, where('userId', '==', user.uid));
         const postsSnap = await getDocs(qPosts);
         setPostsCount(postsSnap.size);
       } catch (e) {
@@ -58,9 +59,12 @@ export default function ProfileScreen() {
     }
   };
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  // Automatically refresh profile data every time the Profile screen gains focus
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [currentUser?.uid])
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);
