@@ -40,6 +40,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
+import MapView, { Marker } from 'react-native-maps';
 import { PhoneMissIcon, PhoneReceiveIcon, PhoneSendIcon, VideoReceiveIcon } from '../../components/CallIcons';
 import { ImageViewerModal } from '../../components/ImageViewerModal';
 import { InAppCallModal } from '../../components/InAppCallModal';
@@ -2014,12 +2015,45 @@ export default function ChatRoomScreen() {
                             borderRadiusStyle
                           ]}
                         >
-                          {/* Map Banner Illustration with Pin */}
+                          {/* Real Mini Map Preview with Location Pin */}
                           <View style={styles.locationMapBanner}>
-                            <View style={styles.locationPulseOuter}>
-                              <View style={styles.locationPulseInner} />
-                            </View>
-                            <Ionicons name="location" size={32} color="#EF4444" style={styles.locationPinIcon} />
+                            {item.location?.latitude != null && item.location?.longitude != null ? (
+                              <MapView
+                                style={StyleSheet.absoluteFill}
+                                initialRegion={{
+                                  latitude: item.location.latitude,
+                                  longitude: item.location.longitude,
+                                  latitudeDelta: 0.008,
+                                  longitudeDelta: 0.008,
+                                }}
+                                scrollEnabled={false}
+                                zoomEnabled={false}
+                                rotateEnabled={false}
+                                pitchEnabled={false}
+                                showsUserLocation={false}
+                                showsCompass={false}
+                                toolbarEnabled={false}
+                                liteMode={Platform.OS === 'android'}
+                                pointerEvents="none"
+                              >
+                                <Marker
+                                  coordinate={{
+                                    latitude: item.location.latitude,
+                                    longitude: item.location.longitude,
+                                  }}
+                                >
+                                  <View style={styles.miniMapPinWrapper}>
+                                    <Ionicons name="location" size={34} color="#EF4444" />
+                                  </View>
+                                </Marker>
+                              </MapView>
+                            ) : (
+                              <View style={styles.locationPulseOuter}>
+                                <View style={styles.locationPulseInner} />
+                                <Ionicons name="location" size={32} color="#EF4444" style={styles.locationPinIcon} />
+                              </View>
+                            )}
+
                             <View style={styles.locationLivePill}>
                               <Ionicons name="navigate" size={10} color="#FFFFFF" style={{ marginRight: 3 }} />
                               <Text style={styles.locationLivePillText}>Điểm hẹn gặp</Text>
@@ -3660,12 +3694,21 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   locationMapBanner: {
-    height: 110,
+    height: 125,
     backgroundColor: '#E0F2FE',
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+  },
+  miniMapPinWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
   },
   locationPulseOuter: {
     width: 64,
