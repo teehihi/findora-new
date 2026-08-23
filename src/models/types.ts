@@ -51,6 +51,13 @@ export interface Comment {
   createdAt?: Timestamp | any;
 }
 
+export interface LocationPayload {
+  latitude: number;
+  longitude: number;
+  address?: string;
+  name?: string;
+}
+
 export interface ChatMessage {
   id?: string;
   senderId: string;
@@ -61,7 +68,8 @@ export interface ChatMessage {
   postType?: 'lost' | 'found' | string;
   postCategory?: string;
   message: string;
-  type?: 'text' | 'image' | 'call' | 'post_card';
+  type?: 'text' | 'image' | 'call' | 'post_card' | 'location';
+  location?: LocationPayload;
   callType?: 'voice' | 'video';
   callDuration?: number;
   callStatus?: 'ended' | 'missed' | 'rejected';

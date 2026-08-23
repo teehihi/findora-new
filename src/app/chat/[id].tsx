@@ -8,6 +8,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  increment,
   limitToLast,
   onSnapshot,
   orderBy,
@@ -37,13 +38,17 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Location from 'expo-location';
+import * as ImagePicker from 'expo-image-picker';
 import { PhoneMissIcon, PhoneReceiveIcon, PhoneSendIcon, VideoReceiveIcon } from '../../components/CallIcons';
 import { ImageViewerModal } from '../../components/ImageViewerModal';
 import { InAppCallModal } from '../../components/InAppCallModal';
 import { IncomingCallModal } from '../../components/IncomingCallModal';
+import { NavigationMapModal } from '../../components/NavigationMapModal';
+import { FloatingMiniMap } from '../../components/FloatingMiniMap';
 import { auth, db } from '../../config/firebase';
-import { ChatMessage } from '../../models/types';
-import { fetchPostById, getLevelFromPoints, getPosterDetails } from '../../services/firebaseService';
+import { ChatMessage, LocationPayload } from '../../models/types';
+import { fetchPostById, getLevelFromPoints, getPosterDetails, uploadAvatarImage } from '../../services/firebaseService';
 import { subscribeUserPresence } from '../../services/presenceService';
 import { playSoundEffect } from '../../services/soundService';
 import { CallStatus } from '../../models/callTypes';
@@ -469,6 +474,16 @@ export default function ChatRoomScreen() {
 
   const [selectedMsgForAction, setSelectedMsgForAction] = useState<ChatMessage | null>(null);
   const [isDeleteConfirmVisible, setIsDeleteConfirmVisible] = useState<boolean>(false);
+
+  // Messenger '+' Action Menu & Location Navigation States
+  const [isActionMenuVisible, setIsActionMenuVisible] = useState<boolean>(false);
+  const [isNavModalVisible, setIsNavModalVisible] = useState<boolean>(false);
+  const [selectedNavDestination, setSelectedNavDestination] = useState<LocationPayload | null>(null);
+  const [miniMapVisible, setMiniMapVisible] = useState<boolean>(false);
+  const [miniMapUserLocation, setMiniMapUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [miniMapDistanceText, setMiniMapDistanceText] = useState<string>('');
+  const [miniMapDurationText, setMiniMapDurationText] = useState<string>('');
+  const [sendingLocation, setSendingLocation] = useState<boolean>(false);
 
   // Automatically fetch full post metadata & real image from Firestore
   useEffect(() => {
@@ -1326,6 +1341,285 @@ export default function ChatRoomScreen() {
     })();
   };
 
+  const handleSendLocation = async () => {
+    if (!otherUserId) return;
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+
+    try {
+      setSendingLocation(true);
+      setIsActionMenuVisible(false);
+
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setSendingLocation(false);
+        Alert.alert('Quyền vị trí', 'Vui lòng cấp quyền truy cập vị trí để gửi điểm hẹn cho đối phương.');
+        return;
+      }
+
+      const loc = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+
+      const userLat = loc.coords.latitude;
+      const userLng = loc.coords.longitude;
+
+      // Reverse geocode street address
+      let addressName = 'Vị trí hiện tại';
+      try {
+        const [geo] = await Location.reverseGeocodeAsync({
+          latitude: userLat,
+          longitude: userLng,
+        });
+        if (geo) {
+          const parts = [
+            geo.streetNumber,
+            geo.street,
+            (geo as any).ward || geo.district,
+            geo.subregion || geo.region || geo.city,
+          ].filter(Boolean);
+          if (parts.length > 0) {
+            addressName = parts.join(', ');
+          }
+        }
+      } catch (geoErr) {
+        console.log('Notice: Reverse geocode error:', geoErr);
+      }
+
+      const chatId = activeChatId || paramChatId || [currentUser.uid, otherUserId].sort().join('_');
+      const tempId = `temp_${Date.now()}`;
+      const locationPayload: LocationPayload = {
+        latitude: userLat,
+        longitude: userLng,
+        address: addressName,
+        name: 'Điểm hẹn gặp mặt',
+      };
+
+      const locMsg: ChatMessage = {
+        id: tempId,
+        senderId: currentUser.uid,
+        receiverId: otherUserId,
+        message: `📍 Điểm hẹn: ${addressName}`,
+        type: 'location',
+        location: locationPayload,
+        read: false,
+        timestamp: Date.now(),
+      };
+
+      setMessages((prev) => [...prev, locMsg]);
+      playSoundEffect('chatSend');
+      setSendingLocation(false);
+
+      // Save to Firestore in background
+      (async () => {
+        try {
+          const chatDocRef = doc(db, 'chats', chatId);
+          const messagesRef = collection(db, 'chats', chatId, 'messages');
+          const notifRef = collection(db, 'notifications');
+
+          const [docRef] = await Promise.all([
+            addDoc(messagesRef, {
+              senderId: currentUser.uid,
+              receiverId: otherUserId,
+              message: `📍 Điểm hẹn: ${addressName}`,
+              type: 'location',
+              location: locationPayload,
+              read: false,
+              timestamp: serverTimestamp(),
+            }),
+            setDoc(
+              chatDocRef,
+              {
+                participants: [currentUser.uid, otherUserId],
+                lastMessage: `📍 Điểm hẹn: ${addressName}`,
+                lastMessageTime: serverTimestamp(),
+                lastSenderId: currentUser.uid,
+                unreadCount: {
+                  [otherUserId]: increment(1),
+                },
+                deletedBy: [],
+              },
+              { merge: true }
+            ),
+          ]);
+
+          if (docRef?.id) {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === tempId ? { ...m, id: docRef.id, timestamp: Date.now() } : m
+              )
+            );
+          }
+
+          addDoc(notifRef, {
+            userId: otherUserId,
+            title: currentUser.displayName || 'Tin nhắn mới',
+            message: `📍 ${currentUser.displayName || 'Người dùng'} đã gửi vị trí điểm hẹn`,
+            type: 'chat',
+            senderId: currentUser.uid,
+            senderName: currentUser.displayName || 'Người dùng',
+            senderAvatar: currentUser.photoURL || '',
+            chatId,
+            createdAt: serverTimestamp(),
+            read: false,
+          }).catch(() => {});
+
+          sendRemotePushNotification({
+            targetUserId: otherUserId,
+            title: currentUser.displayName || 'Tin nhắn mới',
+            body: `📍 ${currentUser.displayName || 'Người dùng'} đã gửi vị trí điểm hẹn`,
+            type: 'chat',
+            data: {
+              chatId,
+              senderId: currentUser.uid,
+            },
+          }).catch(() => {});
+        } catch (e) {
+          console.error('Error sending location message:', e);
+        }
+      })();
+    } catch (err: any) {
+      setSendingLocation(false);
+      Alert.alert('Lỗi', err.message || 'Không thể lấy vị trí hiện tại.');
+    }
+  };
+
+  const handlePickCamera = async () => {
+    setIsActionMenuVisible(false);
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Quyền máy ảnh', 'Vui lòng cấp quyền camera để chụp ảnh gửi trong đoạn chat.');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets[0]?.uri) {
+        await sendImage(result.assets[0].uri);
+      }
+    } catch (e: any) {
+      Alert.alert('Lỗi', e.message || 'Không thể chụp ảnh.');
+    }
+  };
+
+  const handlePickImage = async () => {
+    setIsActionMenuVisible(false);
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Quyền thư viện ảnh', 'Vui lòng cấp quyền truy cập thư viện để chọn ảnh.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets[0]?.uri) {
+        await sendImage(result.assets[0].uri);
+      }
+    } catch (e: any) {
+      Alert.alert('Lỗi', e.message || 'Không thể chọn ảnh.');
+    }
+  };
+
+  const sendImage = async (localUri: string) => {
+    if (!otherUserId) return;
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+
+    const chatId = activeChatId || paramChatId || [currentUser.uid, otherUserId].sort().join('_');
+    const tempId = `temp_${Date.now()}`;
+
+    const imgMsg: ChatMessage = {
+      id: tempId,
+      senderId: currentUser.uid,
+      receiverId: otherUserId,
+      message: '[Hình ảnh]',
+      imageUrl: localUri,
+      type: 'image',
+      read: false,
+      timestamp: Date.now(),
+    };
+
+    setMessages((prev) => [...prev, imgMsg]);
+    playSoundEffect('chatSend');
+
+    try {
+      const uploadedUrl = await uploadAvatarImage(localUri, currentUser.uid);
+      const messagesRef = collection(db, 'chats', chatId, 'messages');
+      const chatDocRef = doc(db, 'chats', chatId);
+      const notifRef = collection(db, 'notifications');
+
+      const [docRef] = await Promise.all([
+        addDoc(messagesRef, {
+          senderId: currentUser.uid,
+          receiverId: otherUserId,
+          message: '[Hình ảnh]',
+          imageUrl: uploadedUrl,
+          type: 'image',
+          read: false,
+          timestamp: serverTimestamp(),
+        }),
+        setDoc(
+          chatDocRef,
+          {
+            participants: [currentUser.uid, otherUserId],
+            lastMessage: '[Hình ảnh]',
+            lastMessageTime: serverTimestamp(),
+            lastSenderId: currentUser.uid,
+            unreadCount: {
+              [otherUserId]: increment(1),
+            },
+            deletedBy: [],
+          },
+          { merge: true }
+        ),
+      ]);
+
+      if (docRef?.id) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === tempId ? { ...m, id: docRef.id, imageUrl: uploadedUrl, timestamp: Date.now() } : m
+          )
+        );
+      }
+
+      addDoc(notifRef, {
+        userId: otherUserId,
+        title: currentUser.displayName || 'Tin nhắn mới',
+        message: `[Hình ảnh] từ ${currentUser.displayName || 'Người dùng'}`,
+        type: 'chat',
+        senderId: currentUser.uid,
+        senderName: currentUser.displayName || 'Người dùng',
+        senderAvatar: currentUser.photoURL || '',
+        chatId,
+        createdAt: serverTimestamp(),
+        read: false,
+      }).catch(() => {});
+
+      sendRemotePushNotification({
+        targetUserId: otherUserId,
+        title: currentUser.displayName || 'Tin nhắn mới',
+        body: `[Hình ảnh] từ ${currentUser.displayName || 'Người dùng'}`,
+        type: 'chat',
+        data: {
+          chatId,
+          senderId: currentUser.uid,
+        },
+      }).catch(() => {});
+    } catch (err) {
+      console.log('Error uploading and sending image:', err);
+    }
+  };
+
   const isMessageSeen = useCallback(
     (msg: ChatMessage): boolean => {
       if (!msg) return false;
@@ -1520,6 +1814,7 @@ export default function ChatRoomScreen() {
             const isMe = item.senderId === auth.currentUser?.uid;
             const isCallMsg = item.type === 'call';
             const isPostCardMsg = item.type === 'post_card';
+            const isLocationMsg = item.type === 'location' || !!item.location;
             const isMissedOrRejected = isCallMsg && (!item.callDuration || item.callDuration === 0);
             const hasImage = item.imageUrl && typeof item.imageUrl === 'string' && item.imageUrl.trim() !== '';
             const position = getMessagePosition(origIndex, messages);
@@ -1706,8 +2001,74 @@ export default function ChatRoomScreen() {
                             <Ionicons name="chevron-forward" size={14} color={isMe ? '#0084FF' : '#059669'} />
                           </TouchableOpacity>
                         </TouchableOpacity>
+                      ) : isLocationMsg ? (
+                        /* 3. Interactive Location Meeting Point Card Rendering */
+                        <TouchableOpacity
+                          activeOpacity={0.95}
+                          onLongPress={() => setSelectedMsgForAction(item)}
+                          onPress={() => setExpandedMsgId(isExpanded ? null : item.id)}
+                          style={[
+                            styles.locationCardBubble,
+                            isMe ? styles.locationCardBubbleMe : styles.locationCardBubbleOther,
+                            borderRadiusStyle
+                          ]}
+                        >
+                          {/* Map Banner Illustration with Pin */}
+                          <View style={styles.locationMapBanner}>
+                            <View style={styles.locationPulseOuter}>
+                              <View style={styles.locationPulseInner} />
+                            </View>
+                            <Ionicons name="location" size={32} color="#EF4444" style={styles.locationPinIcon} />
+                            <View style={styles.locationLivePill}>
+                              <Ionicons name="navigate" size={10} color="#FFFFFF" style={{ marginRight: 3 }} />
+                              <Text style={styles.locationLivePillText}>Điểm hẹn gặp</Text>
+                            </View>
+                          </View>
+
+                          {/* Address & Meta Information */}
+                          <View style={styles.locationInfoCol}>
+                            <Text style={[styles.locationNameText, isMe && { color: '#FFFFFF' }]} numberOfLines={1}>
+                              {item.location?.name || 'Điểm hẹn gặp mặt'}
+                            </Text>
+                            <Text
+                              style={[styles.locationAddressText, isMe && { color: 'rgba(255,255,255,0.85)' }]}
+                              numberOfLines={2}
+                            >
+                              {item.location?.address || `${item.location?.latitude?.toFixed(4)}, ${item.location?.longitude?.toFixed(4)}`}
+                            </Text>
+
+                            <TouchableOpacity
+                              style={[
+                                styles.locationDirectionsBtn,
+                                isMe ? styles.locationDirectionsBtnMe : styles.locationDirectionsBtnOther
+                              ]}
+                              onPress={() => {
+                                if (item.location) {
+                                  setSelectedNavDestination(item.location);
+                                  setIsNavModalVisible(true);
+                                }
+                              }}
+                              activeOpacity={0.85}
+                            >
+                              <Ionicons
+                                name="navigate-circle"
+                                size={18}
+                                color={isMe ? '#0084FF' : '#0D9488'}
+                                style={{ marginRight: 6 }}
+                              />
+                              <Text
+                                style={[
+                                  styles.locationDirectionsBtnText,
+                                  isMe ? styles.locationDirectionsBtnTextMe : styles.locationDirectionsBtnTextOther
+                                ]}
+                              >
+                                Chỉ đường & Xem bản đồ
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        </TouchableOpacity>
                       ) : (
-                        /* 3. Normal Text / Image Bubble Rendering */
+                        /* 4. Normal Text / Image Bubble Rendering */
                         <>
                           {/* Messenger Style Reply Header + Quoted Bubble */}
                           {item.replyToText ? (
@@ -1900,8 +2261,16 @@ export default function ChatRoomScreen() {
         {/* Messenger Style Input Bar */}
         <View style={[styles.inputBarContainer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
           <View style={styles.inputPillContainer}>
-            <TouchableOpacity style={styles.inputActionIcon} activeOpacity={0.7}>
-              <Ionicons name="add-circle" size={26} color="#0084FF" />
+            <TouchableOpacity
+              style={styles.inputActionIcon}
+              activeOpacity={0.7}
+              onPress={() => setIsActionMenuVisible((prev) => !prev)}
+            >
+              <Ionicons
+                name={isActionMenuVisible ? 'close-circle' : 'add-circle'}
+                size={26}
+                color="#0084FF"
+              />
             </TouchableOpacity>
 
             <TextInput
@@ -1909,12 +2278,20 @@ export default function ChatRoomScreen() {
               placeholder="Nhập tin nhắn..."
               placeholderTextColor="#94A3B8"
               value={inputText}
-              onChangeText={setInputText}
+              onChangeText={(txt) => {
+                setInputText(txt);
+                if (isActionMenuVisible) setIsActionMenuVisible(false);
+              }}
+              onFocus={() => setIsActionMenuVisible(false)}
               multiline
               maxLength={500}
             />
 
-            <TouchableOpacity style={styles.inputActionIcon} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={styles.inputActionIcon}
+              activeOpacity={0.7}
+              onPress={handlePickImage}
+            >
               <Ionicons name="image-outline" size={22} color="#64748B" />
             </TouchableOpacity>
 
@@ -1934,6 +2311,99 @@ export default function ChatRoomScreen() {
               />
             </TouchableOpacity>
           </View>
+
+          {/* Messenger Style Expandable Action Menu */}
+          {isActionMenuVisible && (
+            <View style={styles.actionMenuTray}>
+              {/* 1. Send Meeting Location */}
+              <TouchableOpacity
+                style={styles.actionMenuItem}
+                onPress={handleSendLocation}
+                disabled={sendingLocation}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.actionMenuIconCircle, { backgroundColor: '#FEE2E2' }]}>
+                  {sendingLocation ? (
+                    <ActivityIndicator size="small" color="#EF4444" />
+                  ) : (
+                    <Ionicons name="location" size={24} color="#EF4444" />
+                  )}
+                </View>
+                <Text style={styles.actionMenuLabel}>Vị trí</Text>
+              </TouchableOpacity>
+
+              {/* 2. Camera */}
+              <TouchableOpacity
+                style={styles.actionMenuItem}
+                onPress={handlePickCamera}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.actionMenuIconCircle, { backgroundColor: '#E0F2FE' }]}>
+                  <Ionicons name="camera" size={24} color="#0284C7" />
+                </View>
+                <Text style={styles.actionMenuLabel}>Máy ảnh</Text>
+              </TouchableOpacity>
+
+              {/* 3. Gallery */}
+              <TouchableOpacity
+                style={styles.actionMenuItem}
+                onPress={handlePickImage}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.actionMenuIconCircle, { backgroundColor: '#DCFCE7' }]}>
+                  <Ionicons name="images" size={24} color="#16A34A" />
+                </View>
+                <Text style={styles.actionMenuLabel}>Thư viện</Text>
+              </TouchableOpacity>
+
+              {/* 4. Lost / Found Post Card Attachment */}
+              <TouchableOpacity
+                style={styles.actionMenuItem}
+                onPress={() => {
+                  setIsActionMenuVisible(false);
+                  if (postId) {
+                    setPendingPostAttachment({
+                      id: postId,
+                      title: postTitle || 'Bài viết',
+                      image: postImage || '',
+                      type: postType || 'lost'
+                    });
+                  } else {
+                    Alert.alert('Đính kèm bài viết', 'Bạn có thể gửi liên kết bài viết liên quan để cùng thảo luận.');
+                  }
+                }}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.actionMenuIconCircle, { backgroundColor: '#FEF3C7' }]}>
+                  <Ionicons name="document-text" size={24} color="#D97706" />
+                </View>
+                <Text style={styles.actionMenuLabel}>Đồ thất lạc</Text>
+              </TouchableOpacity>
+
+              {/* 5. OTP Safe Handoff Verification */}
+              <TouchableOpacity
+                style={styles.actionMenuItem}
+                onPress={() => {
+                  setIsActionMenuVisible(false);
+                  router.push({
+                    pathname: '/chat/verify-otp',
+                    params: {
+                      chatId: activeChatId || paramChatId,
+                      otherUserId,
+                      otherUserName: otherUser.name,
+                      postId: postId || pendingPostAttachment?.id,
+                    },
+                  } as any);
+                }}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.actionMenuIconCircle, { backgroundColor: '#F3E8FF' }]}>
+                  <Ionicons name="shield-checkmark" size={24} color="#9333EA" />
+                </View>
+                <Text style={styles.actionMenuLabel}>Xác thực OTP</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </KeyboardAvoidingView>
 
@@ -2238,6 +2708,37 @@ export default function ChatRoomScreen() {
         caller={callerDetails}
         onAccept={handleAcceptIncomingCall}
         onReject={handleRejectIncomingCall}
+      />
+
+      {/* Interactive Navigation Route Map Modal */}
+      <NavigationMapModal
+        visible={isNavModalVisible}
+        destination={selectedNavDestination}
+        onClose={() => setIsNavModalVisible(false)}
+        onMinimize={(userLoc, distStr, durStr) => {
+          setIsNavModalVisible(false);
+          setMiniMapUserLocation(userLoc);
+          setMiniMapDistanceText(distStr);
+          setMiniMapDurationText(durStr);
+          setMiniMapVisible(true);
+        }}
+      />
+
+      {/* Floating Picture-in-Picture Mini-Map Widget */}
+      <FloatingMiniMap
+        visible={miniMapVisible}
+        userLocation={miniMapUserLocation}
+        destination={selectedNavDestination}
+        distanceText={miniMapDistanceText}
+        durationText={miniMapDurationText}
+        onExpand={() => {
+          setMiniMapVisible(false);
+          setIsNavModalVisible(true);
+        }}
+        onClose={() => {
+          setMiniMapVisible(false);
+          setSelectedNavDestination(null);
+        }}
       />
     </SafeAreaView>
   );
@@ -3099,5 +3600,147 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  // Messenger Style Action Menu Styles
+  actionMenuTray: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  actionMenuItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 62,
+  },
+  actionMenuIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  actionMenuLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+    textAlign: 'center',
+  },
+  // Location Card Bubble Styles
+  locationCardBubble: {
+    width: 260,
+    borderRadius: 18,
+    overflow: 'hidden',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  locationCardBubbleMe: {
+    backgroundColor: '#0084FF',
+  },
+  locationCardBubbleOther: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  locationMapBanner: {
+    height: 110,
+    backgroundColor: '#E0F2FE',
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  locationPulseOuter: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'absolute',
+  },
+  locationPulseInner: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(239, 68, 68, 0.25)',
+  },
+  locationPinIcon: {
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  locationLivePill: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  locationLivePillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  locationInfoCol: {
+    padding: 12,
+  },
+  locationNameText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 2,
+  },
+  locationAddressText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#64748B',
+    lineHeight: 16,
+    marginBottom: 10,
+  },
+  locationDirectionsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+  },
+  locationDirectionsBtnMe: {
+    backgroundColor: '#FFFFFF',
+  },
+  locationDirectionsBtnOther: {
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1,
+    borderColor: '#CCFBF1',
+  },
+  locationDirectionsBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  locationDirectionsBtnTextMe: {
+    color: '#0084FF',
+  },
+  locationDirectionsBtnTextOther: {
+    color: '#0D9488',
   },
 });
