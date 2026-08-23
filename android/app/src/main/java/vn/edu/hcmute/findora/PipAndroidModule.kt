@@ -1,5 +1,6 @@
 package vn.edu.hcmute.findora
 
+import android.app.Activity
 import android.app.PictureInPictureParams
 import android.os.Build
 import android.util.Rational
@@ -15,7 +16,7 @@ class PipAndroidModule(private val reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun enterPip(aspectWidth: Int, aspectHeight: Int, promise: Promise) {
-        val activity = currentActivity
+        val activity: Activity? = reactContext.currentActivity
         if (activity == null) {
             promise.reject("NO_ACTIVITY", "Current activity is null")
             return
