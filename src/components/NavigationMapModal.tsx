@@ -332,87 +332,95 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
           )}
         </MapView>
 
-        {/* Top Header Floating Guidance Card */}
+        {/* Top Header Google Maps Turn-by-Turn Driving Banner */}
         <SafeAreaView style={styles.topOverlay} edges={['top', 'left', 'right']}>
-          <View style={styles.guidanceCard}>
-            <View style={styles.guidanceIconBox}>
-              <Ionicons name="navigate" size={24} color="#0084FF" />
+          <View style={styles.turnCard}>
+            <View style={styles.turnIconBox}>
+              <Ionicons name="arrow-up" size={28} color="#FFFFFF" />
             </View>
 
-            <View style={styles.guidanceInfoCol}>
-              <Text style={styles.guidanceTitle} numberOfLines={1}>
-                {destination.name || 'Điểm hẹn gặp mặt'}
+            <View style={styles.turnInfoCol}>
+              <Text style={styles.turnHeading} numberOfLines={1}>
+                {destination.name || 'Đi về hướng điểm hẹn'}
               </Text>
-              <Text style={styles.guidanceAddress} numberOfLines={1}>
-                {destination.address || `${destination.latitude.toFixed(4)}, ${destination.longitude.toFixed(4)}`}
+              <Text style={styles.turnSubtext} numberOfLines={1}>
+                {destination.address || 'Lộ trình hẹn gặp trực tiếp'}
               </Text>
-
-              {loadingLocation ? (
-                <View style={styles.loadingRow}>
-                  <ActivityIndicator size="small" color="#0084FF" />
-                  <Text style={styles.loadingText}>Đang định vị lộ trình...</Text>
-                </View>
-              ) : (
-                <View style={styles.metaRow}>
-                  <View style={styles.distancePill}>
-                    <Text style={styles.distancePillText}>{distanceText}</Text>
-                  </View>
-                  <Text style={styles.durationText}>{durationText}</Text>
-                </View>
-              )}
             </View>
 
-            {/* Top Action Buttons (Close on top, Minimize PiP below) */}
+            {/* Top Right Action Buttons (Close on top, In-App PiP below) */}
             <View style={styles.topActionsCol}>
               <TouchableOpacity
                 style={styles.actionCircleBtn}
                 onPress={onClose}
                 activeOpacity={0.8}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Ionicons name="close" size={18} color="#0F172A" />
+                <Ionicons name="close" size={18} color="#FFFFFF" />
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[styles.actionCircleBtn, { marginTop: 8 }]}
                 onPress={handleMinimizePress}
                 activeOpacity={0.8}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Ionicons name="contract" size={18} color="#0F172A" />
+                <Ionicons name="contract" size={16} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
           </View>
         </SafeAreaView>
 
-        {/* Bottom Floating Control Bar */}
-        <SafeAreaView style={styles.bottomOverlay} edges={['bottom', 'left', 'right']}>
-          <View style={styles.bottomControls}>
-            {/* Recenter Button */}
-            <TouchableOpacity
-              style={styles.recenterBtn}
-              onPress={handleRecenter}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="locate" size={22} color="#0084FF" />
-            </TouchableOpacity>
+        {/* Floating Side Recenter Button */}
+        <View style={styles.sideControls}>
+          <TouchableOpacity
+            style={styles.floatingRecenterBtn}
+            onPress={handleRecenter}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="locate" size={24} color="#0084FF" />
+          </TouchableOpacity>
+        </View>
 
-            {/* Native Maps Deep Link Button */}
-            <TouchableOpacity
-              style={styles.openMapsBtn}
-              onPress={openExternalMapsApp}
-              activeOpacity={0.85}
-            >
-              <Ionicons
-                name={Platform.OS === 'ios' ? 'map' : 'navigate-circle'}
-                size={22}
-                color="#FFFFFF"
-                style={{ marginRight: 8 }}
-              />
-              <Text style={styles.openMapsBtnText}>
-                {Platform.OS === 'ios' ? 'Mở trong Apple Maps' : 'Mở chỉ đường Google Maps'}
-              </Text>
-            </TouchableOpacity>
+        {/* Bottom Google Maps Driving HUD Sheet */}
+        <SafeAreaView style={styles.bottomOverlay} edges={['bottom', 'left', 'right']}>
+          <View style={styles.bottomHudCard}>
+            {/* ETA & Distance Info Row */}
+            <View style={styles.hudTopRow}>
+              <View style={styles.hudEtaCol}>
+                <View style={styles.hudEtaRow}>
+                  <Text style={styles.hudEtaNumber}>
+                    {durationText.split('•')[0]?.replace('~', '').trim() || '1 ph'}
+                  </Text>
+                  <View style={styles.ecoBadge}>
+                    <Ionicons name="leaf" size={12} color="#22C55E" />
+                  </View>
+                </View>
+                <Text style={styles.hudMetaText}>
+                  {distanceText} • Tuyến đường tối ưu nhất
+                </Text>
+              </View>
+
+              {/* Action Buttons: Red "Thoát" & Blue "Google Maps" */}
+              <View style={styles.hudButtonsRow}>
+                <TouchableOpacity
+                  style={styles.hudExitBtn}
+                  onPress={onClose}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.hudExitBtnText}>Thoát</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.hudGoogleMapsBtn}
+                  onPress={openExternalMapsApp}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="navigate" size={18} color="#FFFFFF" style={{ marginRight: 4 }} />
+                  <Text style={styles.hudGoogleMapsBtnText}>GG Maps</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
         </SafeAreaView>
       </View>
@@ -430,81 +438,47 @@ const styles = StyleSheet.create({
   },
   topOverlay: {
     position: 'absolute',
-    top: 10,
-    left: 16,
-    right: 16,
+    top: 8,
+    left: 12,
+    right: 12,
     zIndex: 100,
   },
-  guidanceCard: {
+  turnCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 14,
+    backgroundColor: '#00594C',
+    borderRadius: 22,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.18,
+    shadowOpacity: 0.28,
     shadowRadius: 10,
-    elevation: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    elevation: 10,
   },
-  guidanceIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#EFF6FF',
+  turnIconBox: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
-  guidanceInfoCol: {
+  turnInfoCol: {
     flex: 1,
     justifyContent: 'center',
   },
-  guidanceTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  guidanceAddress: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#64748B',
-    marginTop: 2,
-  },
-  loadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  loadingText: {
-    fontSize: 12,
-    color: '#0084FF',
-    fontWeight: '600',
-    marginLeft: 6,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  distancePill: {
-    backgroundColor: '#0084FF',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-    marginRight: 8,
-  },
-  distancePillText: {
-    fontSize: 11,
+  turnHeading: {
+    fontSize: 16,
     fontWeight: '800',
     color: '#FFFFFF',
   },
-  durationText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#0D9488',
+  turnSubtext: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: 'rgba(255, 255, 255, 0.82)',
+    marginTop: 2,
   },
   topActionsCol: {
     alignItems: 'center',
@@ -514,9 +488,30 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  sideControls: {
+    position: 'absolute',
+    right: 16,
+    bottom: 120,
+    zIndex: 90,
+  },
+  floatingRecenterBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   userPulseRing: {
     width: 28,
@@ -553,48 +548,90 @@ const styles = StyleSheet.create({
   },
   bottomOverlay: {
     position: 'absolute',
-    bottom: 20,
-    left: 16,
-    right: 16,
+    bottom: 12,
+    left: 12,
+    right: 12,
     zIndex: 100,
   },
-  bottomControls: {
+  bottomHudCard: {
+    backgroundColor: '#1E293B',
+    borderRadius: 24,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  hudTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  recenterBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 6,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginRight: 12,
-  },
-  openMapsBtn: {
+  hudEtaCol: {
     flex: 1,
-    height: 52,
-    backgroundColor: '#0084FF',
-    borderRadius: 16,
+  },
+  hudEtaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#0084FF',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 6,
   },
-  openMapsBtnText: {
-    fontSize: 15,
+  hudEtaNumber: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#FFFFFF',
+  },
+  ecoBadge: {
+    marginLeft: 8,
+    backgroundColor: 'rgba(34, 197, 94, 0.18)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  hudMetaText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#94A3B8',
+    marginTop: 2,
+  },
+  hudButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  hudExitBtn: {
+    backgroundColor: '#EF4444',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    marginRight: 8,
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  hudExitBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  hudGoogleMapsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0084FF',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 20,
+    shadowColor: '#0084FF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  hudGoogleMapsBtnText: {
+    fontSize: 13,
     fontWeight: '800',
     color: '#FFFFFF',
   },

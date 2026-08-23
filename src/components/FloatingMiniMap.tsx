@@ -110,28 +110,26 @@ export const FloatingMiniMap: React.FC<FloatingMiniMapProps> = ({
   ).current;
 
   useEffect(() => {
-    if (visible && userLocation && destination && mapRef.current) {
-      const midLat = (userLocation.latitude + destination.latitude) / 2;
-      const midLng = (userLocation.longitude + destination.longitude) / 2;
-      const latDelta = Math.max(Math.abs(userLocation.latitude - destination.latitude) * 1.5, 0.008);
-      const lngDelta = Math.max(Math.abs(userLocation.longitude - destination.longitude) * 1.5, 0.008);
-
+    if (visible && userLocation && mapRef.current) {
       mapRef.current.animateToRegion({
-        latitude: midLat,
-        longitude: midLng,
-        latitudeDelta: latDelta,
-        longitudeDelta: lngDelta,
-      }, 500);
+        latitude: userLocation.latitude,
+        longitude: userLocation.longitude,
+        latitudeDelta: 0.006,
+        longitudeDelta: 0.006,
+      }, 400);
     }
-  }, [visible, userLocation, destination]);
+  }, [visible, userLocation]);
 
   if (!visible || !destination) return null;
 
+  const centerLat = userLocation?.latitude || destination.latitude;
+  const centerLng = userLocation?.longitude || destination.longitude;
+
   const initialRegion: Region = {
-    latitude: destination.latitude,
-    longitude: destination.longitude,
-    latitudeDelta: 0.012,
-    longitudeDelta: 0.012,
+    latitude: centerLat,
+    longitude: centerLng,
+    latitudeDelta: 0.006,
+    longitudeDelta: 0.006,
   };
 
   return (
