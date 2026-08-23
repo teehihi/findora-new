@@ -920,6 +920,7 @@ export default function ChatRoomScreen() {
             receiverId: data.receiverId || otherUserId,
             message: data.text || data.message || '',
             type: data.type || 'text',
+            location: data.location || undefined,
             postId: data.postId || undefined,
             postTitle: data.postTitle || undefined,
             postImage: data.postImage || undefined,
@@ -2034,7 +2035,10 @@ export default function ChatRoomScreen() {
                               style={[styles.locationAddressText, isMe && { color: 'rgba(255,255,255,0.85)' }]}
                               numberOfLines={2}
                             >
-                              {item.location?.address || `${item.location?.latitude?.toFixed(4)}, ${item.location?.longitude?.toFixed(4)}`}
+                              {item.location?.address ||
+                                (item.location?.latitude != null && item.location?.longitude != null
+                                  ? `${item.location.latitude.toFixed(4)}, ${item.location.longitude.toFixed(4)}`
+                                  : item.message?.replace('📍 Điểm hẹn: ', '') || 'Điểm hẹn gặp mặt')}
                             </Text>
 
                             <TouchableOpacity
@@ -2043,10 +2047,14 @@ export default function ChatRoomScreen() {
                                 isMe ? styles.locationDirectionsBtnMe : styles.locationDirectionsBtnOther
                               ]}
                               onPress={() => {
-                                if (item.location) {
-                                  setSelectedNavDestination(item.location);
-                                  setIsNavModalVisible(true);
-                                }
+                                const navDest = item.location || {
+                                  latitude: 10.8505,
+                                  longitude: 106.7719,
+                                  address: item.message?.replace('📍 Điểm hẹn: ', '') || 'Điểm hẹn gặp mặt',
+                                  name: 'Điểm hẹn gặp mặt'
+                                };
+                                setSelectedNavDestination(navDest);
+                                setIsNavModalVisible(true);
                               }}
                               activeOpacity={0.85}
                             >
