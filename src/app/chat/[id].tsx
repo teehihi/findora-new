@@ -2320,9 +2320,9 @@ export default function ChatRoomScreen() {
                 style={styles.actionMenuItem}
                 onPress={handleSendLocation}
                 disabled={sendingLocation}
-                activeOpacity={0.8}
+                activeOpacity={0.7}
               >
-                <View style={[styles.actionMenuIconCircle, { backgroundColor: '#FEE2E2' }]}>
+                <View style={[styles.actionMenuSquircle, { backgroundColor: '#FEF2F2', borderColor: '#FEE2E2' }]}>
                   {sendingLocation ? (
                     <ActivityIndicator size="small" color="#EF4444" />
                   ) : (
@@ -2336,9 +2336,9 @@ export default function ChatRoomScreen() {
               <TouchableOpacity
                 style={styles.actionMenuItem}
                 onPress={handlePickCamera}
-                activeOpacity={0.8}
+                activeOpacity={0.7}
               >
-                <View style={[styles.actionMenuIconCircle, { backgroundColor: '#E0F2FE' }]}>
+                <View style={[styles.actionMenuSquircle, { backgroundColor: '#F0F9FF', borderColor: '#E0F2FE' }]}>
                   <Ionicons name="camera" size={24} color="#0284C7" />
                 </View>
                 <Text style={styles.actionMenuLabel}>Máy ảnh</Text>
@@ -2348,9 +2348,9 @@ export default function ChatRoomScreen() {
               <TouchableOpacity
                 style={styles.actionMenuItem}
                 onPress={handlePickImage}
-                activeOpacity={0.8}
+                activeOpacity={0.7}
               >
-                <View style={[styles.actionMenuIconCircle, { backgroundColor: '#DCFCE7' }]}>
+                <View style={[styles.actionMenuSquircle, { backgroundColor: '#F0FDF4', borderColor: '#DCFCE7' }]}>
                   <Ionicons name="images" size={24} color="#16A34A" />
                 </View>
                 <Text style={styles.actionMenuLabel}>Thư viện</Text>
@@ -2372,12 +2372,12 @@ export default function ChatRoomScreen() {
                     Alert.alert('Đính kèm bài viết', 'Bạn có thể gửi liên kết bài viết liên quan để cùng thảo luận.');
                   }
                 }}
-                activeOpacity={0.8}
+                activeOpacity={0.7}
               >
-                <View style={[styles.actionMenuIconCircle, { backgroundColor: '#FEF3C7' }]}>
+                <View style={[styles.actionMenuSquircle, { backgroundColor: '#FFFBEB', borderColor: '#FEF3C7' }]}>
                   <Ionicons name="document-text" size={24} color="#D97706" />
                 </View>
-                <Text style={styles.actionMenuLabel}>Đồ thất lạc</Text>
+                <Text style={styles.actionMenuLabel}>Bài viết</Text>
               </TouchableOpacity>
 
               {/* 5. OTP Safe Handoff Verification */}
@@ -2395,12 +2395,12 @@ export default function ChatRoomScreen() {
                     },
                   } as any);
                 }}
-                activeOpacity={0.8}
+                activeOpacity={0.7}
               >
-                <View style={[styles.actionMenuIconCircle, { backgroundColor: '#F3E8FF' }]}>
+                <View style={[styles.actionMenuSquircle, { backgroundColor: '#FAF5FF', borderColor: '#F3E8FF' }]}>
                   <Ionicons name="shield-checkmark" size={24} color="#9333EA" />
                 </View>
-                <Text style={styles.actionMenuLabel}>Xác thực OTP</Text>
+                <Text style={styles.actionMenuLabel}>Mã OTP</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -3605,35 +3605,31 @@ const styles = StyleSheet.create({
   actionMenuTray: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-around',
+    justifyContent: 'space-between',
     paddingVertical: 14,
-    paddingHorizontal: 8,
-    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    backgroundColor: '#F8FAFC',
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: '#E2E8F0',
   },
   actionMenuItem: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    width: 62,
   },
-  actionMenuIconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  actionMenuSquircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
   },
   actionMenuLabel: {
     fontSize: 11,
     fontWeight: '600',
     color: '#475569',
+    marginTop: 6,
     textAlign: 'center',
   },
   // Location Card Bubble Styles
