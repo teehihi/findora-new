@@ -1,12 +1,15 @@
+import { Platform } from 'react-native';
 import { RouteStep } from './navigationService';
 
-export interface CameraState {
-  latitude: number;
-  longitude: number;
+export interface CameraTarget {
+  center: {
+    latitude: number;
+    longitude: number;
+  };
   pitch: number;
   heading: number;
   zoom: number;
-  altitude?: number;
+  altitude: number;
 }
 
 export interface CameraInput {
@@ -39,7 +42,7 @@ export class NavigationCameraController {
   }
 
   // Calculate reliable, stable camera parameters centered directly on userLocation
-  public computeCameraTarget(input: CameraInput): CameraState {
+  public computeCameraTarget(input: CameraInput): CameraTarget {
     const {
       currentLocation,
       speedKmh,
@@ -53,41 +56,52 @@ export class NavigationCameraController {
         ? currentLocation.heading
         : input.currentBearing;
 
-    this.lastSmoothedHeading = interpolateAngle(this.lastSmoothedHeading, rawHeading, 0.4);
+    this.lastSmoothedHeading = interpolateAngle(this.lastSmoothedHeading, rawHeading, 0.45);
 
     // 2. Speed Smoothing (0-120 km/h)
     const safeSpeed = Math.max(speedKmh || 0, 0);
     this.lastSmoothedSpeed = this.lastSmoothedSpeed * 0.7 + safeSpeed * 0.3;
 
-    // 3. Stable, Natural Zoom (16.8 to 18.0) - Never over-zoom to avoid tile distortion
-    let targetZoom = 17.6;
-    let targetTilt = 46;
+    // 3. Platform-aware Zoom & Altitude
+    // iOS (Apple Maps) responds best to altitude (meters)
+    // Android (Google Maps) responds best to zoom levels (0-20)
+    let targetZoom = 17.8;
+    let targetAltitude = 380;
+    let targetPitch = 48;
 
-    if (this.lastSmoothedSpeed < 20) {
-      targetZoom = 17.8; // Low speed / stopped: clear road view
-      targetTilt = 45;
-    } else if (this.lastSmoothedSpeed < 50) {
-      targetZoom = 17.2; // City driving
-      targetTilt = 50;
+    if (this.lastSmoothedSpeed < 15) {
+      // Stopped / Very slow
+      targetZoom = 18.2;
+      targetAltitude = 300;
+      targetPitch = 45;
+    } else if (this.lastSmoothedSpeed < 45) {
+      // City driving
+      targetZoom = 17.5;
+      targetAltitude = 450;
+      targetPitch = 50;
     } else {
-      targetZoom = 16.5; // Highway / fast driving
-      targetTilt = 54;
+      // Fast road / Highway
+      targetZoom = 16.5;
+      targetAltitude = 750;
+      targetPitch = 55;
     }
 
-    // Near turn maneuver: slightly zoom in to highlight junction
+    // Near turn maneuver (< 150m): zoom in close to show junction
     if (distanceToNextManeuverMeters < 150 && nextStep) {
-      targetZoom = 18.0;
-      targetTilt = 44;
+      targetZoom = 18.5;
+      targetAltitude = 260;
+      targetPitch = 42;
     }
 
-    // Camera center is locked squarely onto user's real location
     return {
-      latitude: currentLocation.latitude,
-      longitude: currentLocation.longitude,
-      pitch: Math.round(targetTilt),
+      center: {
+        latitude: currentLocation.latitude,
+        longitude: currentLocation.longitude,
+      },
+      pitch: Math.round(targetPitch),
       heading: Math.round(this.lastSmoothedHeading),
       zoom: Number(targetZoom.toFixed(1)),
-      altitude: 200,
+      altitude: Math.round(targetAltitude),
     };
   }
 }
