@@ -41,6 +41,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import MapView, { Marker } from 'react-native-maps';
+import Svg, { Rect, Path } from 'react-native-svg';
 import { PhoneMissIcon, PhoneReceiveIcon, PhoneSendIcon, VideoReceiveIcon } from '../../components/CallIcons';
 import { ImageViewerModal } from '../../components/ImageViewerModal';
 import { InAppCallModal } from '../../components/InAppCallModal';
@@ -55,6 +56,27 @@ import { playSoundEffect } from '../../services/soundService';
 import { CallStatus } from '../../models/callTypes';
 import { callManager } from '../../services/callManager';
 import { sendRemotePushNotification } from '../../services/pushNotificationService';
+
+function GoogleDirectionsIcon({ size = 20, color = '#0084FF', iconColor = '#FFFFFF' }: { size?: number; color?: string; iconColor?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 40 40">
+      <Rect
+        x="8"
+        y="8"
+        width="24"
+        height="24"
+        rx="5"
+        ry="5"
+        fill={color}
+        transform="rotate(45 20 20)"
+      />
+      <Path
+        d="M 14.5 25 V 20.5 C 14.5 18 16.5 16 19 16 H 22.5 V 12.5 L 28 18 L 22.5 23.5 V 20 H 19 C 18.7 20 18 20.7 18 21.5 V 25 H 14.5 Z"
+        fill={iconColor}
+      />
+    </Svg>
+  );
+}
 
 type MessagePosition = 'SINGLE' | 'TOP' | 'MIDDLE' | 'BOTTOM';
 const MESSAGES_PAGE_SIZE = 25;
@@ -2092,12 +2114,13 @@ export default function ChatRoomScreen() {
                               }}
                               activeOpacity={0.85}
                             >
-                              <Ionicons
-                                name="navigate-circle"
-                                size={18}
-                                color={isMe ? '#0084FF' : '#0D9488'}
-                                style={{ marginRight: 6 }}
-                              />
+                              <View style={{ marginRight: 7 }}>
+                                <GoogleDirectionsIcon
+                                  size={20}
+                                  color={isMe ? '#0084FF' : '#087F8C'}
+                                  iconColor="#FFFFFF"
+                                />
+                              </View>
                               <Text
                                 style={[
                                   styles.locationDirectionsBtnText,
