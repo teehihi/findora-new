@@ -41,6 +41,33 @@ function getDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): 
   return R * c;
 }
 
+// Fetch real street road route from OSRM Navigation API
+async function fetchRealStreetRoute(
+  start: { latitude: number; longitude: number },
+  end: { latitude: number; longitude: number }
+): Promise<{ coordinates: { latitude: number; longitude: number }[]; distanceMeters: number; durationSeconds: number } | null> {
+  try {
+    const url = `https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson`;
+    const res = await fetch(url, { headers: { 'User-Agent': 'Findora-App' } });
+    const data = await res.json();
+    if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
+      const route = data.routes[0];
+      const coords = route.geometry.coordinates.map((c: [number, number]) => ({
+        latitude: c[1],
+        longitude: c[0],
+      }));
+      return {
+        coordinates: coords,
+        distanceMeters: route.distance,
+        durationSeconds: route.duration,
+      };
+    }
+  } catch (e) {
+    console.log('Notice: OSRM route fetch notice:', e);
+  }
+  return null;
+}
+
 export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
   visible,
   destination,
@@ -54,23 +81,78 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
   const [durationText, setDurationText] = useState('');
   const [routeCoordinates, setRouteCoordinates] = useState<{ latitude: number; longitude: number }[]>([]);
 
-  // Fetch current GPS location
+  // Real-time GPS Position Tracking and Route Recalculation
   useEffect(() => {
     if (!visible || !destination) return;
 
     let isMounted = true;
+    let locationSubscription: Location.LocationSubscription | null = null;
+
+    const updateRouteForLocation = async (userCoords: { latitude: number; longitude: number }) => {
+      if (!isMounted) return;
+      setUserLocation(userCoords);
+
+      // Try fetching real street road route first
+      const realRoute = await fetchRealStreetRoute(userCoords, {
+        latitude: destination.latitude,
+        longitude: destination.longitude,
+      });
+
+      if (!isMounted) return;
+
+      let distMeters = 0;
+      let durSecs = 0;
+      let finalCoords: { latitude: number; longitude: number }[] = [];
+
+      if (realRoute && realRoute.coordinates.length > 0) {
+        finalCoords = realRoute.coordinates;
+        distMeters = realRoute.distanceMeters;
+        durSecs = realRoute.durationSeconds;
+      } else {
+        // Direct linear path fallback
+        const distKm = getDistanceKm(
+          userCoords.latitude,
+          userCoords.longitude,
+          destination.latitude,
+          destination.longitude
+        );
+        distMeters = distKm * 1000;
+        durSecs = (distKm / 25) * 3600;
+        finalCoords = [userCoords, { latitude: destination.latitude, longitude: destination.longitude }];
+      }
+
+      // Format distance
+      let distStr = '';
+      if (distMeters < 1000) {
+        distStr = `${Math.round(distMeters)} m`;
+      } else {
+        distStr = `${(distMeters / 1000).toFixed(1)} km`;
+      }
+
+      // Format estimated travel times (bike & walking)
+      const bikeMins = Math.max(Math.round(durSecs > 0 ? durSecs / 60 : (distMeters / 1000 / 25) * 60), 1);
+      const walkMins = Math.max(Math.round((distMeters / 1000 / 4.5) * 60), 1);
+      const durStr = `~${bikeMins} ph (xe) • ~${walkMins} ph (đi bộ)`;
+
+      setDistanceText(distStr);
+      setDurationText(durStr);
+      setRouteCoordinates(finalCoords);
+      setLoadingLocation(false);
+    };
+
     (async () => {
       try {
         setLoadingLocation(true);
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
-          Alert.alert('Quyền vị trí', 'Vui lòng cấp quyền truy cập vị trí để chỉ đường.');
+          Alert.alert('Quyền vị trí', 'Vui lòng cấp quyền vị trí để chỉ đường.');
           setLoadingLocation(false);
           return;
         }
 
+        // 1. Get initial GPS position
         const loc = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
+          accuracy: Location.Accuracy.High,
         });
 
         if (isMounted) {
@@ -78,90 +160,50 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
             latitude: loc.coords.latitude,
             longitude: loc.coords.longitude,
           };
-          setUserLocation(userCoords);
-
-          // Calculate distance & estimated time
-          const dist = getDistanceKm(
-            userCoords.latitude,
-            userCoords.longitude,
-            destination.latitude,
-            destination.longitude
-          );
-
-          let distStr = '';
-          if (dist < 1) {
-            distStr = `${Math.round(dist * 1000)} m`;
-          } else {
-            distStr = `${dist.toFixed(1)} km`;
-          }
-
-          // Estimate motor/bike travel time (avg 25km/h) and walking (4.5km/h)
-          const bikeMins = Math.max(Math.round((dist / 25) * 60), 1);
-          const walkMins = Math.max(Math.round((dist / 4.5) * 60), 2);
-          const durStr = `~${bikeMins} ph (xe) • ~${walkMins} ph (đi bộ)`;
-
-          setDistanceText(distStr);
-          setDurationText(durStr);
-
-          // Build route coordinates (Curved intermediate path)
-          const coords = generateCurvedRoute(userCoords, {
-            latitude: destination.latitude,
-            longitude: destination.longitude,
-          });
-          setRouteCoordinates(coords);
-          setLoadingLocation(false);
+          await updateRouteForLocation(userCoords);
 
           // Fit camera to both user location and destination
           setTimeout(() => {
             if (mapRef.current) {
-              mapRef.current.fitToCoordinates([userCoords, {
-                latitude: destination.latitude,
-                longitude: destination.longitude,
-              }], {
-                edgePadding: { top: 120, right: 60, bottom: 200, left: 60 },
-                animated: true,
-              });
+              mapRef.current.fitToCoordinates(
+                [userCoords, { latitude: destination.latitude, longitude: destination.longitude }],
+                {
+                  edgePadding: { top: 120, right: 60, bottom: 200, left: 60 },
+                  animated: true,
+                }
+              );
             }
           }, 600);
         }
+
+        // 2. Subscribe to live position updates
+        locationSubscription = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.High,
+            timeInterval: 4000,
+            distanceInterval: 10,
+          },
+          (newLoc) => {
+            const coords = {
+              latitude: newLoc.coords.latitude,
+              longitude: newLoc.coords.longitude,
+            };
+            updateRouteForLocation(coords);
+          }
+        );
       } catch (err) {
-        console.log('Error getting user location for navigation:', err);
+        console.log('Error in live navigation tracking:', err);
         setLoadingLocation(false);
       }
     })();
 
     return () => {
       isMounted = false;
+      if (locationSubscription) {
+        locationSubscription.remove();
+      }
     };
   }, [visible, destination]);
-
-  // Generate slightly curved realistic route polyline
-  const generateCurvedRoute = (
-    start: { latitude: number; longitude: number },
-    end: { latitude: number; longitude: number }
-  ) => {
-    const points: { latitude: number; longitude: number }[] = [];
-    const steps = 8;
-    const midLat = (start.latitude + end.latitude) / 2;
-    const midLng = (start.longitude + end.longitude) / 2;
-    // Offset midpoint slightly for a natural route curve
-    const curveFactor = 0.0008;
-
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps;
-      // Quadratic Bezier interpolation
-      const lat =
-        (1 - t) * (1 - t) * start.latitude +
-        2 * (1 - t) * t * (midLat + curveFactor) +
-        t * t * end.latitude;
-      const lng =
-        (1 - t) * (1 - t) * start.longitude +
-        2 * (1 - t) * t * (midLng - curveFactor) +
-        t * t * end.longitude;
-      points.push({ latitude: lat, longitude: lng });
-    }
-    return points;
-  };
 
   // Open Native Maps (Google Maps on Android, Apple Maps / Google Maps on iOS)
   const openExternalMapsApp = () => {
