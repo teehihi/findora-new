@@ -116,21 +116,34 @@ export async function fetchFullNavigationRoute(
         route.legs[0].steps.forEach((s: any) => {
           let mType: RouteStep['maneuverType'] = 'turn-straight';
           const modifier = s.maneuver?.modifier || '';
-          if (modifier.includes('left')) mType = 'turn-left';
-          else if (modifier.includes('right')) mType = 'turn-right';
-          else if (s.maneuver?.type === 'arrive') mType = 'arrive';
-          else if (s.maneuver?.type === 'depart') mType = 'depart';
+          const type = s.maneuver?.type || '';
 
-          const stName = s.name && s.name.trim() !== '' ? s.name : 'Đoạn đường tiếp theo';
+          if (modifier.includes('sharp left') || modifier.includes('left')) {
+            mType = 'turn-left';
+          } else if (modifier.includes('sharp right') || modifier.includes('right')) {
+            mType = 'turn-right';
+          } else if (type === 'arrive') {
+            mType = 'arrive';
+          } else if (type === 'depart') {
+            mType = 'depart';
+          }
+
+          const stName = s.name && s.name.trim() !== '' ? s.name : 'Đoạn đường phía trước';
           let inst = `Đi thẳng trên ${stName}`;
-          if (mType === 'turn-left') inst = `Rẽ trái vào ${stName}`;
-          else if (mType === 'turn-right') inst = `Rẽ phải vào ${stName}`;
-          else if (mType === 'arrive') inst = 'Bạn đã đến điểm hẹn';
+          if (mType === 'turn-left') {
+            inst = modifier.includes('sharp') ? `Rẽ gắt sang trái vào ${stName}` : `Rẽ trái vào ${stName}`;
+          } else if (mType === 'turn-right') {
+            inst = modifier.includes('sharp') ? `Rẽ gắt sang phải vào ${stName}` : `Rẽ phải vào ${stName}`;
+          } else if (mType === 'arrive') {
+            inst = 'Bạn đã đến điểm hẹn';
+          } else if (mType === 'depart') {
+            inst = `Xuất phát trên ${stName}`;
+          }
 
           steps.push({
             instruction: inst,
-            distanceMeters: s.distance,
-            durationSeconds: s.duration,
+            distanceMeters: Math.round(s.distance),
+            durationSeconds: Math.round(s.duration),
             maneuverType: mType,
             streetName: stName,
           });

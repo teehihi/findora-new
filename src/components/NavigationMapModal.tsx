@@ -13,7 +13,7 @@ import {
   Modal,
 } from 'react-native';
 import MapView, { Marker, Polyline, Region } from 'react-native-maps';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LocationPayload } from '../models/types';
 import { ExternalMapsPickerModal } from './ExternalMapsPickerModal';
 import {
@@ -43,6 +43,7 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
   onClose,
   onMinimize,
 }) => {
+  const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
   const [navState, setNavState] = useState<NavState>('PREVIEW');
   const [vehicleMode, setVehicleMode] = useState<VehicleMode>('bike');
@@ -107,7 +108,7 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
               mapRef.current.fitToCoordinates(
                 [userCoords, { latitude: destination.latitude, longitude: destination.longitude }],
                 {
-                  edgePadding: { top: 180, right: 60, bottom: 260, left: 60 },
+                  edgePadding: { top: insets.top + 140, right: 50, bottom: insets.bottom + 220, left: 50 },
                   animated: true,
                 }
               );
@@ -119,8 +120,8 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
         locationSubscription = await Location.watchPositionAsync(
           {
             accuracy: Location.Accuracy.Highest,
-            timeInterval: 2500,
-            distanceInterval: 5,
+            timeInterval: 2000,
+            distanceInterval: 3,
           },
           (newLoc) => {
             if (!isMounted) return;
@@ -132,17 +133,18 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
             setUserLocation(updatedCoords);
             loadRoute(updatedCoords);
 
-            // In active navigation mode: smooth 3D camera follow
+            // In active navigation mode: smooth close-up 3D camera follow
             if (navState === 'NAVIGATING' && mapRef.current) {
               mapRef.current.animateCamera({
                 center: {
                   latitude: updatedCoords.latitude,
                   longitude: updatedCoords.longitude,
                 },
-                pitch: 50,
+                pitch: 60,
                 heading: updatedCoords.heading || 0,
-                zoom: 18,
-              }, { duration: 800 });
+                zoom: 19,
+                altitude: 120,
+              }, { duration: 600 });
             }
           }
         );
@@ -198,12 +200,13 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
             latitude: userLocation.latitude,
             longitude: userLocation.longitude,
           },
-          pitch: 50,
+          pitch: 60,
           heading: userLocation.heading || 0,
-          zoom: 18,
-        }, { duration: 1000 });
+          zoom: 19,
+          altitude: 120,
+        }, { duration: 800 });
       }
-    }, 400);
+    }, 300);
   };
 
   // In-App PiP Minimize Handler
@@ -450,18 +453,20 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
         {navState === 'NAVIGATING' && (
           <>
             {/* Top Large Green Navigation Instruction Card */}
-            <SafeAreaView style={styles.navTopOverlay} edges={['top', 'left', 'right']}>
+            <View style={[styles.navTopOverlay, { top: insets.top + 6 }]}>
               <View style={styles.turnCard}>
                 <View style={styles.turnIconSquircle}>
                   <Ionicons
                     name={
                       currentStep?.maneuverType === 'turn-left'
-                        ? 'arrow-back'
+                        ? 'return-up-back'
                         : currentStep?.maneuverType === 'turn-right'
-                        ? 'arrow-forward'
+                        ? 'return-up-forward'
+                        : currentStep?.maneuverType === 'arrive'
+                        ? 'flag'
                         : 'arrow-up'
                     }
-                    size={28}
+                    size={32}
                     color="#FFFFFF"
                   />
                 </View>
@@ -473,29 +478,49 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
                   <Text style={styles.turnSubline} numberOfLines={1}>
                     Trong {formatDistanceText(currentStep?.distanceMeters || 0)} • {destination.address}
                   </Text>
+
+                  {routeData?.steps && routeData.steps.length > currentStepIndex + 1 && (
+                    <View style={styles.nextTurnSubPill}>
+                      <Ionicons
+                        name={
+                          routeData.steps[currentStepIndex + 1].maneuverType === 'turn-left'
+                            ? 'return-up-back'
+                            : routeData.steps[currentStepIndex + 1].maneuverType === 'turn-right'
+                            ? 'return-up-forward'
+                            : 'arrow-up'
+                        }
+                        size={12}
+                        color="rgba(255, 255, 255, 0.9)"
+                        style={{ marginRight: 4 }}
+                      />
+                      <Text style={styles.nextTurnSubPillText} numberOfLines={1}>
+                        Sau đó: {routeData.steps[currentStepIndex + 1].instruction}
+                      </Text>
+                    </View>
+                  )}
                 </View>
 
-                {/* Top Action Buttons (In-App PiP & Close) */}
+                {/* Top Action Buttons (Close on top, In-App PiP below) */}
                 <View style={styles.topNavActions}>
                   <TouchableOpacity
                     style={styles.navActionCircle}
-                    onPress={handleMinimizePress}
-                    activeOpacity={0.8}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <Ionicons name="contract" size={16} color="#FFFFFF" />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.navActionCircle, { marginTop: 6 }]}
                     onPress={onClose}
                     activeOpacity={0.8}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
                     <Ionicons name="close" size={18} color="#FFFFFF" />
                   </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.navActionCircle, { marginTop: 6 }]}
+                    onPress={handleMinimizePress}
+                    activeOpacity={0.8}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="contract" size={16} color="#FFFFFF" />
+                  </TouchableOpacity>
                 </View>
               </View>
-            </SafeAreaView>
+            </View>
 
             {/* Floating Side Controls */}
             <View style={styles.sideControls}>
@@ -523,7 +548,7 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
             </View>
 
             {/* Bottom Dark Navigation HUD Panel */}
-            <SafeAreaView style={styles.navBottomOverlay} edges={['bottom', 'left', 'right']}>
+            <View style={[styles.navBottomOverlay, { bottom: Math.max(insets.bottom, 12) }]}>
               <View style={styles.navBottomCard}>
                 <View style={styles.hudEtaCol}>
                   <View style={styles.hudEtaRow}>
@@ -546,7 +571,7 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
                   <Text style={styles.exitBtnText}>Thoát</Text>
                 </TouchableOpacity>
               </View>
-            </SafeAreaView>
+            </View>
           </>
         )}
 
@@ -857,6 +882,21 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: 'rgba(255, 255, 255, 0.85)',
     marginTop: 2,
+  },
+  nextTurnSubPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.22)',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    marginTop: 6,
+  },
+  nextTurnSubPillText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   topNavActions: {
     alignItems: 'center',
