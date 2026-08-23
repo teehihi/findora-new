@@ -1,13 +1,5 @@
 import { RouteStep } from './navigationService';
 
-export type CameraMode =
-  | 'IDLE'
-  | 'FOLLOWING'
-  | 'APPROACHING_MANEUVER'
-  | 'MANEUVER'
-  | 'MANUAL_EXPLORING'
-  | 'ARRIVED';
-
 export interface CameraState {
   latitude: number;
   longitude: number;
@@ -23,12 +15,9 @@ export interface CameraInput {
   speedKmh: number;
   distanceToNextManeuverMeters: number;
   nextStep?: RouteStep | null;
-  cameraMode: CameraMode;
-  bottomSheetHeight: number;
-  screenHeight: number;
 }
 
-// 1. Shortest Angular Path Difference (handles 358° -> 2° smoothly)
+// Shortest Angular Path Difference (handles 358° -> 2° smoothly)
 export function getShortestAngleDelta(fromAngle: number, toAngle: number): number {
   const diff = (toAngle - fromAngle) % 360;
   return ((diff + 540) % 360) - 180;
@@ -40,128 +29,66 @@ export function interpolateAngle(fromAngle: number, toAngle: number, factor: num
   return (fromAngle + delta * factor + 360) % 360;
 }
 
-// 2. Project Coordinate Ahead along Bearing (in meters)
-// To place user at ~38% screen height, camera center is projected FORWARD along user's movement heading
-export function projectCoordinateAhead(
-  lat: number,
-  lng: number,
-  headingDeg: number,
-  distanceMeters: number
-): { latitude: number; longitude: number } {
-  const earthRadius = 6378137; // meters
-  const rad = (headingDeg * Math.PI) / 180;
-  const dLat = (distanceMeters * Math.cos(rad)) / earthRadius;
-  const dLng =
-    (distanceMeters * Math.sin(rad)) / (earthRadius * Math.cos((lat * Math.PI) / 180));
-
-  return {
-    latitude: lat + (dLat * 180) / Math.PI,
-    longitude: lng + (dLng * 180) / Math.PI,
-  };
-}
-
 export class NavigationCameraController {
   private lastSmoothedHeading = 0;
   private lastSmoothedSpeed = 0;
-  private lastTargetCamera: CameraState | null = null;
 
-  // Reset or initialize state
   public reset(initialHeading: number = 0) {
-    this.lastSmoothedHeading = initialHeading;
+    this.lastSmoothedHeading = initialHeading || 0;
     this.lastSmoothedSpeed = 0;
-    this.lastTargetCamera = null;
   }
 
-  // Calculate dynamic camera parameters based on speed, maneuver proximity, and framing
+  // Calculate reliable, stable camera parameters centered directly on userLocation
   public computeCameraTarget(input: CameraInput): CameraState {
     const {
       currentLocation,
       speedKmh,
       distanceToNextManeuverMeters,
       nextStep,
-      cameraMode,
     } = input;
 
     // 1. Heading Smoothing (Noise Filter)
-    const rawHeading = currentLocation.heading !== undefined && currentLocation.heading >= 0
-      ? currentLocation.heading
-      : input.currentBearing;
-    
-    // Smooth heading via shortest angle delta
-    this.lastSmoothedHeading = interpolateAngle(this.lastSmoothedHeading, rawHeading, 0.45);
+    const rawHeading =
+      currentLocation.heading !== undefined && currentLocation.heading >= 0
+        ? currentLocation.heading
+        : input.currentBearing;
+
+    this.lastSmoothedHeading = interpolateAngle(this.lastSmoothedHeading, rawHeading, 0.4);
 
     // 2. Speed Smoothing (0-120 km/h)
     const safeSpeed = Math.max(speedKmh || 0, 0);
     this.lastSmoothedSpeed = this.lastSmoothedSpeed * 0.7 + safeSpeed * 0.3;
 
-    // 3. Dynamic Zoom Calculation based on Speed & Maneuver Distance
-    let targetZoom = 18.2;
-    let lookaheadMeters = 35; // Default distance to offset camera ahead
-    let targetTilt = 52;
+    // 3. Stable, Natural Zoom (16.8 to 18.0) - Never over-zoom to avoid tile distortion
+    let targetZoom = 17.6;
+    let targetTilt = 46;
 
-    // Base zoom and tilt from speed
-    if (this.lastSmoothedSpeed < 15) {
-      targetZoom = 18.8; // Low speed: close, high-detail road
-      targetTilt = 48;
-      lookaheadMeters = 25;
-    } else if (this.lastSmoothedSpeed < 35) {
-      targetZoom = 17.8; // City driving: optimal balance
-      targetTilt = 55;
-      lookaheadMeters = 50;
-    } else if (this.lastSmoothedSpeed < 65) {
-      targetZoom = 16.8; // Fast avenue: wider preview
-      targetTilt = 60;
-      lookaheadMeters = 90;
-    } else {
-      targetZoom = 15.6; // Highway: long-range forward view
-      targetTilt = 65;
-      lookaheadMeters = 140;
-    }
-
-    // Maneuver Distance Proximity adjustments
-    if (distanceToNextManeuverMeters < 120 && nextStep) {
-      // In immediate intersection: zoom in for precise turn execution
-      targetZoom = Math.max(targetZoom, 19.0);
+    if (this.lastSmoothedSpeed < 20) {
+      targetZoom = 17.8; // Low speed / stopped: clear road view
       targetTilt = 45;
-      lookaheadMeters = 18;
-    } else if (distanceToNextManeuverMeters < 350) {
-      // Approaching turn: zoom in moderately
-      targetZoom = Math.max(targetZoom, 18.4);
+    } else if (this.lastSmoothedSpeed < 50) {
+      targetZoom = 17.2; // City driving
       targetTilt = 50;
-      lookaheadMeters = 35;
-    } else if (distanceToNextManeuverMeters > 1500 && this.lastSmoothedSpeed > 40) {
-      // Long straight route: allow slightly broader view
-      targetZoom = Math.min(targetZoom, 16.5);
-      lookaheadMeters = Math.min(lookaheadMeters * 1.2, 160);
+    } else {
+      targetZoom = 16.5; // Highway / fast driving
+      targetTilt = 54;
     }
 
-    // Special state adjustments
-    if (cameraMode === 'ARRIVED') {
-      targetZoom = 17.5;
-      targetTilt = 30;
-      lookaheadMeters = 0;
+    // Near turn maneuver: slightly zoom in to highlight junction
+    if (distanceToNextManeuverMeters < 150 && nextStep) {
+      targetZoom = 18.0;
+      targetTilt = 44;
     }
 
-    // 4. Predictive Viewpoint: Offset camera forward along vehicle heading
-    // This positions the vehicle at ~38% of the viewport from bottom!
-    const cameraCenter = projectCoordinateAhead(
-      currentLocation.latitude,
-      currentLocation.longitude,
-      this.lastSmoothedHeading,
-      lookaheadMeters
-    );
-
-    const calculatedState: CameraState = {
-      latitude: cameraCenter.latitude,
-      longitude: cameraCenter.longitude,
+    // Camera center is locked squarely onto user's real location
+    return {
+      latitude: currentLocation.latitude,
+      longitude: currentLocation.longitude,
       pitch: Math.round(targetTilt),
       heading: Math.round(this.lastSmoothedHeading),
       zoom: Number(targetZoom.toFixed(1)),
-      altitude: Math.round(120 + (19 - targetZoom) * 80),
+      altitude: 200,
     };
-
-    this.lastTargetCamera = calculatedState;
-    return calculatedState;
   }
 }
 

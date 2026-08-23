@@ -149,12 +149,9 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
                 speedKmh: Math.max((newLoc.coords.speed || 0) * 3.6, 0),
                 distanceToNextManeuverMeters: currentManeuver?.distanceMeters || 100,
                 nextStep: nextManeuver,
-                cameraMode: 'FOLLOWING',
-                bottomSheetHeight: 120,
-                screenHeight: SCREEN_HEIGHT,
               });
 
-              mapRef.current.animateCamera(targetCam, { duration: 650 });
+              mapRef.current.animateCamera(targetCam, { duration: 550 });
             }
           }
         );
@@ -188,11 +185,8 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
         speedKmh: Math.max((userLocation.speed || 0) * 3.6, 0),
         distanceToNextManeuverMeters: currentManeuver?.distanceMeters || 100,
         nextStep: nextManeuver,
-        cameraMode: 'FOLLOWING',
-        bottomSheetHeight: 120,
-        screenHeight: SCREEN_HEIGHT,
       });
-      mapRef.current.animateCamera(targetCam, { duration: 700 });
+      mapRef.current.animateCamera(targetCam, { duration: 600 });
     } else if (userLocation && destination) {
       mapRef.current.fitToCoordinates(
         [userLocation, { latitude: destination.latitude, longitude: destination.longitude }],
@@ -219,11 +213,8 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
           speedKmh: Math.max((userLocation.speed || 0) * 3.6, 0),
           distanceToNextManeuverMeters: currentManeuver?.distanceMeters || 100,
           nextStep: nextManeuver,
-          cameraMode: 'FOLLOWING',
-          bottomSheetHeight: 120,
-          screenHeight: SCREEN_HEIGHT,
         });
-        mapRef.current.animateCamera(targetCam, { duration: 800 });
+        mapRef.current.animateCamera(targetCam, { duration: 600 });
       }
     }, 300);
   };
@@ -334,8 +325,8 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
         {/* ========================================================================= */}
         {navState === 'PREVIEW' && (
           <>
-            {/* Top Route Information Card */}
-            <SafeAreaView style={styles.previewTopOverlay} edges={['top', 'left', 'right']}>
+            {/* Top Route Information Card with exact Safe Area */}
+            <View style={[styles.previewTopOverlay, { top: insets.top + 8 }]}>
               <View style={styles.previewCard}>
                 <TouchableOpacity
                   style={styles.closeRoundBtn}
@@ -417,10 +408,10 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
                   </Text>
                 </TouchableOpacity>
               </View>
-            </SafeAreaView>
+            </View>
 
-            {/* Bottom Route Preview Sheet */}
-            <SafeAreaView style={styles.previewBottomOverlay} edges={['bottom', 'left', 'right']}>
+            {/* Bottom Route Preview Sheet with exact Safe Area */}
+            <View style={[styles.previewBottomOverlay, { bottom: Math.max(insets.bottom, 16) }]}>
               <View style={styles.previewBottomCard}>
                 {loadingRoute ? (
                   <View style={styles.loadingRow}>
@@ -467,7 +458,7 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
                   </>
                 )}
               </View>
-            </SafeAreaView>
+            </View>
           </>
         )}
 
