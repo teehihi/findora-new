@@ -94,37 +94,52 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
           return;
         }
 
-        // Get initial position
-        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-        if (isMounted) {
-          const userCoords = {
-            latitude: loc.coords.latitude,
-            longitude: loc.coords.longitude,
-            heading: loc.coords.heading || 0,
-            speed: loc.coords.speed || 0,
+        // 1. Instant Location: Get last known position immediately (0ms delay)
+        const lastLoc = await Location.getLastKnownPositionAsync({});
+        if (lastLoc && isMounted) {
+          const fastCoords = {
+            latitude: lastLoc.coords.latitude,
+            longitude: lastLoc.coords.longitude,
+            heading: lastLoc.coords.heading || 0,
+            speed: lastLoc.coords.speed || 0,
           };
-          setUserLocation(userCoords);
-          navigationCamera.reset(userCoords.heading);
-          await loadRoute(userCoords);
+          setUserLocation(fastCoords);
+          navigationCamera.reset(fastCoords.heading);
+          loadRoute(fastCoords);
 
-          // Fit full overview in preview mode
+          // Fit route immediately with no lag
           setTimeout(() => {
-            if (mapRef.current) {
+            if (mapRef.current && isMounted) {
               mapRef.current.fitToCoordinates(
-                [userCoords, { latitude: destination.latitude, longitude: destination.longitude }],
+                [fastCoords, { latitude: destination.latitude, longitude: destination.longitude }],
                 {
                   edgePadding: { top: insets.top + 140, right: 50, bottom: insets.bottom + 220, left: 50 },
                   animated: true,
                 }
               );
             }
-          }, 500);
+          }, 100);
         }
 
-        // Subscribe to live GPS tracking
+        // 2. Refine position with active GPS in parallel
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+          .then((loc) => {
+            if (!isMounted || !loc) return;
+            const userCoords = {
+              latitude: loc.coords.latitude,
+              longitude: loc.coords.longitude,
+              heading: loc.coords.heading || 0,
+              speed: loc.coords.speed || 0,
+            };
+            setUserLocation(userCoords);
+            loadRoute(userCoords);
+          })
+          .catch((err) => console.log('Notice: High accuracy loc fallback:', err));
+
+        // 3. Subscribe to live GPS tracking
         locationSubscription = await Location.watchPositionAsync(
           {
-            accuracy: Location.Accuracy.Highest,
+            accuracy: Location.Accuracy.High,
             timeInterval: 2000,
             distanceInterval: 3,
           },
@@ -257,11 +272,26 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
             latitudeDelta: 0.015,
             longitudeDelta: 0.015,
           }}
+          onTouchStart={() => {
+            if (navState === 'NAVIGATING') {
+              setIsManualExploring(true);
+            }
+          }}
           onPanDrag={() => {
             if (navState === 'NAVIGATING') {
               setIsManualExploring(true);
             }
           }}
+          onRegionChangeComplete={(_, isGesture) => {
+            if (isGesture?.isGesture && navState === 'NAVIGATING') {
+              setIsManualExploring(true);
+            }
+          }}
+          scrollEnabled={true}
+          zoomEnabled={true}
+          rotateEnabled={true}
+          pitchEnabled={true}
+          zoomTapEnabled={true}
           showsCompass={false}
           showsUserLocation={false}
           showsMyLocationButton={false}
