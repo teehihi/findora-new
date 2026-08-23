@@ -24,6 +24,7 @@ import {
   formatDurationText,
   getDistanceKm,
 } from '../services/navigationService';
+import { navigationCamera } from '../services/navigationCameraController';
 import { enterPipMode, setAutoPip } from '../services/pipService';
 
 interface NavigationMapModalProps {
@@ -47,17 +48,19 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
   const mapRef = useRef<MapView>(null);
   const [navState, setNavState] = useState<NavState>('PREVIEW');
   const [vehicleMode, setVehicleMode] = useState<VehicleMode>('bike');
-  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number; heading?: number } | null>(null);
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number; heading?: number; speed?: number } | null>(null);
   const [loadingRoute, setLoadingRoute] = useState(true);
   const [routeData, setRouteData] = useState<RouteResult | null>(null);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
   const [isExternalPickerVisible, setIsExternalPickerVisible] = useState(false);
+  const [isManualExploring, setIsManualExploring] = useState(false);
 
   // 1. Initial Route Loading and Realtime GPS Tracking
   useEffect(() => {
     if (!visible || !destination) {
       setNavState('PREVIEW');
+      setIsManualExploring(false);
       return;
     }
 
@@ -98,8 +101,10 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
             latitude: loc.coords.latitude,
             longitude: loc.coords.longitude,
             heading: loc.coords.heading || 0,
+            speed: loc.coords.speed || 0,
           };
           setUserLocation(userCoords);
+          navigationCamera.reset(userCoords.heading);
           await loadRoute(userCoords);
 
           // Fit full overview in preview mode
@@ -129,22 +134,27 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
               latitude: newLoc.coords.latitude,
               longitude: newLoc.coords.longitude,
               heading: newLoc.coords.heading || 0,
+              speed: newLoc.coords.speed || 0,
             };
             setUserLocation(updatedCoords);
             loadRoute(updatedCoords);
 
-            // In active navigation mode: smooth close-up 3D camera follow
-            if (navState === 'NAVIGATING' && mapRef.current) {
-              mapRef.current.animateCamera({
-                center: {
-                  latitude: updatedCoords.latitude,
-                  longitude: updatedCoords.longitude,
-                },
-                pitch: 60,
-                heading: updatedCoords.heading || 0,
-                zoom: 19,
-                altitude: 120,
-              }, { duration: 600 });
+            // In active navigation mode: Smart Predictive Camera Follow
+            if (navState === 'NAVIGATING' && !isManualExploring && mapRef.current) {
+              const currentManeuver = routeData?.steps[currentStepIndex];
+              const nextManeuver = routeData?.steps[currentStepIndex + 1] || null;
+              const targetCam = navigationCamera.computeCameraTarget({
+                currentLocation: updatedCoords,
+                currentBearing: updatedCoords.heading || 0,
+                speedKmh: Math.max((newLoc.coords.speed || 0) * 3.6, 0),
+                distanceToNextManeuverMeters: currentManeuver?.distanceMeters || 100,
+                nextStep: nextManeuver,
+                cameraMode: 'FOLLOWING',
+                bottomSheetHeight: 120,
+                screenHeight: SCREEN_HEIGHT,
+              });
+
+              mapRef.current.animateCamera(targetCam, { duration: 650 });
             }
           }
         );
@@ -163,26 +173,31 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
         locationSubscription.remove();
       }
     };
-  }, [visible, destination, vehicleMode, navState]);
+  }, [visible, destination, vehicleMode, navState, isManualExploring]);
 
-  // Recenter map camera
-  const handleRecenter = () => {
+  // Recenter / Resume Smart Navigation Camera
+  const handleRecenterOrResume = () => {
+    setIsManualExploring(false);
     if (!mapRef.current) return;
     if (navState === 'NAVIGATING' && userLocation) {
-      mapRef.current.animateCamera({
-        center: {
-          latitude: userLocation.latitude,
-          longitude: userLocation.longitude,
-        },
-        pitch: 50,
-        heading: userLocation.heading || 0,
-        zoom: 18,
-      }, { duration: 600 });
+      const currentManeuver = routeData?.steps[currentStepIndex];
+      const nextManeuver = routeData?.steps[currentStepIndex + 1] || null;
+      const targetCam = navigationCamera.computeCameraTarget({
+        currentLocation: userLocation,
+        currentBearing: userLocation.heading || 0,
+        speedKmh: Math.max((userLocation.speed || 0) * 3.6, 0),
+        distanceToNextManeuverMeters: currentManeuver?.distanceMeters || 100,
+        nextStep: nextManeuver,
+        cameraMode: 'FOLLOWING',
+        bottomSheetHeight: 120,
+        screenHeight: SCREEN_HEIGHT,
+      });
+      mapRef.current.animateCamera(targetCam, { duration: 700 });
     } else if (userLocation && destination) {
       mapRef.current.fitToCoordinates(
         [userLocation, { latitude: destination.latitude, longitude: destination.longitude }],
         {
-          edgePadding: { top: 180, right: 60, bottom: 260, left: 60 },
+          edgePadding: { top: insets.top + 140, right: 50, bottom: insets.bottom + 220, left: 50 },
           animated: true,
         }
       );
@@ -192,19 +207,23 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
   // Start Realtime Navigation
   const handleStartNavigation = () => {
     setNavState('STARTING');
+    setIsManualExploring(false);
     setTimeout(() => {
       setNavState('NAVIGATING');
       if (userLocation && mapRef.current) {
-        mapRef.current.animateCamera({
-          center: {
-            latitude: userLocation.latitude,
-            longitude: userLocation.longitude,
-          },
-          pitch: 60,
-          heading: userLocation.heading || 0,
-          zoom: 19,
-          altitude: 120,
-        }, { duration: 800 });
+        const currentManeuver = routeData?.steps[0];
+        const nextManeuver = routeData?.steps[1] || null;
+        const targetCam = navigationCamera.computeCameraTarget({
+          currentLocation: userLocation,
+          currentBearing: userLocation.heading || 0,
+          speedKmh: Math.max((userLocation.speed || 0) * 3.6, 0),
+          distanceToNextManeuverMeters: currentManeuver?.distanceMeters || 100,
+          nextStep: nextManeuver,
+          cameraMode: 'FOLLOWING',
+          bottomSheetHeight: 120,
+          screenHeight: SCREEN_HEIGHT,
+        });
+        mapRef.current.animateCamera(targetCam, { duration: 800 });
       }
     }, 300);
   };
@@ -246,6 +265,11 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
             longitude: destination.longitude,
             latitudeDelta: 0.015,
             longitudeDelta: 0.015,
+          }}
+          onPanDrag={() => {
+            if (navState === 'NAVIGATING') {
+              setIsManualExploring(true);
+            }
           }}
           showsCompass={false}
           showsUserLocation={false}
@@ -527,7 +551,7 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
               {/* Compass / Recenter */}
               <TouchableOpacity
                 style={styles.sideCircleBtn}
-                onPress={handleRecenter}
+                onPress={handleRecenterOrResume}
                 activeOpacity={0.85}
               >
                 <Ionicons name="locate" size={22} color="#0084FF" />
@@ -546,6 +570,20 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
                 />
               </TouchableOpacity>
             </View>
+
+            {/* Resume Navigation Floating Button when user manually dragged map */}
+            {isManualExploring && (
+              <View style={[styles.resumeNavContainer, { bottom: Math.max(insets.bottom, 12) + 85 }]}>
+                <TouchableOpacity
+                  style={styles.resumeNavBtn}
+                  onPress={handleRecenterOrResume}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="navigate" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                  <Text style={styles.resumeNavBtnText}>Tiếp tục dẫn đường</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
             {/* Bottom Dark Navigation HUD Panel */}
             <View style={[styles.navBottomOverlay, { bottom: Math.max(insets.bottom, 12) }]}>
@@ -930,6 +968,32 @@ const styles = StyleSheet.create({
     elevation: 6,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+  },
+  resumeNavContainer: {
+    position: 'absolute',
+    alignSelf: 'center',
+    zIndex: 110,
+  },
+  resumeNavBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0D9488',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 24,
+    shadowColor: '#0D9488',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 8,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  resumeNavBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
   navBottomOverlay: {
     position: 'absolute',
