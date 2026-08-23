@@ -346,24 +346,24 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
               )}
             </View>
 
-            {/* Top Action Buttons (Minimize PiP & Close) */}
+            {/* Top Action Buttons (Close on top, Minimize PiP below) */}
             <View style={styles.topActionsCol}>
               <TouchableOpacity
                 style={styles.actionCircleBtn}
-                onPress={() => onMinimize(userLocation, distanceText, durationText)}
-                activeOpacity={0.8}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Ionicons name="contract" size={18} color="#0F172A" />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.actionCircleBtn, { marginTop: 8 }]}
                 onPress={onClose}
                 activeOpacity={0.8}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <Ionicons name="close" size={18} color="#0F172A" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.actionCircleBtn, { marginTop: 8 }]}
+                onPress={() => onMinimize(userLocation, distanceText, durationText)}
+                activeOpacity={0.8}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="contract" size={18} color="#0F172A" />
               </TouchableOpacity>
             </View>
           </View>
