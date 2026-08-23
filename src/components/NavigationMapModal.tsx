@@ -16,6 +16,7 @@ import {
 import MapView, { Marker, Polyline, Region } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LocationPayload } from '../models/types';
+import { enterPipMode, setAutoPip } from '../services/pipService';
 
 interface NavigationMapModalProps {
   visible: boolean;
@@ -191,6 +192,9 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
             updateRouteForLocation(coords);
           }
         );
+
+        // Enable automatic OS Picture-in-Picture on Android when pressing Home button
+        setAutoPip(true);
       } catch (err) {
         console.log('Error in live navigation tracking:', err);
         setLoadingLocation(false);
@@ -199,11 +203,23 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
 
     return () => {
       isMounted = false;
+      setAutoPip(false);
       if (locationSubscription) {
         locationSubscription.remove();
       }
     };
   }, [visible, destination]);
+
+  const handleMinimizePress = async () => {
+    if (Platform.OS === 'android') {
+      const entered = await enterPipMode(16, 9);
+      if (!entered) {
+        onMinimize(userLocation, distanceText, durationText);
+      }
+    } else {
+      onMinimize(userLocation, distanceText, durationText);
+    }
+  };
 
   // Open Native Maps (Google Maps on Android, Apple Maps / Google Maps on iOS)
   const openExternalMapsApp = () => {
@@ -359,7 +375,7 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
 
               <TouchableOpacity
                 style={[styles.actionCircleBtn, { marginTop: 8 }]}
-                onPress={() => onMinimize(userLocation, distanceText, durationText)}
+                onPress={handleMinimizePress}
                 activeOpacity={0.8}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
