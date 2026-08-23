@@ -11,7 +11,29 @@ import {
   View,
 } from 'react-native';
 import MapView, { Marker, Polyline, Region } from 'react-native-maps';
+import Svg, { Rect, Path } from 'react-native-svg';
 import { LocationPayload } from '../models/types';
+
+function MiniDirectionsIcon({ size = 14 }: { size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 40 40">
+      <Rect
+        x="8"
+        y="8"
+        width="24"
+        height="24"
+        rx="5"
+        ry="5"
+        fill="#FFFFFF"
+        transform="rotate(45 20 20)"
+      />
+      <Path
+        d="M 14.5 25 V 20.5 C 14.5 18 16.5 16 19 16 H 22.5 V 12.5 L 28 18 L 22.5 23.5 V 20 H 19 C 18.7 20 18 20.7 18 21.5 V 25 H 14.5 Z"
+        fill="#15803D"
+      />
+    </Svg>
+  );
+}
 
 interface FloatingMiniMapProps {
   visible: boolean;
@@ -24,8 +46,8 @@ interface FloatingMiniMapProps {
 }
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const WIDGET_WIDTH = 220;
-const WIDGET_HEIGHT = 200;
+const WIDGET_WIDTH = 210;
+const WIDGET_HEIGHT = 190;
 
 export const FloatingMiniMap: React.FC<FloatingMiniMapProps> = ({
   visible,
@@ -38,7 +60,7 @@ export const FloatingMiniMap: React.FC<FloatingMiniMapProps> = ({
 }) => {
   const pan = useRef(new Animated.ValueXY({
     x: SCREEN_WIDTH - WIDGET_WIDTH - 16,
-    y: SCREEN_HEIGHT - WIDGET_HEIGHT - 120,
+    y: SCREEN_HEIGHT - WIDGET_HEIGHT - 130,
   })).current;
 
   const mapRef = useRef<MapView>(null);
@@ -91,8 +113,8 @@ export const FloatingMiniMap: React.FC<FloatingMiniMapProps> = ({
     if (visible && userLocation && destination && mapRef.current) {
       const midLat = (userLocation.latitude + destination.latitude) / 2;
       const midLng = (userLocation.longitude + destination.longitude) / 2;
-      const latDelta = Math.max(Math.abs(userLocation.latitude - destination.latitude) * 1.5, 0.01);
-      const lngDelta = Math.max(Math.abs(userLocation.longitude - destination.longitude) * 1.5, 0.01);
+      const latDelta = Math.max(Math.abs(userLocation.latitude - destination.latitude) * 1.5, 0.008);
+      const lngDelta = Math.max(Math.abs(userLocation.longitude - destination.longitude) * 1.5, 0.008);
 
       mapRef.current.animateToRegion({
         latitude: midLat,
@@ -108,8 +130,8 @@ export const FloatingMiniMap: React.FC<FloatingMiniMapProps> = ({
   const initialRegion: Region = {
     latitude: destination.latitude,
     longitude: destination.longitude,
-    latitudeDelta: 0.015,
-    longitudeDelta: 0.015,
+    latitudeDelta: 0.012,
+    longitudeDelta: 0.012,
   };
 
   return (
@@ -122,39 +144,10 @@ export const FloatingMiniMap: React.FC<FloatingMiniMapProps> = ({
       ]}
       {...panResponder.panHandlers}
     >
-      {/* Top Header Card with Distance & Controls */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <View style={styles.livePulseDot} />
-          <Text style={styles.distanceBadge} numberOfLines={1}>
-            {distanceText || 'Đang chỉ đường'}
-          </Text>
-        </View>
-
-        <View style={styles.headerRight}>
-          <TouchableOpacity
-            style={styles.headerBtn}
-            onPress={onExpand}
-            activeOpacity={0.7}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons name="expand" size={14} color="#FFFFFF" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.headerBtn, { marginLeft: 6 }]}
-            onPress={onClose}
-            activeOpacity={0.7}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons name="close" size={14} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Mini Map View */}
+      {/* Full Bleed Map View */}
       <TouchableOpacity
         style={styles.mapTouchWrapper}
-        activeOpacity={0.9}
+        activeOpacity={0.95}
         onPress={onExpand}
       >
         <MapView
@@ -168,6 +161,8 @@ export const FloatingMiniMap: React.FC<FloatingMiniMapProps> = ({
           showsUserLocation={false}
           showsCompass={false}
           toolbarEnabled={false}
+          liteMode={Platform.OS === 'android'}
+          pointerEvents="none"
         >
           {/* User Location Marker */}
           {userLocation && (
@@ -176,7 +171,7 @@ export const FloatingMiniMap: React.FC<FloatingMiniMapProps> = ({
               title="Vị trí của bạn"
               anchor={{ x: 0.5, y: 0.5 }}
             >
-              <View style={styles.userMarkerCircle}>
+              <View style={styles.userMarkerPulse}>
                 <View style={styles.userMarkerDot} />
               </View>
             </Marker>
@@ -191,7 +186,7 @@ export const FloatingMiniMap: React.FC<FloatingMiniMapProps> = ({
             title={destination.name || 'Điểm hẹn'}
           >
             <View style={styles.destMarkerPin}>
-              <Ionicons name="location" size={20} color="#EF4444" />
+              <Ionicons name="location" size={24} color="#EF4444" />
             </View>
           </Marker>
 
@@ -202,21 +197,52 @@ export const FloatingMiniMap: React.FC<FloatingMiniMapProps> = ({
                 userLocation,
                 { latitude: destination.latitude, longitude: destination.longitude },
               ]}
-              strokeColor="#0084FF"
-              strokeWidth={3.5}
-              lineDashPattern={[6, 4]}
+              strokeColor="#1A73E8"
+              strokeWidth={4}
             />
           )}
         </MapView>
 
-        {/* Bottom Bar: Address & Expand Banner */}
-        <View style={styles.bottomBar}>
+        {/* Top Floating Controls Overlay */}
+        <View style={styles.topFloatingBar}>
+          {/* Left Navigation Pill (Google Maps Green) */}
+          <View style={styles.navGreenPill}>
+            <MiniDirectionsIcon size={14} />
+            <Text style={styles.navDistanceText} numberOfLines={1}>
+              {distanceText || 'Chỉ đường'}
+            </Text>
+          </View>
+
+          {/* Right Action Circle Buttons */}
+          <View style={styles.topActionsRow}>
+            <TouchableOpacity
+              style={styles.actionCircleBtn}
+              onPress={onExpand}
+              activeOpacity={0.75}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            >
+              <Ionicons name="expand" size={12} color="#0F172A" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.actionCircleBtn, { marginLeft: 6 }]}
+              onPress={onClose}
+              activeOpacity={0.75}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            >
+              <Ionicons name="close" size={13} color="#0F172A" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Bottom Floating Glass Banner */}
+        <View style={styles.bottomGlassBanner}>
           <Text style={styles.addressText} numberOfLines={1}>
-            {destination.name || destination.address || 'Điểm hẹn'}
+            {destination.name || destination.address || 'Điểm hẹn gặp mặt'}
           </Text>
-          <View style={styles.expandRow}>
-            <Ionicons name="navigate-circle" size={12} color="#0084FF" />
-            <Text style={styles.expandText}>Chạm để mở to</Text>
+          <View style={styles.expandHintRow}>
+            <Ionicons name="locate" size={10} color="#0284C7" />
+            <Text style={styles.expandHintText}>Chạm để mở toàn màn hình</Text>
           </View>
         </View>
       </TouchableOpacity>
@@ -231,54 +257,17 @@ const styles = StyleSheet.create({
     left: 0,
     width: WIDGET_WIDTH,
     height: WIDGET_HEIGHT,
-    backgroundColor: '#0F172A',
-    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
     overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: '#0084FF',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.08)',
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.35,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
     shadowRadius: 12,
-    elevation: 12,
+    elevation: 8,
     zIndex: 9999,
-  },
-  header: {
-    height: 34,
-    backgroundColor: '#0F172A',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 10,
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  livePulseDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: '#10B981',
-    marginRight: 6,
-  },
-  distanceBadge: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#38BDF8',
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  headerBtn: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: 'rgba(255, 255, 255, 0.18)',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   mapTouchWrapper: {
     flex: 1,
@@ -287,10 +276,58 @@ const styles = StyleSheet.create({
   map: {
     ...StyleSheet.absoluteFill,
   },
-  userMarkerCircle: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+  topFloatingBar: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    right: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    zIndex: 10,
+  },
+  navGreenPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#15803D',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  navDistanceText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginLeft: 4,
+  },
+  topActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  actionCircleBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  userMarkerPulse: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     backgroundColor: 'rgba(0, 132, 255, 0.25)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -306,30 +343,37 @@ const styles = StyleSheet.create({
   destMarkerPin: {
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
   },
-  bottomBar: {
+  bottomGlassBanner: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(15, 23, 42, 0.9)',
-    paddingHorizontal: 8,
-    paddingVertical: 5,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
   },
   addressText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#0F172A',
   },
-  expandRow: {
+  expandHintRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 2,
   },
-  expandText: {
+  expandHintText: {
     fontSize: 9,
     fontWeight: '600',
-    color: '#94A3B8',
+    color: '#0284C7',
     marginLeft: 3,
   },
 });
