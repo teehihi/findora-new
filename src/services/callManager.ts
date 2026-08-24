@@ -582,6 +582,13 @@ class SimpleCallManager {
   }
 
   /**
+   * Toggle camera enabled / disabled
+   */
+  setCameraEnabled(enabled: boolean): void {
+    this.webRTCClient?.setCameraEnabled(enabled);
+  }
+
+  /**
    * Cleanup call resources
    */
   private async cleanup(): Promise<void> {

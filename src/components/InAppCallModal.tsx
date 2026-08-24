@@ -143,6 +143,12 @@ export function InAppCallModal({ visible, otherUser, status = 'RINGING', onClose
     callManager.setMicrophoneMuted(nextState);
   };
 
+  const handleToggleVideo = () => {
+    const nextState = !isVideoOn;
+    setIsVideoOn(nextState);
+    callManager.setCameraEnabled(nextState);
+  };
+
   const handleEndCallAction = () => {
     setCallState('ENDED');
     callManager.endCall(duration).catch(() => {});
@@ -264,19 +270,19 @@ export function InAppCallModal({ visible, otherUser, status = 'RINGING', onClose
               </Text>
             </TouchableOpacity>
 
-            {/* Video Toggle (Placeholder) */}
+            {/* Video Toggle */}
             <TouchableOpacity
               style={[styles.actionBtn, isVideoOn && styles.actionBtnActive]}
-              onPress={() => setIsVideoOn(!isVideoOn)}
+              onPress={handleToggleVideo}
               activeOpacity={0.8}
             >
               <Ionicons
-                name={isVideoOn ? 'videocam' : 'videocam-outline'}
+                name={isVideoOn ? 'videocam' : 'videocam-off-outline'}
                 size={26}
                 color={isVideoOn ? '#0F172A' : '#FFFFFF'}
               />
               <Text style={[styles.actionBtnText, isVideoOn && styles.actionBtnTextActive]}>
-                {isVideoOn ? 'Camera Bật' : 'Camera'}
+                {isVideoOn ? 'Camera Bật' : 'Camera Tắt'}
               </Text>
             </TouchableOpacity>
 

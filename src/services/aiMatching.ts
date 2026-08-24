@@ -1,9 +1,19 @@
 import { Post, MatchResult } from '../models/types';
 
-const MIN_MATCH_SCORE = 0.2;
+const MIN_MATCH_SCORE = 0.25;
 const ABSOLUTE_MAX_DISTANCE_KM = 500.0;
 const MAX_DISTANCE_KM = 50.0;
 const MAX_TIME_DIFF_DAYS = 30;
+
+export type ItemDomain =
+  | 'document'
+  | 'fashion'
+  | 'electronics'
+  | 'valuables'
+  | 'vehicle_key'
+  | 'beverage'
+  | 'pet'
+  | 'general';
 
 /**
  * Removes Vietnamese diacritics / accents for robust matching
@@ -29,9 +39,55 @@ function isIdentityDocument(post: Post): boolean {
   const docKeywords = [
     'the sinh vien', 'the sv', 'cccd', 'cmnd', 'can cuoc', 'bang lai',
     'gplx', 'the ngan hang', 'the atm', 'giay to', 'bao hiem', 'bhyt',
-    'ho chieu', 'passport', 'student id', 'id card', 'the xe'
+    'ho chieu', 'passport', 'student id', 'id card', 'the xe', 'ca vet', 'giay dang ky'
   ];
   return docKeywords.some(kw => text.includes(kw));
+}
+
+/**
+ * Detects the distinct item domain of a post to prevent absurd cross-domain matches
+ */
+export function detectItemDomain(post: Post): ItemDomain {
+  if (isIdentityDocument(post)) return 'document';
+
+  const text = removeVietnameseDiacritics(`${post.title} ${post.description} ${post.imageLabel || ''}`);
+
+  const beverageKeywords = [
+    'bia', 'thung bia', 'lon bia', 'tiger', 'saigon', 'heineken', 'larue', 'lager',
+    'nuoc ngot', 'coca', 'pepsi', 'ruou', 'thuc uong', 'do uong', 'thung nuoc'
+  ];
+  if (beverageKeywords.some(kw => text.includes(kw))) return 'beverage';
+
+  const fashionKeywords = [
+    'quan', 'ao', 'quan jean', 'quan tay', 'quan short', 'ao khoac', 'ao thun',
+    'ao so mi', 'vay', 'dam', 'giay', 'dep', 'non', 'mu', 'khan', 'that lung',
+    'day nit', 'tat', 'vo', 'hoodie', 'blazer', 'jean', 'quan bo'
+  ];
+  if (fashionKeywords.some(kw => text.includes(kw))) return 'fashion';
+
+  const electronicKeywords = [
+    'dien thoai', 'iphone', 'samsung', 'oppo', 'xiaomi', 'redmi', 'laptop',
+    'macbook', 'ipad', 'tablet', 'may tinh', 'tai nghe', 'airpod', 'headphone',
+    'cuc sac', 'sac du phong', 'chuot', 'ban phim', 'apple watch', 'dong ho thong minh'
+  ];
+  if (electronicKeywords.some(kw => text.includes(kw))) return 'electronics';
+
+  const petKeywords = ['meo', 'cho', 'thu cung', 'con meo', 'con cho', 'pet', 'cun', 'meo con', 'cho con'];
+  if (petKeywords.some(kw => text.includes(kw))) return 'pet';
+
+  const vehicleKeyKeywords = [
+    'chia khoa', 'chia khoá', 'xe may', 'xe dap', 'smartkey', 'non bao hiem',
+    'mu bao hiem', 'khoa xe'
+  ];
+  if (vehicleKeyKeywords.some(kw => text.includes(kw))) return 'vehicle_key';
+
+  const valuableKeywords = [
+    'vi', 'bop', 'vi tien', 'bop tien', 'tien mat', 'nhan', 'vong tay',
+    'day chuyen', 'bong tai', 'lac tay', 'vang', 'kim cuong', 'trang suc'
+  ];
+  if (valuableKeywords.some(kw => text.includes(kw))) return 'valuables';
+
+  return 'general';
 }
 
 /**
@@ -108,7 +164,6 @@ function checkDocumentMismatch(post1: Post, post2: Post): { isMismatch: boolean;
     if (nameMatchFound) {
       return { isMismatch: false, isExactMatch: true };
     } else {
-      // Names are clearly different (e.g., 'Phạm Văn Hậu' vs 'Nguyễn Thị Thuỳ Trang')
       return { isMismatch: true, isExactMatch: false };
     }
   }
@@ -149,7 +204,8 @@ function calculateKeywordBonus(text1: string, text2: string): number {
     'chìa khóa', 'chìa khoá', 'xe', 'xe máy', 'ô tô', 'túi xách', 'ba lô', 'cặp',
     'ví tiền', 'đồng hồ', 'nhẫn', 'vòng', 'dây chuyền', 'bông tai', 'lắc tay',
     'áo', 'quần', 'giày', 'dép', 'mũ', 'kính', 'kính mắt',
-    'sách', 'vở', 'bút', 'cặp sách', 'balo', 'key', 'cat', 'dog', 'wallet', 'phone'
+    'sách', 'vở', 'bút', 'cặp sách', 'balo', 'key', 'cat', 'dog', 'wallet', 'phone',
+    'bia', 'thùng bia', 'lon bia', 'tiger', 'saigon', 'heineken'
   ];
 
   let matchCount = 0;
@@ -162,7 +218,7 @@ function calculateKeywordBonus(text1: string, text2: string): number {
     }
   }
 
-  return matchCount * 0.1;
+  return matchCount * 0.15;
 }
 
 /**
@@ -184,7 +240,7 @@ function calculateTitleSimilarity(post1: Post, post2: Post): number {
   if (union.size === 0) return 0.0;
 
   const jaccard = intersection.size / union.size;
-  const keywordBonus = calculateKeywordBonus(title1, title2) * 3.0;
+  const keywordBonus = calculateKeywordBonus(title1, title2) * 2.5;
 
   return Math.min(1.0, jaccard + keywordBonus);
 }
@@ -298,6 +354,7 @@ export function inferMatchReasons(
     { keywords: ['laptop', 'macbook', 'may tinh'], label: 'Cùng loại Laptop' },
     { keywords: ['chia khoa', 'chia khoa xe', 'key'], label: 'Cùng loại Chìa khóa' },
     { keywords: ['tai nghe', 'airpod', 'headphone'], label: 'Cùng loại Tai nghe' },
+    { keywords: ['quan', 'quan jean', 'quan bo', 'ao', 'ao thun', 'ao khoac', 'vay', 'dam'], label: 'Cùng loại Quần áo / Thời trang' },
     { keywords: ['bia', 'beer', 'saigon', 'tiger', 'heineken', 'larue', 'lager', 'lon bia', 'thung bia', 'nuoc ngot', 'do uong'], label: 'Cùng loại Bia / Đồ uống' },
     { keywords: ['nhan', 'nhan vang', 'day chuyen', 'vong tay', 'lac tay', 'trang suc'], label: 'Cùng loại Trang sức' },
     { keywords: ['non', 'mu', 'non bao hiem', 'helmet'], label: 'Cùng loại Nón bảo hiểm' },
@@ -378,33 +435,34 @@ export function inferMatchReasons(
     } catch {}
   }
 
-  // 8. General fallbacks if needed
-  if (reasons.length < 2) {
-    if (contentScore >= 0.2 && !reasons.includes('Thông tin phù hợp')) {
-      reasons.push('Thông tin phù hợp');
-    }
-    if (imageScore > 0.2 && !reasons.includes('Hình ảnh tương đồng') && !reasons.includes('Hình ảnh giống nhau')) {
-      reasons.push('Hình ảnh tương đồng');
-    }
-    if (reasons.length === 0) {
-      reasons.push('Đặc điểm tương đồng');
-      reasons.push('Thông tin phù hợp');
-    } else if (reasons.length === 1) {
-      reasons.push('Thông tin phù hợp');
-    }
-  }
-
   return reasons;
 }
 
 /**
- * Calculates Match Score between 2 posts with intelligent document identity verification
+ * Calculates Match Score between 2 posts with strict domain separation and content verification
  */
 export function calculateMatchScore(post1: Post, post2: Post): MatchResult {
-  // 1. Check Identity Document Mismatch
+  // 1. Strict Domain Incompatibility Check (e.g. fashion vs document vs beverage)
+  const domain1 = detectItemDomain(post1);
+  const domain2 = detectItemDomain(post2);
+
+  if (domain1 !== 'general' && domain2 !== 'general' && domain1 !== domain2) {
+    // Incompatible categories -> Immediate 0% match
+    return {
+      post: post2,
+      score: 0,
+      percentage: 0,
+      imageScore: 0,
+      contentScore: 0,
+      locationScore: 0,
+      distanceKm: undefined,
+      reasons: []
+    };
+  }
+
+  // 2. Check Identity Document Mismatch
   const { isMismatch, isExactMatch } = checkDocumentMismatch(post1, post2);
   if (isMismatch) {
-    // Different owner names / ID numbers -> Completely distinct items (0% match)
     return {
       post: post2,
       score: 0,
@@ -419,18 +477,31 @@ export function calculateMatchScore(post1: Post, post2: Post): MatchResult {
 
   const imageScore = calculateImageSimilarity(post1, post2);
   const hasImageMatch = Boolean(post1.imageLabel && post2.imageLabel);
-
   const contentScore = calculateContentSimilarity(post1, post2);
   const { score: locationScore, distanceKm } = calculateLocationScore(post1, post2);
+
+  // 3. Content Guard: If there is ZERO or negligible content/visual similarity, distance alone NEVER matches!
+  if (!isExactMatch && contentScore < 0.15 && imageScore < 0.15) {
+    return {
+      post: post2,
+      score: 0,
+      percentage: 0,
+      imageScore: 0,
+      contentScore: 0,
+      locationScore: 0,
+      distanceKm,
+      reasons: []
+    };
+  }
 
   let totalScore = 0;
   if (isExactMatch) {
     // Both documents share the exact owner name / student ID -> High confidence match (95%)
     totalScore = 0.95;
   } else if (hasImageMatch) {
-    totalScore = imageScore * 0.5 + contentScore * 0.4 + locationScore * 0.1;
+    totalScore = imageScore * 0.5 + contentScore * 0.35 + locationScore * 0.15;
   } else {
-    totalScore = contentScore * 0.8 + locationScore * 0.2;
+    totalScore = contentScore * 0.75 + locationScore * 0.25;
   }
 
   const finalImageScore = isExactMatch ? 1.0 : imageScore;

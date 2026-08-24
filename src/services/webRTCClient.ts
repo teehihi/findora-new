@@ -211,7 +211,10 @@ export class WebRTCClient {
     if (!this.pc) throw new Error('PeerConnection not initialized');
     this.log('CREATE_ANSWER');
 
-    const answer = await this.pc.createAnswer();
+    const answer = await this.pc.createAnswer({
+      offerToReceiveAudio: true,
+      offerToReceiveVideo: true,
+    });
     await this.pc.setLocalDescription(answer);
     this.log('LOCAL_ANSWER_SET', { signalingState: this.pc.signalingState });
     return { sdp: answer.sdp, type: answer.type };
@@ -270,13 +273,15 @@ export class WebRTCClient {
     return this.pc?.iceConnectionState || 'new';
   }
 
-  get RemoteStream(): any {
-    return this.remoteStream;
-  }
-
   setMicrophoneMuted(muted: boolean): void {
     this.localStream?.getAudioTracks?.()?.forEach((track: any) => {
       track.enabled = !muted;
+    });
+  }
+
+  setCameraEnabled(enabled: boolean): void {
+    this.localStream?.getVideoTracks?.()?.forEach((track: any) => {
+      track.enabled = enabled;
     });
   }
 
