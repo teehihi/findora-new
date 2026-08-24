@@ -331,7 +331,9 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     width: '100%',
-    height: 220,
+    aspectRatio: 16 / 10,
+    minHeight: 220,
+    maxHeight: 460,
     borderRadius: 16,
     overflow: 'hidden',
     marginBottom: 12,
@@ -340,7 +342,7 @@ const styles = StyleSheet.create({
   },
   postImage: {
     width: '100%',
-    height: 220,
+    height: '100%',
     borderRadius: 16
   },
   typeBadge: {

@@ -132,7 +132,9 @@ const styles = StyleSheet.create({
   },
   imageBox: {
     width: '100%',
-    height: 200,
+    aspectRatio: 16 / 10,
+    minHeight: 200,
+    maxHeight: 460,
     borderRadius: 16,
     backgroundColor: '#E2E8F0',
     marginBottom: 12,
