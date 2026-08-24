@@ -129,6 +129,7 @@ export default function RegisterScreen() {
         offlineAccess: false
       });
       await GoogleSigninModule.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      await GoogleSigninModule.signOut().catch(() => {});
       const response = await GoogleSigninModule.signIn();
       
       const googleUser = response.data?.user || (response as any).user;
