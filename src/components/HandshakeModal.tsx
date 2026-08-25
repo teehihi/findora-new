@@ -88,19 +88,33 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
   useEffect(() => {
     if (visible && currentUser) {
       setStep(1);
+      setSelectedParticipant(null);
+      setManualReceiverName('');
+      setEnteredOtp('');
+      setCapturedPhotoUri(null);
+      setCapturedPhotoBase64(null);
+      setAiResult(null);
       setShowParticipantModal(false);
       setLoadingParticipants(true);
       getChatParticipantsForPost(postId, currentUser.uid)
         .then((list) => {
           setParticipants(list);
-          if (list.length > 0) {
-            setSelectedParticipant(list[0]);
-          }
           setLoadingParticipants(false);
         })
         .catch(() => setLoadingParticipants(false));
     }
   }, [visible, postId]);
+
+  const handleCloseModal = () => {
+    setSelectedParticipant(null);
+    setManualReceiverName('');
+    setEnteredOtp('');
+    setCapturedPhotoUri(null);
+    setCapturedPhotoBase64(null);
+    setAiResult(null);
+    setStep(1);
+    onClose();
+  };
 
   // Step 2: Create Handshake & Generate OTP (Transitions to Step 3)
   const handleCreateOtp = async () => {
@@ -286,7 +300,7 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleCloseModal}>
       <KeyboardAvoidingView
         style={styles.overlay}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -298,7 +312,7 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
               <Ionicons name="shield-checkmark" size={22} color="#00A896" style={{ marginRight: 6 }} />
               <Text style={styles.headerTitle}>Xác Nhận Trao Trả Đồ</Text>
             </View>
-            <TouchableOpacity style={styles.closeBtn} onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <TouchableOpacity style={styles.closeBtn} onPress={handleCloseModal} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <Ionicons name="close" size={22} color="#64748B" />
             </TouchableOpacity>
           </View>
