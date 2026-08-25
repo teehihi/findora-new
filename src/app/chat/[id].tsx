@@ -2911,6 +2911,7 @@ export default function ChatRoomScreen() {
         partnerId={otherUserId || ''}
         partnerName={otherUser.name || 'Người dùng Findora'}
         initialMessageText={appointmentTriggerText}
+        postTitle={attachedPost?.title}
         onSuccess={async (appPayload: AppointmentPayload) => {
           try {
             const curChatId = activeChatId || paramChatId;

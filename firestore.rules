@@ -220,5 +220,17 @@ service cloud.firestore {
       allow read: if true;
       allow write: if false; // Chỉ admin
     }
+    
+    // ===== APPOINTMENTS =====
+    match /appointments/{appointmentId} {
+      allow read, create, update: if isAuthenticated();
+      allow delete: if false;
+    }
+    
+    // ===== MAIL (Email Queue) =====
+    match /mail/{mailId} {
+      allow create: if isAuthenticated();
+      allow read, update, delete: if false;
+    }
   }
 }

@@ -1,19 +1,20 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Modal,
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   TextInput,
   ActivityIndicator,
   Alert,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  Linking,
+  Animated,
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { extractAppointmentFromMessageWithGemini } from '../services/geminiService';
 import { createAndSaveAppointment, AppointmentPayload } from '../services/appointmentService';
 
@@ -26,6 +27,7 @@ interface AppointmentModalProps {
   partnerId: string;
   partnerName: string;
   initialMessageText?: string;
+  postTitle?: string;
   onSuccess: (appointment: AppointmentPayload) => void;
 }
 
@@ -38,18 +40,76 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
   partnerId,
   partnerName,
   initialMessageText = '',
+  postTitle = '',
   onSuccess,
 }) => {
+  const [showModal, setShowModal] = useState(visible);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(450)).current;
+
   const [loadingAi, setLoadingAi] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const [title, setTitle] = useState('Hẹn gặp trao trả đồ');
+  const [title, setTitle] = useState(postTitle ? `Hẹn gặp: ${postTitle}` : 'Hẹn gặp trao trả đồ');
   const [dateText, setDateText] = useState('');
   const [timeText, setTimeText] = useState('');
   const [locationText, setLocationText] = useState('');
   const [noteText, setNoteText] = useState('');
   const [isoStart, setIsoStart] = useState('');
   const [isoEnd, setIsoEnd] = useState('');
+
+  // Handle open / close animations: Fade backdrop only + slide sheet up
+  useEffect(() => {
+    if (visible) {
+      setShowModal(true);
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 220,
+          useNativeDriver: true,
+        }),
+        Animated.spring(slideAnim, {
+          toValue: 0,
+          damping: 24,
+          stiffness: 220,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else if (showModal) {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 450,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setShowModal(false);
+      });
+    }
+  }, [visible]);
+
+  const handleClose = () => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 450,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setShowModal(false);
+      onClose();
+    });
+  };
 
   // When modal opens, run AI extraction if initialMessageText exists
   useEffect(() => {
@@ -58,7 +118,8 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
         setLoadingAi(true);
         extractAppointmentFromMessageWithGemini(initialMessageText)
           .then((res) => {
-            setTitle(res.title);
+            const finalTitle = postTitle ? `Hẹn gặp: ${postTitle}` : res.title || 'Hẹn gặp trao trả đồ';
+            setTitle(finalTitle);
             setDateText(res.dateText);
             setTimeText(res.timeText);
             setLocationText(res.locationText);
@@ -75,12 +136,13 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
         setDefaultDateTime();
       }
     }
-  }, [visible, initialMessageText]);
+  }, [visible, initialMessageText, postTitle]);
 
   const setDefaultDateTime = () => {
     const now = new Date();
     const pad = (n: number) => String(n).padStart(2, '0');
     const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    setTitle(postTitle ? `Hẹn gặp: ${postTitle}` : 'Hẹn gặp trao trả đồ');
     setDateText(today);
     setTimeText('15:00');
     setLocationText('');
@@ -125,47 +187,73 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
 
       setSaving(false);
       onSuccess(appointment);
-      onClose();
+      handleClose();
     } catch (e: any) {
       setSaving(false);
       Alert.alert('Lỗi', e.message || 'Không thể tạo cuộc hẹn.');
     }
   };
 
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        style={styles.overlay}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <View style={styles.content}>
-          {/* Header */}
-          <View style={styles.headerRow}>
-            <View style={styles.headerTitleWrap}>
-              <Ionicons name="calendar" size={22} color="#00A896" style={{ marginRight: 8 }} />
-              <Text style={styles.headerTitle}>Tạo Nhắc Hẹn Gặp Mặt</Text>
-            </View>
-            <TouchableOpacity style={styles.closeBtn} onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close" size={22} color="#64748B" />
-            </TouchableOpacity>
-          </View>
+  if (!showModal) return null;
 
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-            {loadingAi ? (
-              <View style={styles.aiLoadingBox}>
-                <ActivityIndicator size="small" color="#00A896" />
-                <Text style={styles.aiLoadingText}>
-                  Gemini AI đang tự động trích xuất ngày, giờ, địa điểm từ tin nhắn...
-                </Text>
+  return (
+    <Modal visible={showModal} transparent animationType="none" onRequestClose={handleClose}>
+      <View style={styles.overlay}>
+        {/* Fade-only Fixed Dark Backdrop */}
+        <Animated.View style={[styles.backdrop, { opacity: fadeAnim }]}>
+          <TouchableWithoutFeedback onPress={handleClose}>
+            <View style={StyleSheet.absoluteFill} />
+          </TouchableWithoutFeedback>
+        </Animated.View>
+
+        {/* Sliding Bottom Sheet Content Card */}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardWrap}
+        >
+          <Animated.View
+            style={[
+              styles.content,
+              { transform: [{ translateY: slideAnim }] },
+            ]}
+          >
+            {/* Header */}
+            <View style={styles.headerRow}>
+              <View style={styles.headerTitleWrap}>
+                <Ionicons name="calendar" size={22} color="#00A896" style={{ marginRight: 8 }} />
+                <Text style={styles.headerTitle}>Tạo Nhắc Hẹn Gặp Mặt</Text>
               </View>
-            ) : initialMessageText ? (
-              <View style={styles.aiDetectedTipBox}>
-                <Ionicons name="sparkles" size={16} color="#00A896" style={{ marginRight: 6 }} />
-                <Text style={styles.aiDetectedTipText}>
-                  Đã tự động điền thông tin từ tin nhắn bằng Gemini AI. Bạn có thể chỉnh sửa nếu cần!
-                </Text>
-              </View>
-            ) : null}
+              <TouchableOpacity style={styles.closeBtn} onPress={handleClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close" size={22} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+              {/* Attached Post Badge for visual context */}
+              {postTitle ? (
+                <View style={styles.attachedPostBox}>
+                  <Ionicons name="link" size={15} color="#0284C7" style={{ marginRight: 6 }} />
+                  <Text style={styles.attachedPostText} numberOfLines={1}>
+                    Về bài đăng: "{postTitle}"
+                  </Text>
+                </View>
+              ) : null}
+
+              {loadingAi ? (
+                <View style={styles.aiLoadingBox}>
+                  <ActivityIndicator size="small" color="#00A896" />
+                  <Text style={styles.aiLoadingText}>
+                    Gemini AI đang tự động trích xuất ngày, giờ, địa điểm từ tin nhắn...
+                  </Text>
+                </View>
+              ) : initialMessageText ? (
+                <View style={styles.aiDetectedTipBox}>
+                  <Ionicons name="sparkles" size={16} color="#00A896" style={{ marginRight: 6 }} />
+                  <Text style={styles.aiDetectedTipText}>
+                    Đã tự động điền thông tin từ tin nhắn bằng Gemini AI. Bạn có thể chỉnh sửa nếu cần!
+                  </Text>
+                </View>
+              ) : null}
 
             {/* Title Field */}
             <View style={styles.formGroup}>
@@ -246,16 +334,24 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
               )}
             </TouchableOpacity>
           </ScrollView>
-        </View>
+        </Animated.View>
       </KeyboardAvoidingView>
-    </Modal>
+    </View>
+  </Modal>
   );
 };
 
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
+    justifyContent: 'flex-end',
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(15, 23, 42, 0.65)',
+  },
+  keyboardWrap: {
+    width: '100%',
     justifyContent: 'flex-end',
   },
   content: {
@@ -264,6 +360,23 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     maxHeight: '85%',
     paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+  },
+  attachedPostBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginBottom: 14,
+  },
+  attachedPostText: {
+    flex: 1,
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#0284C7',
   },
   headerRow: {
     flexDirection: 'row',
