@@ -34,6 +34,7 @@ import {
   verifyHandshakeOtp,
   resendHandshakeOtp,
   verifyAndCompleteHandshakeWithAI,
+  completeHandshakeTestBypass,
   submitReceiverRating,
   ChatParticipant,
   HandshakeSession,
@@ -786,10 +787,18 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
                 {/* Temporary Skip Button for Testing */}
                 <TouchableOpacity
                   style={styles.skipStep4Btn}
-                  onPress={() => {
+                  onPress={async () => {
+                    if (currentUser && handshakeId) {
+                      completeHandshakeTestBypass({
+                        handshakeId,
+                        postId,
+                        finderUserId: currentUser.uid,
+                        rewardPoints: rewardPoints || 50,
+                      });
+                    }
                     setAiResult({
-                      score: 95,
-                      explanation: 'Đã bỏ qua bước ảnh kiểm thử. Giao dịch hợp lệ!',
+                      score: 100,
+                      explanation: 'Trao trả đồ thành công!',
                     });
                     goToStep(5);
                   }}
@@ -802,79 +811,43 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
             )}
 
             {/* ========================================================================= */}
-            {/* STEP 5: CELEBRATION & RATING                                              */}
+            {/* STEP 5: FINDER CELEBRATION (NO RATING FORM ON FINDER SIDE)                */}
             {/* ========================================================================= */}
             {step === 5 && (
               <View style={styles.stepContainer}>
                 {/* Celebration Badge */}
                 <View style={styles.celebrationBox}>
                   <View style={styles.celebrationIconCircle}>
-                    <Ionicons name="trophy" size={36} color="#F59E0B" />
+                    <Ionicons name="trophy" size={40} color="#F59E0B" />
                   </View>
                   <Text style={styles.celebrationTitle}>Trao Trả Đồ Thành Công</Text>
                   <Text style={styles.celebrationSubtitle}>
-                    {aiResult?.explanation || 'AI đã xác thực đối soát hình ảnh thành công 100%!'}
+                    {aiResult?.explanation || 'Xác thực trao trả đồ thành công.'}
                   </Text>
                   <View style={styles.pointsEarnedBadge}>
                     <Ionicons name="gift" size={18} color="#00A896" style={{ marginRight: 6 }} />
-                    <Text style={styles.pointsEarnedText}>+{rewardPoints} Điểm thưởng Findora</Text>
+                    <Text style={styles.pointsEarnedText}>+{rewardPoints || 50} Điểm thưởng Findora</Text>
                   </View>
                 </View>
 
-                {/* Interactive Star Rating */}
-                <View style={styles.ratingSection}>
-                  <Text style={styles.ratingLabel}>Đánh giá mức độ hài lòng:</Text>
-                  <View style={styles.starsRow}>
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <TouchableOpacity key={star} onPress={() => setRating(star)} activeOpacity={0.7}>
-                        <Ionicons
-                          name={star <= rating ? 'star' : 'star-outline'}
-                          size={36}
-                          color={star <= rating ? '#F59E0B' : '#CBD5E1'}
-                          style={{ marginHorizontal: 4 }}
-                        />
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-
-                  {/* Compliments Tags */}
-                  <View style={styles.tagsWrap}>
-                    {['Nhiệt tình', 'Đúng hẹn', 'Tốt bụng', 'Cẩn thận', 'Tuyệt vời'].map((tag) => {
-                      const isTagSelected = selectedTags.includes(tag);
-                      return (
-                        <TouchableOpacity
-                          key={tag}
-                          style={[styles.tagPill, isTagSelected && styles.tagPillSelected]}
-                          onPress={() => toggleTag(tag)}
-                          activeOpacity={0.8}
-                        >
-                          <Text style={[styles.tagPillText, isTagSelected && styles.tagPillTextSelected]}>
-                            {tag}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-
-                  {/* Feedback Comment Input */}
-                  <TextInput
-                    style={styles.commentInput}
-                    placeholder="Viết vài lời cảm ơn chân thành..."
-                    placeholderTextColor="#94A3B8"
-                    value={ratingComment}
-                    onChangeText={setRatingComment}
-                    multiline
-                  />
+                {/* Finder Information Note */}
+                <View style={styles.finderSuccessNoteBox}>
+                  <Ionicons name="sparkles" size={20} color="#00A896" style={{ marginRight: 10 }} />
+                  <Text style={styles.finderSuccessNoteText}>
+                    Cảm ơn nghĩa cử cao đẹp của bạn! Điểm thưởng đã được cộng vào tài khoản và form đánh giá đã được gửi tới người nhận đồ.
+                  </Text>
                 </View>
 
-                {/* Complete Button */}
+                {/* Final Complete Button */}
                 <TouchableOpacity
-                  style={[styles.primaryActionBtn, loading && { opacity: 0.7 }, { marginTop: 16 }]}
-                  onPress={handleFinalRatingSubmit}
-                  disabled={loading}
+                  style={[styles.primaryActionBtn, { marginTop: 24 }]}
+                  onPress={() => {
+                    handleCloseModal();
+                    onSuccess?.();
+                  }}
                   activeOpacity={0.85}
                 >
-                  <Text style={styles.primaryActionBtnText}>Đóng & Lưu Đánh Giá</Text>
+                  <Text style={styles.primaryActionBtnText}>Hoàn Tất & Đóng</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -1572,60 +1545,25 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   pointsEarnedText: {
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: '800',
     color: '#00A896',
   },
-  ratingSection: {
-    marginTop: 8,
-    marginBottom: 16,
-  },
-  ratingLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0F172A',
-    textAlign: 'center',
-    marginBottom: 10,
-  },
-  starsRow: {
+  finderSuccessNoteBox: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  tagsWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    justifyContent: 'center',
-    marginBottom: 14,
-  },
-  tagPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: '#F1F5F9',
-  },
-  tagPillSelected: {
-    backgroundColor: '#00A896',
-  },
-  tagPillText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  tagPillTextSelected: {
-    color: '#FFFFFF',
-  },
-  commentInput: {
-    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    backgroundColor: '#F0FDFA',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    borderColor: '#CCFBF1',
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 14,
+    marginBottom: 4,
+  },
+  finderSuccessNoteText: {
+    flex: 1,
     fontSize: 13,
-    color: '#0F172A',
-    minHeight: 64,
-    textAlignVertical: 'top',
+    color: '#0F766E',
+    lineHeight: 19,
   },
 });

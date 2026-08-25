@@ -5,10 +5,12 @@ import {
   Text,
   Modal,
   Image,
+  TextInput,
   TouchableOpacity,
   TouchableWithoutFeedback,
   StyleSheet,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,7 +22,7 @@ import {
   triggerDeviceNotification 
 } from '../services/deviceNotificationService';
 import { registerPushToken } from '../services/pushNotificationService';
-import { HandshakeSession } from '../services/handshakeService';
+import { HandshakeSession, submitReceiverRating } from '../services/handshakeService';
 
 let NotificationsModule: any = null;
 try {
@@ -37,6 +39,13 @@ export function GlobalNotificationListener() {
   // Active handshake session for receiver
   const [activeReceiverHandshake, setActiveReceiverHandshake] = useState<HandshakeSession | null>(null);
   const [receiverPhotoUri, setReceiverPhotoUri] = useState<string | null>(null);
+
+  // Rating session for receiver (Step 5)
+  const [ratingSession, setRatingSession] = useState<HandshakeSession | null>(null);
+  const [receiverRating, setReceiverRating] = useState<number>(5);
+  const [selectedTags, setSelectedTags] = useState<string[]>(['Nhiệt tình', 'Đúng hẹn']);
+  const [ratingComment, setRatingComment] = useState<string>('');
+  const [submittingRating, setSubmittingRating] = useState<boolean>(false);
 
   useEffect(() => {
     if (Platform.OS === 'web') return;
@@ -144,7 +153,7 @@ export function GlobalNotificationListener() {
       const handshakeQ = query(
         collection(db, 'handshakes'),
         where('receiverId', '==', user.uid),
-        where('status', 'in', ['otp_verified', 'photo_verifying'])
+        where('status', 'in', ['otp_verified', 'photo_verifying', 'completed'])
       );
 
       unsubscribeHandshakes = onSnapshot(
@@ -153,9 +162,18 @@ export function GlobalNotificationListener() {
           if (!snapshot.empty) {
             const firstDoc = snapshot.docs[0];
             const data = { id: firstDoc.id, ...firstDoc.data() } as HandshakeSession;
-            setActiveReceiverHandshake(data);
-            if (data.handoverPhotoUrl) {
-              setReceiverPhotoUri(data.handoverPhotoUrl);
+
+            if (data.status === 'completed' && !data.rating) {
+              // Switch to Rating Modal
+              setActiveReceiverHandshake(null);
+              setRatingSession(data);
+            } else if (data.status === 'otp_verified' || data.status === 'photo_verifying') {
+              setActiveReceiverHandshake(data);
+              if (data.handoverPhotoUrl) {
+                setReceiverPhotoUri(data.handoverPhotoUrl);
+              }
+            } else {
+              setActiveReceiverHandshake(null);
             }
           } else {
             setActiveReceiverHandshake(null);
@@ -174,6 +192,39 @@ export function GlobalNotificationListener() {
       if (unsubscribeHandshakes) unsubscribeHandshakes();
     };
   }, [auth.currentUser?.uid]);
+
+  const toggleTag = (tag: string) => {
+    if (selectedTags.includes(tag)) {
+      setSelectedTags((prev) => prev.filter((t) => t !== tag));
+    } else {
+      setSelectedTags((prev) => [...prev, tag]);
+    }
+  };
+
+  const handleReceiverRatingSubmit = async () => {
+    if (!ratingSession) return;
+
+    try {
+      setSubmittingRating(true);
+      const combinedComment = selectedTags.length > 0
+        ? `${selectedTags.join(', ')}. ${ratingComment.trim()}`
+        : ratingComment.trim();
+
+      await submitReceiverRating(
+        ratingSession.id || '',
+        ratingSession.finderId,
+        receiverRating,
+        combinedComment
+      );
+
+      setSubmittingRating(false);
+      setRatingSession(null);
+      Alert.alert('Đã gửi đánh giá', 'Cảm ơn bạn đã gửi đánh giá và lời cảm ơn tới người tìm thấy đồ!');
+    } catch (e: any) {
+      setSubmittingRating(false);
+      setRatingSession(null);
+    }
+  };
 
   const handleReceiverTakePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -276,6 +327,105 @@ export function GlobalNotificationListener() {
                 activeOpacity={0.85}
               >
                 <Text style={styles.doneBtnText}>Đã Hiểu & Đóng</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {/* Realtime Step 5 Rating Modal for Lost Item Owner */}
+      {ratingSession && (
+        <Modal
+          visible={!!ratingSession}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setRatingSession(null)}
+        >
+          <View style={styles.modalOverlay}>
+            <TouchableWithoutFeedback onPress={() => setRatingSession(null)}>
+              <View style={StyleSheet.absoluteFill} />
+            </TouchableWithoutFeedback>
+
+            <View style={styles.modalCard}>
+              {/* Header */}
+              <View style={styles.modalHeader}>
+                <View style={styles.modalHeaderLeft}>
+                  <View style={[styles.iconCircle, { backgroundColor: '#FEF3C7' }]}>
+                    <Ionicons name="star" size={24} color="#F59E0B" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.modalTitle}>Đánh Giá Người Trả Đồ</Text>
+                    <Text style={styles.modalSubtitle}>Gửi lời cảm ơn vì đã tìm thấy đồ</Text>
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.closeBtn}
+                  onPress={() => setRatingSession(null)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons name="close" size={22} color="#64748B" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Star Rating */}
+              <View style={styles.ratingSection}>
+                <Text style={styles.ratingLabel}>Mức độ hài lòng của bạn:</Text>
+                <View style={styles.starsRow}>
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <TouchableOpacity key={star} onPress={() => setReceiverRating(star)} activeOpacity={0.7}>
+                      <Ionicons
+                        name={star <= receiverRating ? 'star' : 'star-outline'}
+                        size={36}
+                        color={star <= receiverRating ? '#F59E0B' : '#CBD5E1'}
+                        style={{ marginHorizontal: 4 }}
+                      />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* Compliment Tags */}
+                <View style={styles.tagsWrap}>
+                  {['Nhiệt tình', 'Đúng hẹn', 'Tốt bụng', 'Cẩn thận', 'Tuyệt vời'].map((tag) => {
+                    const isTagSelected = selectedTags.includes(tag);
+                    return (
+                      <TouchableOpacity
+                        key={tag}
+                        style={[styles.tagPill, isTagSelected && styles.tagPillSelected]}
+                        onPress={() => toggleTag(tag)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={[styles.tagPillText, isTagSelected && styles.tagPillTextSelected]}>
+                          {tag}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {/* Comment Input */}
+                <TextInput
+                  style={styles.commentInput}
+                  placeholder="Viết vài lời cảm ơn chân thành..."
+                  placeholderTextColor="#94A3B8"
+                  value={ratingComment}
+                  onChangeText={setRatingComment}
+                  multiline
+                />
+              </View>
+
+              {/* Submit Rating Button */}
+              <TouchableOpacity
+                style={[styles.doneBtn, submittingRating && { opacity: 0.7 }]}
+                onPress={handleReceiverRatingSubmit}
+                disabled={submittingRating}
+                activeOpacity={0.85}
+              >
+                {submittingRating ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.doneBtnText}>Gửi Đánh Giá & Hoàn Tất</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -456,6 +606,58 @@ const styles = StyleSheet.create({
     fontSize: 14.5,
     fontWeight: '800',
     color: '#FFFFFF',
+  },
+  ratingSection: {
+    marginVertical: 12,
+  },
+  ratingLabel: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#0F172A',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  starsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  tagsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  tagPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+  },
+  tagPillSelected: {
+    backgroundColor: '#00A896',
+  },
+  tagPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  tagPillTextSelected: {
+    color: '#FFFFFF',
+  },
+  commentInput: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 13,
+    color: '#0F172A',
+    minHeight: 64,
+    textAlignVertical: 'top',
+    marginBottom: 16,
   },
 });
 

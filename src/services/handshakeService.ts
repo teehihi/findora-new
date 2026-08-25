@@ -406,6 +406,36 @@ export async function verifyAndCompleteHandshakeWithAI(params: {
 }
 
 /**
+ * Bypass AI photo for testing and transition handshake to completed
+ */
+export async function completeHandshakeTestBypass(params: {
+  handshakeId: string;
+  postId: string;
+  finderUserId: string;
+  rewardPoints?: number;
+}): Promise<void> {
+  try {
+    if (!params.handshakeId.startsWith('local_')) {
+      const docRef = doc(db, 'handshakes', params.handshakeId);
+      await updateDoc(docRef, {
+        status: 'completed',
+        completedAt: serverTimestamp(),
+      }).catch(() => {});
+    }
+
+    await completePostResolve(
+      params.postId,
+      params.finderUserId,
+      5,
+      'Giao dịch hợp lệ (Test nhanh)',
+      params.rewardPoints || 50
+    ).catch(() => {});
+  } catch (e) {
+    console.log('Notice: completeHandshakeTestBypass error:', e);
+  }
+}
+
+/**
  * Submit receiver's star rating & comments for the finder
  */
 export async function submitReceiverRating(
