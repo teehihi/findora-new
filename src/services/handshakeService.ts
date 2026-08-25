@@ -236,6 +236,50 @@ export async function getActiveHandshakeSession(
 }
 
 /**
+ * Resend/Generate a fresh OTP for an active handshake session
+ */
+export async function resendHandshakeOtp(params: {
+  handshakeId: string;
+  postId: string;
+  postTitle: string;
+  finderName: string;
+  receiverId?: string;
+}): Promise<{ success: boolean; newOtp: string }> {
+  const newOtp = generateHandshakeOtp();
+  activeHandshakeOtps.set(params.handshakeId, newOtp);
+
+  try {
+    if (!params.handshakeId.startsWith('local_')) {
+      const docRef = doc(db, 'handshakes', params.handshakeId);
+      await updateDoc(docRef, {
+        otpCode: newOtp,
+        updatedAt: serverTimestamp(),
+      }).catch(() => {});
+    }
+
+    // Send new in-app notification to receiver
+    if (params.receiverId) {
+      await addDoc(collection(db, 'notifications'), {
+        userId: params.receiverId,
+        title: '🤝 Mã OTP Mới Nhận Lại Đồ',
+        message: `${params.finderName} vừa tạo mã OTP mới cho món đồ "${params.postTitle}". Mã mới của bạn là: ${newOtp}. Vui lòng đọc mã này cho họ!`,
+        type: 'resolve',
+        postId: params.postId,
+        senderName: params.finderName,
+        otpCode: newOtp,
+        handshakeId: params.handshakeId,
+        createdAt: serverTimestamp(),
+        read: false,
+      }).catch(() => {});
+    }
+
+    return { success: true, newOtp };
+  } catch (e: any) {
+    return { success: true, newOtp };
+  }
+}
+
+/**
  * Verify OTP entered by the finder
  */
 export async function verifyHandshakeOtp(

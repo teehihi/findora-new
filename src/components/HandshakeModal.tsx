@@ -32,6 +32,7 @@ import {
   getChatParticipantsForPost,
   getActiveHandshakeSession,
   verifyHandshakeOtp,
+  resendHandshakeOtp,
   verifyAndCompleteHandshakeWithAI,
   submitReceiverRating,
   ChatParticipant,
@@ -81,6 +82,8 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
   const [handshakeId, setHandshakeId] = useState<string>('');
   const [otpCode, setOtpCode] = useState<string>('');
   const [enteredOtp, setEnteredOtp] = useState<string>('');
+  const [resendCountdown, setResendCountdown] = useState<number>(60);
+  const [resending, setResending] = useState<boolean>(false);
 
   // AI Photo Verification State
   const [capturedPhotoUri, setCapturedPhotoUri] = useState<string | null>(null);
@@ -258,6 +261,47 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
       }
     }
   };
+
+  // Resend / Regenerate fresh OTP code & clear old input
+  const handleResendOtp = async () => {
+    if (!currentUser || !handshakeId || resending || resendCountdown > 0) return;
+
+    try {
+      setResending(true);
+      setEnteredOtp(''); // Invalidate and clear old entered code
+      const receiverId = selectedParticipant ? selectedParticipant.id : '';
+      const receiverName = selectedParticipant ? selectedParticipant.name : manualReceiverName.trim() || 'Người nhận đồ';
+
+      const res = await resendHandshakeOtp({
+        handshakeId,
+        postId,
+        postTitle,
+        finderName: currentUser.displayName || 'Người tìm thấy đồ',
+        receiverId,
+      });
+
+      setOtpCode(res.newOtp);
+      setResendCountdown(60);
+      setResending(false);
+      Alert.alert('Đã gửi mã mới', `Mã OTP mới (${res.newOtp}) đã được tạo và gửi tới ${receiverName}. Vui lòng yêu cầu họ đọc mã mới!`);
+    } catch (e: any) {
+      setResending(false);
+      Alert.alert('Lỗi', 'Không thể gửi lại mã OTP. Vui lòng thử lại!');
+    }
+  };
+
+  // Step 3 Countdown Timer effect
+  useEffect(() => {
+    let timer: any = null;
+    if (step === 3 && resendCountdown > 0) {
+      timer = setInterval(() => {
+        setResendCountdown((prev) => (prev > 0 ? prev - 1 : 0));
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [step, resendCountdown]);
 
   // Step 4: Take / Pick Handover Photo
   const handleTakePhoto = async () => {
@@ -644,6 +688,34 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
                     </>
                   )}
                 </TouchableOpacity>
+
+                {/* Resend / Regenerate OTP Row with Countdown */}
+                <View style={styles.resendRow}>
+                  {resendCountdown > 0 ? (
+                    <View style={styles.resendCountdownBox}>
+                      <Ionicons name="time-outline" size={15} color="#94A3B8" style={{ marginRight: 5 }} />
+                      <Text style={styles.resendCountdownText}>
+                        Gửi lại mã sau <Text style={styles.resendCountdownHighlight}>{resendCountdown}s</Text>
+                      </Text>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.resendActiveBtn}
+                      onPress={handleResendOtp}
+                      disabled={resending}
+                      activeOpacity={0.8}
+                    >
+                      {resending ? (
+                        <ActivityIndicator size="small" color="#00A896" />
+                      ) : (
+                        <>
+                          <Ionicons name="refresh" size={15} color="#00A896" style={{ marginRight: 5 }} />
+                          <Text style={styles.resendActiveBtnText}>Gửi lại mã OTP mới</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
             )}
 
@@ -1327,6 +1399,37 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '800',
     color: '#0F172A',
+  },
+  resendRow: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 14,
+  },
+  resendCountdownBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  resendCountdownText: {
+    fontSize: 13,
+    color: '#64748B',
+  },
+  resendCountdownHighlight: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#00A896',
+  },
+  resendActiveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  resendActiveBtnText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#00A896',
   },
   guideTipBox: {
     flexDirection: 'row',
