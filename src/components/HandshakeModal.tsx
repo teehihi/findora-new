@@ -5,6 +5,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   TextInput,
   ActivityIndicator,
   Alert,
@@ -305,6 +306,11 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
         style={styles.overlay}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
+        {/* Backdrop dismiss touchable outside on Step 1 */}
+        <TouchableWithoutFeedback onPress={step === 1 ? handleCloseModal : undefined}>
+          <View style={StyleSheet.absoluteFill} />
+        </TouchableWithoutFeedback>
+
         <View style={styles.content}>
           {/* Header Bar */}
           <View style={styles.headerRow}>
