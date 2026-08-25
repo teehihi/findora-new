@@ -67,6 +67,7 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
 
     let isMounted = true;
     let locationSubscription: Location.LocationSubscription | null = null;
+    let headingSubscription: Location.LocationSubscription | null = null;
 
     const loadRoute = async (coords: { latitude: number; longitude: number }) => {
       if (!isMounted) return;
@@ -180,6 +181,31 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
           }
         );
 
+        // 4. Subscribe to live Device Compass Heading (Rotates map as user turns device in real-time)
+        try {
+          headingSubscription = await Location.watchHeadingAsync((headingObj) => {
+            if (!isMounted) return;
+            const headingVal = headingObj.trueHeading >= 0 ? headingObj.trueHeading : headingObj.magHeading;
+            if (headingVal == null || headingVal < 0) return;
+
+            if (navState === 'NAVIGATING' && !isManualExploring && mapRef.current && userLocation) {
+              const currentManeuver = routeData?.steps[currentStepIndex];
+              const nextManeuver = routeData?.steps[currentStepIndex + 1] || null;
+              const targetCam = navigationCamera.computeCameraTarget({
+                currentLocation: userLocation,
+                currentBearing: headingVal,
+                speedKmh: Math.max((userLocation.speed || 0) * 3.6, 0),
+                distanceToNextManeuverMeters: currentManeuver?.distanceMeters || 100,
+                nextStep: nextManeuver,
+              });
+
+              mapRef.current.animateCamera(targetCam, { duration: 250 });
+            }
+          });
+        } catch (e) {
+          console.log('Notice: Compass sensor not available on this device:', e);
+        }
+
         setAutoPip(true);
       } catch (e) {
         console.log('Error in navigation setup:', e);
@@ -192,6 +218,9 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
       setAutoPip(false);
       if (locationSubscription) {
         locationSubscription.remove();
+      }
+      if (headingSubscription) {
+        headingSubscription.remove();
       }
     };
   }, [visible, destination, vehicleMode, navState, isManualExploring]);

@@ -35,7 +35,7 @@ export class NavigationCameraController {
     this.lastSmoothedSpeed = 0;
   }
 
-  // Calculate rock-solid, non-spinning camera parameters
+  // Calculate rock-solid, responsive camera parameters following device orientation
   public computeCameraTarget(input: CameraInput): CameraTarget {
     const {
       currentLocation,
@@ -44,35 +44,35 @@ export class NavigationCameraController {
       nextStep,
     } = input;
 
-    // 1. Heading Stabilization (Anti-Spin Filter)
-    // GPS heading fluctuates wildly when stationary or moving slowly.
-    // We strictly LOCK heading when speed < 4 km/h to prevent dizzy rotation.
+    // 1. Device Compass & Heading Tracking
     const rawHeading =
-      currentLocation.heading !== undefined && currentLocation.heading >= 0
-        ? currentLocation.heading
-        : input.currentBearing;
+      input.currentBearing >= 0
+        ? input.currentBearing
+        : (currentLocation.heading !== undefined && currentLocation.heading >= 0
+            ? currentLocation.heading
+            : this.lastSmoothedHeading);
 
     const safeSpeed = Math.max(speedKmh || 0, 0);
     this.lastSmoothedSpeed = this.lastSmoothedSpeed * 0.7 + safeSpeed * 0.3;
 
-    if (this.lastSmoothedSpeed >= 4.0 && rawHeading >= 0) {
+    if (rawHeading >= 0) {
       const delta = getShortestAngleDelta(this.lastSmoothedHeading, rawHeading);
-      // Only adjust if directional change is meaningful (> 4 degrees)
-      if (Math.abs(delta) > 4) {
-        this.lastSmoothedHeading = (this.lastSmoothedHeading + delta * 0.35 + 360) % 360;
+      // Smooth device heading update (responsive & jitter-free)
+      if (Math.abs(delta) > 1.5) {
+        this.lastSmoothedHeading = (this.lastSmoothedHeading + delta * 0.4 + 360) % 360;
       }
     }
 
     // 2. Stable, Natural Driving Zoom & Pitch (Google Maps Standard)
-    let targetZoom = 17.5;
-    let targetAltitude = 420;
-    let targetPitch = 45;
+    let targetZoom = 17.6;
+    let targetAltitude = 400;
+    let targetPitch = 48;
 
     if (this.lastSmoothedSpeed > 50) {
       // Fast road / Highway: wider view
       targetZoom = 16.5;
       targetAltitude = 700;
-      targetPitch = 48;
+      targetPitch = 50;
     } else if (distanceToNextManeuverMeters < 100 && nextStep) {
       // Near turn maneuver: slightly closer
       targetZoom = 18.0;
