@@ -366,7 +366,7 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
               styles.content,
               {
                 transform: [{ translateY: slideAnim }],
-                paddingBottom: Math.max(insets.bottom, 16) + 14,
+                paddingBottom: Math.max(insets.bottom, 20) + 26,
               },
             ]}
           >
