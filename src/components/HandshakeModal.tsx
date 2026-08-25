@@ -86,19 +86,28 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
 
   const currentUser = auth.currentUser;
 
-  const slideAnim = useRef(new Animated.Value(500)).current;
+  const slideAnim = useRef(new Animated.Value(600)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
   // Load chat participants and animate modal sheet when modal opens
   useEffect(() => {
     if (visible) {
-      slideAnim.setValue(500);
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        damping: 26,
-        mass: 0.85,
-        stiffness: 220,
-        useNativeDriver: true,
-      }).start();
+      slideAnim.setValue(600);
+      fadeAnim.setValue(0);
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 250,
+          useNativeDriver: true,
+        }),
+        Animated.spring(slideAnim, {
+          toValue: 0,
+          damping: 26,
+          mass: 0.85,
+          stiffness: 220,
+          useNativeDriver: true,
+        }),
+      ]).start();
 
       if (currentUser) {
         setStep(1);
@@ -121,11 +130,18 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
   }, [visible, postId]);
 
   const handleCloseModal = () => {
-    Animated.timing(slideAnim, {
-      toValue: 500,
-      duration: 200,
-      useNativeDriver: true,
-    }).start(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 600,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
       setSelectedParticipant(null);
       setManualReceiverName('');
       setEnteredOtp('');
@@ -321,18 +337,19 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleCloseModal}>
-      <KeyboardAvoidingView
-        style={styles.overlay}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
+    <Modal visible={visible} transparent animationType="none" onRequestClose={handleCloseModal}>
+      <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
         {/* Backdrop dismiss touchable outside on Step 1 */}
         <TouchableWithoutFeedback onPress={step === 1 ? handleCloseModal : undefined}>
           <View style={StyleSheet.absoluteFill} />
         </TouchableWithoutFeedback>
 
-        <Animated.View style={[styles.content, { transform: [{ translateY: slideAnim }] }]}>
-          {/* Header Bar */}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardAvoidWrap}
+        >
+          <Animated.View style={[styles.content, { transform: [{ translateY: slideAnim }] }]}>
+            {/* Header Bar */}
           <View style={styles.headerRow}>
             <View style={styles.headerTitleWrap}>
               <Ionicons name="shield-checkmark" size={22} color="#00A896" style={{ marginRight: 6 }} />
@@ -751,8 +768,9 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
               </View>
             )}
           </ScrollView>
-        </Animated.View>
-      </KeyboardAvoidingView>
+          </Animated.View>
+        </KeyboardAvoidingView>
+      </Animated.View>
 
       {/* Participant Picker Popup Sheet */}
       {showParticipantModal && (
@@ -845,6 +863,9 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'flex-end',
+  },
+  keyboardAvoidWrap: {
     justifyContent: 'flex-end',
   },
   content: {
