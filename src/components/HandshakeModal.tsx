@@ -574,13 +574,21 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
                   Người mất đồ đã nhận được thông báo mã OTP 6 số. Vui lòng yêu cầu họ đọc mã và nhập vào ô dưới đây:
                 </Text>
 
-                {/* Glowing OTP Display (For testing/reference) */}
-                <View style={styles.otpCardBox}>
-                  <Text style={styles.otpCardLabel}>Mã OTP tạo cho phiên này:</Text>
-                  <Text style={styles.otpCardValue}>{otpCode}</Text>
-                  <Text style={styles.otpCardHint}>
-                    (Thông báo đã được gửi tới tài khoản người nhận)
-                  </Text>
+                {/* Waiting for receiver to read OTP card */}
+                <View style={styles.otpWaitingCard}>
+                  <View style={styles.otpWaitingIconCircle}>
+                    <Ionicons name="notifications" size={22} color="#00A896" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.otpWaitingTitle}>Mã đã gửi tới người nhận</Text>
+                    <Text style={styles.otpWaitingSub}>
+                      Mã OTP gồm 6 chữ số đã được gửi qua thông báo tài khoản của{' '}
+                      <Text style={{ fontWeight: '700', color: '#0F172A' }}>
+                        {selectedParticipant ? selectedParticipant.name : 'người nhận'}
+                      </Text>
+                      . Hãy yêu cầu họ đọc mã để nhập vào ô dưới đây.
+                    </Text>
+                  </View>
                 </View>
 
                 {/* 6-Digit Styled Input */}
@@ -1248,30 +1256,35 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#FFFFFF',
   },
-  otpCardBox: {
-    backgroundColor: 'rgba(0, 168, 150, 0.08)',
-    borderRadius: 16,
-    padding: 18,
+  otpWaitingCard: {
+    flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#F0FDFA',
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: 'rgba(0, 168, 150, 0.25)',
+    padding: 14,
     marginBottom: 20,
   },
-  otpCardLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#00A896',
+  otpWaitingIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0, 168, 150, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
   },
-  otpCardValue: {
-    fontSize: 34,
-    fontWeight: '900',
-    color: '#00A896',
-    letterSpacing: 8,
-    marginVertical: 6,
+  otpWaitingTitle: {
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 2,
   },
-  otpCardHint: {
-    fontSize: 11.5,
+  otpWaitingSub: {
+    fontSize: 12.5,
     color: '#64748B',
+    lineHeight: 17,
   },
   otpInputContainer: {
     marginBottom: 24,
