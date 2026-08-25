@@ -8,8 +8,8 @@ export interface CameraTarget {
   };
   pitch: number;
   heading: number;
-  zoom: number;
-  altitude: number;
+  zoom?: number;
+  altitude?: number;
 }
 
 export interface CameraInput {
@@ -26,22 +26,16 @@ export function getShortestAngleDelta(fromAngle: number, toAngle: number): numbe
   return ((diff + 540) % 360) - 180;
 }
 
-// Smoothly interpolate angle with shortest path
-export function interpolateAngle(fromAngle: number, toAngle: number, factor: number): number {
-  const delta = getShortestAngleDelta(fromAngle, toAngle);
-  return (fromAngle + delta * factor + 360) % 360;
-}
-
 export class NavigationCameraController {
   private lastSmoothedHeading = 0;
   private lastSmoothedSpeed = 0;
 
   public reset(initialHeading: number = 0) {
-    this.lastSmoothedHeading = initialHeading || 0;
+    this.lastSmoothedHeading = initialHeading >= 0 ? initialHeading : 0;
     this.lastSmoothedSpeed = 0;
   }
 
-  // Calculate reliable, stable camera parameters centered directly on userLocation
+  // Calculate rock-solid, non-spinning camera parameters
   public computeCameraTarget(input: CameraInput): CameraTarget {
     const {
       currentLocation,
@@ -50,59 +44,62 @@ export class NavigationCameraController {
       nextStep,
     } = input;
 
-    // 1. Heading Smoothing (Noise Filter)
+    // 1. Heading Stabilization (Anti-Spin Filter)
+    // GPS heading fluctuates wildly when stationary or moving slowly.
+    // We strictly LOCK heading when speed < 4 km/h to prevent dizzy rotation.
     const rawHeading =
       currentLocation.heading !== undefined && currentLocation.heading >= 0
         ? currentLocation.heading
         : input.currentBearing;
 
-    this.lastSmoothedHeading = interpolateAngle(this.lastSmoothedHeading, rawHeading, 0.45);
-
-    // 2. Speed Smoothing (0-120 km/h)
     const safeSpeed = Math.max(speedKmh || 0, 0);
     this.lastSmoothedSpeed = this.lastSmoothedSpeed * 0.7 + safeSpeed * 0.3;
 
-    // 3. Platform-aware Zoom & Altitude
-    // iOS (Apple Maps) responds best to altitude (meters)
-    // Android (Google Maps) responds best to zoom levels (0-20)
-    let targetZoom = 17.8;
-    let targetAltitude = 380;
-    let targetPitch = 48;
-
-    if (this.lastSmoothedSpeed < 15) {
-      // Stopped / Very slow
-      targetZoom = 18.2;
-      targetAltitude = 300;
-      targetPitch = 45;
-    } else if (this.lastSmoothedSpeed < 45) {
-      // City driving
-      targetZoom = 17.5;
-      targetAltitude = 450;
-      targetPitch = 50;
-    } else {
-      // Fast road / Highway
-      targetZoom = 16.5;
-      targetAltitude = 750;
-      targetPitch = 55;
+    if (this.lastSmoothedSpeed >= 4.0 && rawHeading >= 0) {
+      const delta = getShortestAngleDelta(this.lastSmoothedHeading, rawHeading);
+      // Only adjust if directional change is meaningful (> 4 degrees)
+      if (Math.abs(delta) > 4) {
+        this.lastSmoothedHeading = (this.lastSmoothedHeading + delta * 0.35 + 360) % 360;
+      }
     }
 
-    // Near turn maneuver (< 150m): zoom in close to show junction
-    if (distanceToNextManeuverMeters < 150 && nextStep) {
-      targetZoom = 18.5;
-      targetAltitude = 260;
+    // 2. Stable, Natural Driving Zoom & Pitch (Google Maps Standard)
+    let targetZoom = 17.5;
+    let targetAltitude = 420;
+    let targetPitch = 45;
+
+    if (this.lastSmoothedSpeed > 50) {
+      // Fast road / Highway: wider view
+      targetZoom = 16.5;
+      targetAltitude = 700;
+      targetPitch = 48;
+    } else if (distanceToNextManeuverMeters < 100 && nextStep) {
+      // Near turn maneuver: slightly closer
+      targetZoom = 18.0;
+      targetAltitude = 320;
       targetPitch = 42;
     }
 
-    return {
-      center: {
-        latitude: currentLocation.latitude,
-        longitude: currentLocation.longitude,
-      },
-      pitch: Math.round(targetPitch),
-      heading: Math.round(this.lastSmoothedHeading),
-      zoom: Number(targetZoom.toFixed(1)),
-      altitude: Math.round(targetAltitude),
+    const center = {
+      latitude: currentLocation.latitude,
+      longitude: currentLocation.longitude,
     };
+
+    if (Platform.OS === 'ios') {
+      return {
+        center,
+        pitch: Math.round(targetPitch),
+        heading: Math.round(this.lastSmoothedHeading),
+        altitude: Math.round(targetAltitude),
+      };
+    } else {
+      return {
+        center,
+        pitch: Math.round(targetPitch),
+        heading: Math.round(this.lastSmoothedHeading),
+        zoom: Number(targetZoom.toFixed(1)),
+      };
+    }
   }
 }
 

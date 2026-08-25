@@ -136,25 +136,33 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
           })
           .catch((err) => console.log('Notice: High accuracy loc fallback:', err));
 
-        // 3. Subscribe to live GPS tracking
+        // 3. Subscribe to live GPS tracking (Smooth & Lightweight)
         locationSubscription = await Location.watchPositionAsync(
           {
             accuracy: Location.Accuracy.High,
-            timeInterval: 2000,
-            distanceInterval: 3,
+            timeInterval: 1500,
+            distanceInterval: 2,
           },
           (newLoc) => {
             if (!isMounted) return;
+            const headingVal = newLoc.coords.heading != null && newLoc.coords.heading >= 0 ? newLoc.coords.heading : 0;
             const updatedCoords = {
               latitude: newLoc.coords.latitude,
               longitude: newLoc.coords.longitude,
-              heading: newLoc.coords.heading || 0,
+              heading: headingVal,
               speed: newLoc.coords.speed || 0,
             };
             setUserLocation(updatedCoords);
-            loadRoute(updatedCoords);
 
-            // In active navigation mode: Smart Predictive Camera Follow
+            // Check arrival condition locally without hitting network (< 25m)
+            const dLat = (destination.latitude - updatedCoords.latitude) * 111320;
+            const dLon = (destination.longitude - updatedCoords.longitude) * 111320 * Math.cos(updatedCoords.latitude * (Math.PI / 180));
+            const distM = Math.sqrt(dLat * dLat + dLon * dLon);
+            if (distM <= 25 && navState === 'NAVIGATING') {
+              setNavState('ARRIVED');
+            }
+
+            // In active navigation mode: Smooth Anti-Spin Camera Follow
             if (navState === 'NAVIGATING' && !isManualExploring && mapRef.current) {
               const currentManeuver = routeData?.steps[currentStepIndex];
               const nextManeuver = routeData?.steps[currentStepIndex + 1] || null;
@@ -166,7 +174,7 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
                 nextStep: nextManeuver,
               });
 
-              mapRef.current.animateCamera(targetCam, { duration: 550 });
+              mapRef.current.animateCamera(targetCam, { duration: 400 });
             }
           }
         );
