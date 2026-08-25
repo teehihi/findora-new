@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   Modal,
   View,
@@ -14,6 +14,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Dimensions,
+  Animated,
 } from 'react-native';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -85,36 +86,55 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
 
   const currentUser = auth.currentUser;
 
-  // Load chat participants when modal opens
+  const slideAnim = useRef(new Animated.Value(500)).current;
+
+  // Load chat participants and animate modal sheet when modal opens
   useEffect(() => {
-    if (visible && currentUser) {
-      setStep(1);
+    if (visible) {
+      slideAnim.setValue(500);
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        damping: 26,
+        mass: 0.85,
+        stiffness: 220,
+        useNativeDriver: true,
+      }).start();
+
+      if (currentUser) {
+        setStep(1);
+        setSelectedParticipant(null);
+        setManualReceiverName('');
+        setEnteredOtp('');
+        setCapturedPhotoUri(null);
+        setCapturedPhotoBase64(null);
+        setAiResult(null);
+        setShowParticipantModal(false);
+        setLoadingParticipants(true);
+        getChatParticipantsForPost(postId, currentUser.uid)
+          .then((list) => {
+            setParticipants(list);
+            setLoadingParticipants(false);
+          })
+          .catch(() => setLoadingParticipants(false));
+      }
+    }
+  }, [visible, postId]);
+
+  const handleCloseModal = () => {
+    Animated.timing(slideAnim, {
+      toValue: 500,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
       setSelectedParticipant(null);
       setManualReceiverName('');
       setEnteredOtp('');
       setCapturedPhotoUri(null);
       setCapturedPhotoBase64(null);
       setAiResult(null);
-      setShowParticipantModal(false);
-      setLoadingParticipants(true);
-      getChatParticipantsForPost(postId, currentUser.uid)
-        .then((list) => {
-          setParticipants(list);
-          setLoadingParticipants(false);
-        })
-        .catch(() => setLoadingParticipants(false));
-    }
-  }, [visible, postId]);
-
-  const handleCloseModal = () => {
-    setSelectedParticipant(null);
-    setManualReceiverName('');
-    setEnteredOtp('');
-    setCapturedPhotoUri(null);
-    setCapturedPhotoBase64(null);
-    setAiResult(null);
-    setStep(1);
-    onClose();
+      setStep(1);
+      onClose();
+    });
   };
 
   // Step 2: Create Handshake & Generate OTP (Transitions to Step 3)
@@ -311,7 +331,7 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
           <View style={StyleSheet.absoluteFill} />
         </TouchableWithoutFeedback>
 
-        <View style={styles.content}>
+        <Animated.View style={[styles.content, { transform: [{ translateY: slideAnim }] }]}>
           {/* Header Bar */}
           <View style={styles.headerRow}>
             <View style={styles.headerTitleWrap}>
@@ -731,7 +751,7 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
               </View>
             )}
           </ScrollView>
-        </View>
+        </Animated.View>
       </KeyboardAvoidingView>
 
       {/* Participant Picker Popup Sheet */}
