@@ -57,6 +57,18 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
   const [isExternalPickerVisible, setIsExternalPickerVisible] = useState(false);
   const [isManualExploring, setIsManualExploring] = useState(false);
 
+  // Sync refs for uninterrupted GPS/Compass subscriptions
+  const navStateRef = useRef<NavState>(navState);
+  navStateRef.current = navState;
+  const isManualExploringRef = useRef<boolean>(isManualExploring);
+  isManualExploringRef.current = isManualExploring;
+  const userLocationRef = useRef(userLocation);
+  userLocationRef.current = userLocation;
+  const routeDataRef = useRef(routeData);
+  routeDataRef.current = routeData;
+  const currentStepIndexRef = useRef(currentStepIndex);
+  currentStepIndexRef.current = currentStepIndex;
+
   // 1. Initial Route Loading and Realtime GPS Tracking
   useEffect(() => {
     if (!visible || !destination) {
@@ -81,7 +93,7 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
       setLoadingRoute(false);
 
       // Check arrival condition (< 25m)
-      if (res.distanceMeters <= 25 && navState === 'NAVIGATING') {
+      if (res.distanceMeters <= 25 && navStateRef.current === 'NAVIGATING') {
         setNavState('ARRIVED');
       }
     };
@@ -109,9 +121,9 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
           navigationCamera.reset(fastCoords.heading);
           loadRoute(fastCoords);
 
-          // Fit route immediately with no lag
+          // Fit route initially once on overview
           setTimeout(() => {
-            if (mapRef.current && isMounted) {
+            if (mapRef.current && isMounted && navStateRef.current === 'PREVIEW') {
               mapRef.current.fitToCoordinates(
                 [fastCoords, { latitude: destination.latitude, longitude: destination.longitude }],
                 {
@@ -160,14 +172,14 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
             const dLat = (destination.latitude - updatedCoords.latitude) * 111320;
             const dLon = (destination.longitude - updatedCoords.longitude) * 111320 * Math.cos(updatedCoords.latitude * (Math.PI / 180));
             const distM = Math.sqrt(dLat * dLat + dLon * dLon);
-            if (distM <= 25 && navState === 'NAVIGATING') {
+            if (distM <= 25 && navStateRef.current === 'NAVIGATING') {
               setNavState('ARRIVED');
             }
 
             // In active navigation mode: Smooth Anti-Spin Camera Follow
-            if (navState === 'NAVIGATING' && !isManualExploring && mapRef.current) {
-              const currentManeuver = routeData?.steps[currentStepIndex];
-              const nextManeuver = routeData?.steps[currentStepIndex + 1] || null;
+            if (navStateRef.current === 'NAVIGATING' && !isManualExploringRef.current && mapRef.current) {
+              const currentManeuver = routeDataRef.current?.steps[currentStepIndexRef.current];
+              const nextManeuver = routeDataRef.current?.steps[currentStepIndexRef.current + 1] || null;
               const targetCam = navigationCamera.computeCameraTarget({
                 currentLocation: updatedCoords,
                 currentBearing: updatedCoords.heading || 0,
@@ -188,13 +200,13 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
             const headingVal = headingObj.trueHeading >= 0 ? headingObj.trueHeading : headingObj.magHeading;
             if (headingVal == null || headingVal < 0) return;
 
-            if (navState === 'NAVIGATING' && !isManualExploring && mapRef.current && userLocation) {
-              const currentManeuver = routeData?.steps[currentStepIndex];
-              const nextManeuver = routeData?.steps[currentStepIndex + 1] || null;
+            if (navStateRef.current === 'NAVIGATING' && !isManualExploringRef.current && mapRef.current && userLocationRef.current) {
+              const currentManeuver = routeDataRef.current?.steps[currentStepIndexRef.current];
+              const nextManeuver = routeDataRef.current?.steps[currentStepIndexRef.current + 1] || null;
               const targetCam = navigationCamera.computeCameraTarget({
-                currentLocation: userLocation,
+                currentLocation: userLocationRef.current,
                 currentBearing: headingVal,
-                speedKmh: Math.max((userLocation.speed || 0) * 3.6, 0),
+                speedKmh: Math.max((userLocationRef.current.speed || 0) * 3.6, 0),
                 distanceToNextManeuverMeters: currentManeuver?.distanceMeters || 100,
                 nextStep: nextManeuver,
               });
@@ -223,7 +235,7 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
         headingSubscription.remove();
       }
     };
-  }, [visible, destination, vehicleMode, navState, isManualExploring]);
+  }, [visible, destination, vehicleMode]);
 
   // Recenter / Resume Smart Navigation Camera
   const handleRecenterOrResume = () => {
@@ -232,13 +244,19 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
     if (navState === 'NAVIGATING' && userLocation) {
       let forwardHeading = userLocation.heading || 0;
       if (routeData?.coordinates && routeData.coordinates.length > 1) {
-        const targetPt = routeData.coordinates[Math.min(3, routeData.coordinates.length - 1)];
-        forwardHeading = calculateBearing(
-          userLocation.latitude,
-          userLocation.longitude,
-          targetPt.latitude,
-          targetPt.longitude
-        );
+        for (let i = 1; i < routeData.coordinates.length; i++) {
+          const pt = routeData.coordinates[i];
+          const distM = getDistanceKm(userLocation.latitude, userLocation.longitude, pt.latitude, pt.longitude) * 1000;
+          if (distM > 12) {
+            forwardHeading = calculateBearing(
+              userLocation.latitude,
+              userLocation.longitude,
+              pt.latitude,
+              pt.longitude
+            );
+            break;
+          }
+        }
       }
       navigationCamera.reset(forwardHeading);
       const currentManeuver = routeData?.steps[currentStepIndex];
@@ -246,11 +264,11 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
       const targetCam = navigationCamera.computeCameraTarget({
         currentLocation: userLocation,
         currentBearing: forwardHeading,
-        speedKmh: Math.max((userLocation.speed || 0) * 3.6, 20),
+        speedKmh: Math.max((userLocation.speed || 0) * 3.6, 25),
         distanceToNextManeuverMeters: currentManeuver?.distanceMeters || 100,
         nextStep: nextManeuver,
       });
-      mapRef.current.animateCamera(targetCam, { duration: 700 });
+      mapRef.current.animateCamera(targetCam, { duration: 600 });
     } else if (userLocation && destination) {
       mapRef.current.fitToCoordinates(
         [userLocation, { latitude: destination.latitude, longitude: destination.longitude }],
@@ -268,16 +286,30 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
     setIsManualExploring(false);
 
     if (userLocation && mapRef.current) {
-      // Calculate exact road orientation from start along the route polyline
+      // Calculate exact road orientation from start along the route polyline (at least 12m ahead)
       let forwardHeading = userLocation.heading || 0;
       if (routeData?.coordinates && routeData.coordinates.length > 1) {
-        const targetPt = routeData.coordinates[Math.min(3, routeData.coordinates.length - 1)];
-        forwardHeading = calculateBearing(
-          userLocation.latitude,
-          userLocation.longitude,
-          targetPt.latitude,
-          targetPt.longitude
-        );
+        for (let i = 1; i < routeData.coordinates.length; i++) {
+          const pt = routeData.coordinates[i];
+          const distM = getDistanceKm(userLocation.latitude, userLocation.longitude, pt.latitude, pt.longitude) * 1000;
+          if (distM > 12) {
+            forwardHeading = calculateBearing(
+              userLocation.latitude,
+              userLocation.longitude,
+              pt.latitude,
+              pt.longitude
+            );
+            break;
+          }
+        }
+        if (forwardHeading === 0 && routeData.coordinates[1]) {
+          forwardHeading = calculateBearing(
+            userLocation.latitude,
+            userLocation.longitude,
+            routeData.coordinates[1].latitude,
+            routeData.coordinates[1].longitude
+          );
+        }
       }
 
       navigationCamera.reset(forwardHeading);
@@ -287,7 +319,7 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
       const targetCam = navigationCamera.computeCameraTarget({
         currentLocation: userLocation,
         currentBearing: forwardHeading,
-        speedKmh: 25, // trigger sharp 3D driving view
+        speedKmh: 30, // trigger sharp 3D driving view
         distanceToNextManeuverMeters: currentManeuver?.distanceMeters || 100,
         nextStep: nextManeuver,
       });
