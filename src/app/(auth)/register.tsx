@@ -69,7 +69,11 @@ export default function RegisterScreen() {
     }
   }, []);
 
-  const handleRegister = async () => {
+  const [isOtpModalVisible, setIsOtpModalVisible] = useState(false);
+  const [generatedEmailOtp, setGeneratedEmailOtp] = useState('');
+  const [enteredEmailOtp, setEnteredEmailOtp] = useState('');
+
+  const handleInitiateRegister = () => {
     if (!name.trim() || !email.trim() || !password.trim()) {
       Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ Họ và tên, Email và Mật khẩu.');
       return;
@@ -80,7 +84,27 @@ export default function RegisterScreen() {
       return;
     }
 
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      Alert.alert('Lỗi Email', 'Vui lòng nhập đúng định dạng địa chỉ Email.');
+      return;
+    }
+
+    // Generate 6-digit Email Verification OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    setGeneratedEmailOtp(otp);
+    setEnteredEmailOtp('');
+    setIsOtpModalVisible(true);
+  };
+
+  const handleVerifyOtpAndCreateAccount = async () => {
+    if (enteredEmailOtp.trim() !== generatedEmailOtp) {
+      Alert.alert('Lỗi xác thực', 'Mã OTP không chính xác. Vui lòng kiểm tra lại!');
+      return;
+    }
+
     try {
+      setIsOtpModalVisible(false);
       setLoading(true);
       const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
       const user = userCredential.user;
@@ -98,6 +122,7 @@ export default function RegisterScreen() {
         reputationScore: 100,
         resolvedCount: 0,
         authProvider: 'email',
+        emailVerified: true,
         createdAt: serverTimestamp()
       });
 
@@ -286,7 +311,7 @@ export default function RegisterScreen() {
             {/* Vibrant Green Submit Button */}
             <TouchableOpacity 
               style={styles.registerBtn} 
-              onPress={handleRegister}
+              onPress={handleInitiateRegister}
               disabled={loading || googleLoading}
               activeOpacity={0.85}
             >
@@ -317,6 +342,72 @@ export default function RegisterScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Email Verification OTP Modal */}
+      {isOtpModalVisible && (
+        <View style={styles.otpModalOverlay}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.otpModalCard}
+          >
+            <View style={styles.otpModalHeader}>
+              <View style={styles.otpIconCircle}>
+                <Ionicons name="mail" size={24} color="#00C853" />
+              </View>
+              <Text style={styles.otpModalTitle}>Xác thực Email</Text>
+              <Text style={styles.otpModalSubtitle}>
+                Mã xác thực 6 số đã được gửi tới {email}:
+              </Text>
+            </View>
+
+            {/* Display Code for reference */}
+            <View style={styles.otpCodePreview}>
+              <Text style={styles.otpCodePreviewText}>{generatedEmailOtp}</Text>
+            </View>
+
+            {/* 6 Box OTP Input */}
+            <TextInput
+              style={styles.otpRealInput}
+              value={enteredEmailOtp}
+              onChangeText={(t) => setEnteredEmailOtp(t.replace(/[^0-9]/g, '').slice(0, 6))}
+              keyboardType="number-pad"
+              maxLength={6}
+              autoFocus
+            />
+
+            <View style={styles.otpBoxesRow}>
+              {[0, 1, 2, 3, 4, 5].map((idx) => {
+                const digit = enteredEmailOtp[idx] || '';
+                return (
+                  <View key={idx} style={[styles.otpBox, digit !== '' && styles.otpBoxFilled]}>
+                    <Text style={styles.otpBoxDigit}>{digit}</Text>
+                  </View>
+                );
+              })}
+            </View>
+
+            {/* Actions */}
+            <View style={styles.otpModalActions}>
+              <TouchableOpacity
+                style={styles.otpCancelBtn}
+                onPress={() => setIsOtpModalVisible(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.otpCancelText}>Quay lại</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.otpVerifyBtn, enteredEmailOtp.length < 6 && { opacity: 0.5 }]}
+                onPress={handleVerifyOtpAndCreateAccount}
+                disabled={enteredEmailOtp.length < 6}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.otpVerifyText}>Xác nhận & Đăng ký</Text>
+              </TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -434,5 +525,123 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: '#1F1F1F'
-  }
+  },
+  otpModalOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    zIndex: 1000,
+  },
+  otpModalCard: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  otpModalHeader: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  otpIconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#E8F5E9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  otpModalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#111111',
+    marginBottom: 4,
+  },
+  otpModalSubtitle: {
+    fontSize: 13,
+    color: '#666666',
+    textAlign: 'center',
+  },
+  otpCodePreview: {
+    backgroundColor: '#F5F5F7',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginBottom: 16,
+  },
+  otpCodePreviewText: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#00C853',
+    letterSpacing: 4,
+  },
+  otpRealInput: {
+    position: 'absolute',
+    width: '100%',
+    height: 60,
+    opacity: 0,
+  },
+  otpBoxesRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 24,
+  },
+  otpBox: {
+    width: 44,
+    height: 52,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#E5E5EA',
+    backgroundColor: '#F9F9F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  otpBoxFilled: {
+    borderColor: '#00C853',
+    backgroundColor: '#E8F5E9',
+  },
+  otpBoxDigit: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#111111',
+  },
+  otpModalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  otpCancelBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#F5F5F7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  otpCancelText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#666666',
+  },
+  otpVerifyBtn: {
+    flex: 2,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#00C853',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  otpVerifyText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
 });

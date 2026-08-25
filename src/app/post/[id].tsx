@@ -26,7 +26,7 @@ import { fetchPostById, subscribeComments, addComment, fetchPosts, getPosterDeta
 import { findMatches } from '../../services/aiMatching';
 import { playSoundEffect } from '../../services/soundService';
 import { Post, Comment, MatchResult, User } from '../../models/types';
-import { ResolveModal } from '../../components/ResolveModal';
+import { HandshakeModal } from '../../components/HandshakeModal';
 import { MatchCard } from '../../components/MatchCard';
 import { ImageViewerModal } from '../../components/ImageViewerModal';
 import { PostDetailSkeleton } from '../../components/PostDetailSkeleton';
@@ -929,12 +929,15 @@ export default function PostDetailScreen() {
         </View>
       )}
 
-      {/* Resolve Modal */}
-      <ResolveModal
+      {/* Handshake OTP & AI Verification Modal */}
+      <HandshakeModal
         visible={resolveModalVisible}
         onClose={() => setResolveModalVisible(false)}
         postId={post.id!}
         postTitle={post.title}
+        postImageUrl={post.imageUrl}
+        postDesc={post.description}
+        rewardPoints={post.rewardPoints || 50}
         onSuccess={() => {
           fetchPostById(post.id!).then(setPost);
         }}

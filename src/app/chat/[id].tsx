@@ -48,8 +48,12 @@ import { InAppCallModal } from '../../components/InAppCallModal';
 import { IncomingCallModal } from '../../components/IncomingCallModal';
 import { NavigationMapModal } from '../../components/NavigationMapModal';
 import { FloatingMiniMap } from '../../components/FloatingMiniMap';
+import { HandshakeModal } from '../../components/HandshakeModal';
+import { AppointmentModal } from '../../components/AppointmentModal';
+import { SmartAppointmentPill } from '../../components/SmartAppointmentPill';
+import { detectAppointmentIntent, AppointmentPayload } from '../../services/appointmentService';
 import { auth, db } from '../../config/firebase';
-import { ChatMessage, LocationPayload } from '../../models/types';
+import { ChatMessage, LocationPayload, Post } from '../../models/types';
 import { fetchPostById, getLevelFromPoints, getPosterDetails, uploadAvatarImage } from '../../services/firebaseService';
 import { subscribeUserPresence } from '../../services/presenceService';
 import { playSoundEffect } from '../../services/soundService';
@@ -508,12 +512,19 @@ export default function ChatRoomScreen() {
   const [miniMapDurationText, setMiniMapDurationText] = useState<string>('');
   const [sendingLocation, setSendingLocation] = useState<boolean>(false);
 
+  // Handshake & Smart Appointment States
+  const [attachedPost, setAttachedPost] = useState<Post | null>(null);
+  const [isHandshakeModalVisible, setIsHandshakeModalVisible] = useState<boolean>(false);
+  const [isAppointmentModalVisible, setIsAppointmentModalVisible] = useState<boolean>(false);
+  const [appointmentTriggerText, setAppointmentTriggerText] = useState<string>('');
+
   // Automatically fetch full post metadata & real image from Firestore
   useEffect(() => {
     if (!postId) return;
     fetchPostById(postId)
       .then((pData) => {
         if (pData) {
+          setAttachedPost(pData);
           setPendingPostAttachment({
             id: pData.id || postId || '',
             title: pData.title || postTitle || 'Bài viết',
@@ -1069,29 +1080,21 @@ export default function ChatRoomScreen() {
       setIsInAppCallVisible(true);
       setCallStatus('ACCEPTING');
 
-      callManager.claimIncomingCall({
-        callId,
-        chatId,
-        callerId: otherUserId,
-        callerName: otherUser.name,
-        callerAvatar: otherUser.avatarUrl,
-        receiverId: currentUser.uid,
-        isCaller: false,
-        onStatusChange: setCallStatus,
-        onError: (error) => Alert.alert('Lỗi cuộc gọi', error instanceof Error ? error.message : String(error)),
-      }, 'ACCEPTING');
+      if ((callManager as any).claimIncomingCall) {
+        (callManager as any).claimIncomingCall({
+          callId,
+          chatId,
+          callerId: otherUserId,
+          callerName: otherUser.name,
+          callerAvatar: otherUser.avatarUrl,
+          receiverId: currentUser.uid,
+          isCaller: false,
+          onStatusChange: setCallStatus,
+          onError: (error: any) => Alert.alert('Lỗi cuộc gọi', error instanceof Error ? error.message : String(error)),
+        }, 'ACCEPTING');
+      }
 
-      await callManager.acceptCall({
-        callId,
-        chatId,
-        callerId: otherUserId,
-        callerName: otherUser.name,
-        callerAvatar: otherUser.avatarUrl,
-        receiverId: currentUser.uid,
-        isCaller: false,
-        onStatusChange: setCallStatus,
-        onError: (error) => Alert.alert('Lỗi cuộc gọi', error instanceof Error ? error.message : String(error)),
-      });
+      await callManager.acceptCall();
     } catch (e) {
       console.error('Error accepting call:', e);
     }
@@ -1122,7 +1125,7 @@ export default function ChatRoomScreen() {
       if (callStatus === 'RINGING' || callStatus === 'OUTGOING_CALL') {
         await callManager.cancelCall();
       } else {
-        await callManager.endCall('ended', finalDuration);
+        await callManager.endCall(finalDuration);
         await sendCallRecordMessage('voice', finalDuration, 'ended');
       }
     } catch (e) {
@@ -1798,23 +1801,36 @@ export default function ChatRoomScreen() {
         </View>
       </View>
 
-      {/* Post Context Banner - Clickable to open Post Detail */}
+      {/* Post Context Banner - Clickable to open Post Detail or Trigger Handshake */}
       {postTitle ? (
-        <TouchableOpacity
-          style={styles.postContextBanner}
-          onPress={() => {
-            if (postId) {
-              router.push(`/post/${postId}`);
-            }
-          }}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="link-outline" size={16} color="#0084FF" />
-          <Text style={styles.postContextBannerText} numberOfLines={1}>
-            Về bài đăng: "{postTitle}"
-          </Text>
-          <Ionicons name="chevron-forward" size={16} color="#0084FF" />
-        </TouchableOpacity>
+        <View style={styles.postContextBanner}>
+          <TouchableOpacity
+            style={styles.postContextLeft}
+            onPress={() => {
+              if (postId) {
+                router.push(`/post/${postId}`);
+              }
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="link-outline" size={16} color="#0084FF" />
+            <Text style={styles.postContextBannerText} numberOfLines={1}>
+              Về: "{postTitle}"
+            </Text>
+          </TouchableOpacity>
+
+          {/* Handshake OTP Trigger Button */}
+          {attachedPost && attachedPost.status === 'active' && attachedPost.userId === auth.currentUser?.uid && (
+            <TouchableOpacity
+              style={styles.bannerHandshakeBtn}
+              onPress={() => setIsHandshakeModalVisible(true)}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="shield-checkmark" size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
+              <Text style={styles.bannerHandshakeBtnText}>Xác nhận trả đồ</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       ) : null}
 
       <KeyboardAvoidingView
@@ -1839,6 +1855,7 @@ export default function ChatRoomScreen() {
             const isCallMsg = item.type === 'call';
             const isPostCardMsg = item.type === 'post_card';
             const isLocationMsg = item.type === 'location' || !!item.location;
+            const isAppointmentMsg = item.type === 'appointment' || !!(item as any).appointmentData;
             const isMissedOrRejected = isCallMsg && (!item.callDuration || item.callDuration === 0);
             const hasImage = item.imageUrl && typeof item.imageUrl === 'string' && item.imageUrl.trim() !== '';
             const position = getMessagePosition(origIndex, messages);
@@ -1960,7 +1977,61 @@ export default function ChatRoomScreen() {
                             </TouchableOpacity>
                           </TouchableOpacity>
                         );
-                      })() : isPostCardMsg ? (
+                      })() : isAppointmentMsg ? (
+                        /* 1.5 Rich Appointment Card with Google Calendar */
+                        <View
+                          style={[
+                            styles.appointmentCardContainer,
+                            isMe ? styles.appointmentCardContainerMe : styles.appointmentCardContainerOther,
+                            borderRadiusStyle,
+                          ]}
+                        >
+                          <View style={styles.appointmentCardHeader}>
+                            <View style={styles.appointmentCalendarIconBox}>
+                              <Ionicons name="calendar" size={16} color="#FFFFFF" />
+                            </View>
+                            <Text style={[styles.appointmentCardHeaderTitle, isMe && { color: '#FFFFFF' }]}>
+                              {(item as any).appointmentData?.title || 'Lịch hẹn gặp mặt'}
+                            </Text>
+                          </View>
+
+                          <View style={styles.appointmentCardBody}>
+                            <View style={styles.appointmentDetailRow}>
+                              <Ionicons name="time" size={15} color={isMe ? '#E2E8F0' : '#00A896'} style={{ marginRight: 6 }} />
+                              <Text style={[styles.appointmentDetailText, isMe && { color: '#FFFFFF' }]}>
+                                {(item as any).appointmentData?.timeText || '15:00'} • Ngày {(item as any).appointmentData?.dateText || 'Hôm nay'}
+                              </Text>
+                            </View>
+
+                            <View style={styles.appointmentDetailRow}>
+                              <Ionicons name="location" size={15} color={isMe ? '#E2E8F0' : '#EF4444'} style={{ marginRight: 6 }} />
+                              <Text style={[styles.appointmentDetailText, isMe && { color: '#FFFFFF' }]} numberOfLines={2}>
+                                {(item as any).appointmentData?.locationText || 'Điểm hẹn'}
+                              </Text>
+                            </View>
+
+                            {(item as any).appointmentData?.noteText ? (
+                              <View style={styles.appointmentDetailRow}>
+                                <Ionicons name="information-circle" size={15} color={isMe ? '#E2E8F0' : '#64748B'} style={{ marginRight: 6 }} />
+                                <Text style={[styles.appointmentDetailText, isMe && { color: '#E2E8F0' }]} numberOfLines={2}>
+                                  {(item as any).appointmentData.noteText}
+                                </Text>
+                              </View>
+                            ) : null}
+                          </View>
+
+                          {(item as any).appointmentData?.googleCalendarUrl && (
+                            <TouchableOpacity
+                              style={[styles.googleCalBtn, isMe && styles.googleCalBtnMe]}
+                              onPress={() => Linking.openURL((item as any).appointmentData!.googleCalendarUrl)}
+                              activeOpacity={0.85}
+                            >
+                              <Ionicons name="calendar-outline" size={15} color="#FFFFFF" style={{ marginRight: 6 }} />
+                              <Text style={styles.googleCalBtnText}>Thêm vào Google Calendar</Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      ) : isPostCardMsg ? (
                         /* 2. TikTok Shop Style Post Item Card Rendering */
                         <TouchableOpacity
                           activeOpacity={0.95}
@@ -2173,21 +2244,33 @@ export default function ChatRoomScreen() {
                               />
                             </TouchableOpacity>
                           ) : (
-                            <TouchableOpacity
-                              activeOpacity={0.9}
-                              onPress={() => setExpandedMsgId(isExpanded ? null : item.id)}
-                              onLongPress={() => setSelectedMsgForAction(item)}
-                              style={[
-                                styles.msgBubble,
-                                isMe ? styles.msgBubbleMe : styles.msgBubbleOther,
-                                borderRadiusStyle,
-                                item.replyToText ? styles.msgBubbleOverlapping : null
-                              ]}
-                            >
-                              <Text style={[styles.msgText, isMe ? styles.msgTextMe : styles.msgTextOther]}>
-                                {item.message}
-                              </Text>
-                            </TouchableOpacity>
+                            <View>
+                              <TouchableOpacity
+                                activeOpacity={0.9}
+                                onPress={() => setExpandedMsgId(isExpanded ? null : item.id)}
+                                onLongPress={() => setSelectedMsgForAction(item)}
+                                style={[
+                                  styles.msgBubble,
+                                  isMe ? styles.msgBubbleMe : styles.msgBubbleOther,
+                                  borderRadiusStyle,
+                                  item.replyToText ? styles.msgBubbleOverlapping : null
+                                ]}
+                              >
+                                <Text style={[styles.msgText, isMe ? styles.msgTextMe : styles.msgTextOther]}>
+                                  {item.message}
+                                </Text>
+                              </TouchableOpacity>
+
+                              {/* Smart Sticky Appointment Suggestion Pill below receiver message */}
+                              {!isMe && detectAppointmentIntent(item.message || '') && (
+                                <SmartAppointmentPill
+                                  onPress={() => {
+                                    setAppointmentTriggerText(item.message || '');
+                                    setIsAppointmentModalVisible(true);
+                                  }}
+                                />
+                              )}
+                            </View>
                           )}
                         </>
                       )}
@@ -2445,27 +2528,20 @@ export default function ChatRoomScreen() {
                 <Text style={styles.actionMenuLabel}>Bài viết</Text>
               </TouchableOpacity>
 
-              {/* 5. OTP Safe Handoff Verification */}
+              {/* 5. Smart Appointment Creator */}
               <TouchableOpacity
                 style={styles.actionMenuItem}
                 onPress={() => {
                   setIsActionMenuVisible(false);
-                  router.push({
-                    pathname: '/chat/verify-otp',
-                    params: {
-                      chatId: activeChatId || paramChatId,
-                      otherUserId,
-                      otherUserName: otherUser.name,
-                      postId: postId || pendingPostAttachment?.id,
-                    },
-                  } as any);
+                  setAppointmentTriggerText('');
+                  setIsAppointmentModalVisible(true);
                 }}
                 activeOpacity={0.7}
               >
                 <View style={[styles.actionMenuSquircle, { backgroundColor: '#FAF5FF', borderColor: '#F3E8FF' }]}>
-                  <Ionicons name="shield-checkmark" size={24} color="#9333EA" />
+                  <Ionicons name="calendar" size={24} color="#9333EA" />
                 </View>
-                <Text style={styles.actionMenuLabel}>Mã OTP</Text>
+                <Text style={styles.actionMenuLabel}>Hẹn lịch gặp</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -2805,6 +2881,63 @@ export default function ChatRoomScreen() {
           setSelectedNavDestination(null);
         }}
       />
+
+      {/* Handshake OTP & AI Verification Modal */}
+      {attachedPost && (
+        <HandshakeModal
+          visible={isHandshakeModalVisible}
+          onClose={() => setIsHandshakeModalVisible(false)}
+          postId={attachedPost.id!}
+          postTitle={attachedPost.title}
+          postImageUrl={attachedPost.imageUrl}
+          postDesc={attachedPost.description}
+          rewardPoints={attachedPost.rewardPoints || 50}
+          onSuccess={() => {
+            if (postId) {
+              fetchPostById(postId).then(setAttachedPost);
+            }
+          }}
+        />
+      )}
+
+      {/* Smart Appointment Creator Modal */}
+      <AppointmentModal
+        visible={isAppointmentModalVisible}
+        onClose={() => setIsAppointmentModalVisible(false)}
+        chatId={activeChatId || paramChatId || ''}
+        creatorId={auth.currentUser?.uid || ''}
+        creatorName={auth.currentUser?.displayName || 'Người dùng Findora'}
+        partnerId={otherUserId || ''}
+        partnerName={otherUser.name || 'Người dùng Findora'}
+        initialMessageText={appointmentTriggerText}
+        onSuccess={async (appPayload: AppointmentPayload) => {
+          try {
+            const curChatId = activeChatId || paramChatId;
+            if (!curChatId || !auth.currentUser) return;
+
+            const msgData = {
+              chatId: curChatId,
+              senderId: auth.currentUser.uid,
+              message: `📅 Lịch hẹn: ${appPayload.title} lúc ${appPayload.timeText} ngày ${appPayload.dateText} tại ${appPayload.locationText}`,
+              type: 'appointment',
+              appointmentData: appPayload,
+              timestamp: serverTimestamp(),
+              readBy: [auth.currentUser.uid],
+            };
+
+            await addDoc(collection(db, 'chats', curChatId, 'messages'), msgData);
+            await updateDoc(doc(db, 'chats', curChatId), {
+              lastMessage: `📅 Lịch hẹn: ${appPayload.title}`,
+              lastMessageTime: serverTimestamp(),
+              lastSenderId: auth.currentUser.uid,
+              unreadCount: increment(1),
+            });
+            playSoundEffect('chatSend');
+          } catch (e) {
+            console.log('Error saving appointment message to chat:', e);
+          }
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -2813,6 +2946,89 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
+  },
+  postContextLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  bannerHandshakeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#00A896',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+  },
+  bannerHandshakeBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  appointmentCardContainer: {
+    width: 270,
+    padding: 14,
+    borderRadius: 18,
+    marginVertical: 4,
+  },
+  appointmentCardContainerMe: {
+    backgroundColor: '#0084FF',
+  },
+  appointmentCardContainerOther: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+  },
+  appointmentCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  appointmentCalendarIconBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#00A896',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  appointmentCardHeaderTitle: {
+    fontSize: 14.5,
+    fontWeight: '800',
+    color: '#0F172A',
+    flex: 1,
+  },
+  appointmentCardBody: {
+    marginBottom: 10,
+  },
+  appointmentDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 5,
+  },
+  appointmentDetailText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#334155',
+    flex: 1,
+  },
+  googleCalBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#00A896',
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+  googleCalBtnMe: {
+    backgroundColor: '#0062CC',
+  },
+  googleCalBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   headerRow: {
     flexDirection: 'row',
