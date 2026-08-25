@@ -84,7 +84,6 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
   const [enteredOtp, setEnteredOtp] = useState<string>('');
   const [resendCountdown, setResendCountdown] = useState<number>(60);
   const [resending, setResending] = useState<boolean>(false);
-  const [showResendSuccessModal, setShowResendSuccessModal] = useState<boolean>(false);
 
   // AI Photo Verification State
   const [capturedPhotoUri, setCapturedPhotoUri] = useState<string | null>(null);
@@ -284,10 +283,8 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
       setOtpCode(res.newOtp);
       setResendCountdown(60);
       setResending(false);
-      setShowResendSuccessModal(true);
     } catch (e: any) {
       setResending(false);
-      Alert.alert('Lỗi', 'Không thể gửi lại mã OTP. Vui lòng thử lại!');
     }
   };
 
@@ -961,46 +958,6 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
           </View>
         </Modal>
       )}
-
-      {/* Resend OTP Success Modal (Clean & Beautiful, No Exposed Code) */}
-      {showResendSuccessModal && (
-        <Modal
-          visible={showResendSuccessModal}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setShowResendSuccessModal(false)}
-        >
-          <View style={styles.resendSuccessOverlay}>
-            <TouchableWithoutFeedback onPress={() => setShowResendSuccessModal(false)}>
-              <View style={StyleSheet.absoluteFill} />
-            </TouchableWithoutFeedback>
-
-            <View style={styles.resendSuccessCard}>
-              <View style={styles.resendSuccessIconCircle}>
-                <Ionicons name="paper-plane" size={32} color="#00A896" />
-              </View>
-
-              <Text style={styles.resendSuccessTitle}>Đã Gửi Mã OTP Mới</Text>
-
-              <Text style={styles.resendSuccessMessage}>
-                Mã OTP mới đã được tạo và gửi thành công qua thông báo tới tài khoản của{' '}
-                <Text style={{ fontWeight: '800', color: '#0F172A' }}>
-                  {selectedParticipant ? selectedParticipant.name : manualReceiverName.trim() || 'người nhận đồ'}
-                </Text>
-                .{'\n\n'}Vui lòng yêu cầu họ mở thông báo để đọc mã mới cho bạn!
-              </Text>
-
-              <TouchableOpacity
-                style={styles.resendSuccessBtn}
-                onPress={() => setShowResendSuccessModal(false)}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.resendSuccessBtnText}>Đã Hiểu & Đóng</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
-      )}
     </Modal>
   );
 };
@@ -1645,82 +1602,5 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     minHeight: 64,
     textAlignVertical: 'top',
-  },
-  // ==================== RESEND SUCCESS MODAL STYLES ====================
-  resendSuccessOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.72)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  resendSuccessCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 24,
-    width: '100%',
-    maxWidth: 360,
-    alignItems: 'center',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.25,
-        shadowRadius: 20,
-      },
-      android: {
-        elevation: 20,
-      },
-    }),
-  },
-  resendSuccessIconCircle: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: '#F0FDFA',
-    borderWidth: 2,
-    borderColor: '#CCFBF1',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  resendSuccessTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  resendSuccessMessage: {
-    fontSize: 13.5,
-    color: '#475569',
-    lineHeight: 20,
-    textAlign: 'center',
-    marginBottom: 22,
-  },
-  resendSuccessBtn: {
-    backgroundColor: '#00A896',
-    borderRadius: 14,
-    paddingVertical: 13,
-    paddingHorizontal: 32,
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#00A896',
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.3,
-        shadowRadius: 6,
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
-  },
-  resendSuccessBtnText: {
-    fontSize: 14.5,
-    fontWeight: '800',
-    color: '#FFFFFF',
   },
 });
