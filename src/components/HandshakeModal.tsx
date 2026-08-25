@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SPACING } from '../constants/theme';
 import { auth } from '../config/firebase';
 import {
@@ -54,6 +55,7 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
   rewardPoints = 50,
   onSuccess,
 }) => {
+  const insets = useSafeAreaInsets();
   // Steps: 
   // 1: Chọn/Nhập người nhận lại đồ
   // 2: Xem lại thông tin tổng quan và nhấn tạo mã OTP
@@ -348,7 +350,15 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.keyboardAvoidWrap}
         >
-          <Animated.View style={[styles.content, { transform: [{ translateY: slideAnim }] }]}>
+          <Animated.View
+            style={[
+              styles.content,
+              {
+                transform: [{ translateY: slideAnim }],
+                paddingBottom: Math.max(insets.bottom, 16) + 16,
+              },
+            ]}
+          >
             {/* Header Bar */}
           <View style={styles.headerRow}>
             <View style={styles.headerTitleWrap}>
