@@ -703,20 +703,15 @@ export default function NotificationsScreen() {
                 khi hai bên gặp mặt trực tiếp:
               </Text>
 
-              {/* 6 Large Styled Digit Boxes */}
+              {/* Massive, Ultra-Clean & Luminous OTP Code Display */}
               {(() => {
                 const rawOtp =
                   (selectedOtpNotif as any).otpCode ||
                   selectedOtpNotif.message?.match(/\b\d{6}\b/)?.[0] ||
                   '123456';
-                const digits = rawOtp.padEnd(6, '-').split('').slice(0, 6);
                 return (
-                  <View style={styles.otpModalBoxesRow}>
-                    {digits.map((d: string, i: number) => (
-                      <View key={i} style={styles.otpModalDigitBox}>
-                        <Text style={styles.otpModalDigitText}>{d}</Text>
-                      </View>
-                    ))}
+                  <View style={styles.otpModalBigCodeBox}>
+                    <Text style={styles.otpModalBigCodeText}>{rawOtp}</Text>
                   </View>
                 );
               })()}
@@ -1093,37 +1088,33 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     marginBottom: 18,
   },
-  otpModalBoxesRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  otpModalDigitBox: {
-    flex: 1,
-    height: 52,
-    marginHorizontal: 3,
+  otpModalBigCodeBox: {
     backgroundColor: '#F0FDFA',
-    borderRadius: 12,
+    borderRadius: 20,
     borderWidth: 1.5,
-    borderColor: '#00A896',
+    borderColor: 'rgba(0, 168, 150, 0.35)',
+    paddingVertical: 18,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 16,
     ...Platform.select({
       ios: {
         shadowColor: '#00A896',
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.15,
-        shadowRadius: 4,
+        shadowRadius: 10,
       },
       android: {
-        elevation: 2,
+        elevation: 3,
       },
     }),
   },
-  otpModalDigitText: {
-    fontSize: 22,
+  otpModalBigCodeText: {
+    fontSize: 40,
     fontWeight: '900',
     color: '#00A896',
+    letterSpacing: 10,
+    textAlign: 'center',
   },
   otpModalSecurityBox: {
     flexDirection: 'row',
