@@ -55,17 +55,23 @@ export async function getChatParticipantsForPost(
 ): Promise<ChatParticipant[]> {
   try {
     const chatsRef = collection(db, 'chats');
+    // Query without orderBy to avoid requiring a Firestore Composite Index
     const q = query(
       chatsRef,
-      where('participants', 'array-contains', currentUserId),
-      orderBy('lastMessageTime', 'desc')
+      where('participants', 'array-contains', currentUserId)
     );
 
     const snap = await getDocs(q);
+    const sortedDocs = [...snap.docs].sort((a, b) => {
+      const timeA = a.data().lastMessageTime?.toMillis ? a.data().lastMessageTime.toMillis() : (a.data().lastMessageTime?.seconds ? a.data().lastMessageTime.seconds * 1000 : 0);
+      const timeB = b.data().lastMessageTime?.toMillis ? b.data().lastMessageTime.toMillis() : (b.data().lastMessageTime?.seconds ? b.data().lastMessageTime.seconds * 1000 : 0);
+      return timeB - timeA;
+    });
+
     const participants: ChatParticipant[] = [];
     const seenIds = new Set<string>();
 
-    for (const d of snap.docs) {
+    for (const d of sortedDocs) {
       const data = d.data();
       const otherId = (data.participants || []).find((id: string) => id !== currentUserId);
       if (otherId && !seenIds.has(otherId)) {
