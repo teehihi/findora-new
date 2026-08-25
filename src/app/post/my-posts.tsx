@@ -43,48 +43,42 @@ export default function MyPostsScreen() {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <HeaderBar title="Bài Đăng Của Tôi" showBack />
 
-      {/* Segmented Filter Tabs */}
+      {/* Standard Underline Top Tab Bar */}
       <View style={styles.tabBarContainer}>
         <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'active' && styles.tabButtonActive]}
+          style={styles.tabButton}
           onPress={() => setActiveTab('active')}
-          activeOpacity={0.8}
+          activeOpacity={0.7}
         >
-          <Ionicons
-            name="time-outline"
-            size={16}
-            color={activeTab === 'active' ? '#00A896' : '#64748B'}
-            style={{ marginRight: 6 }}
-          />
-          <Text style={[styles.tabButtonText, activeTab === 'active' && styles.tabButtonTextActive]}>
-            Đang hoạt động
-          </Text>
-          <View style={[styles.tabBadge, activeTab === 'active' && styles.tabBadgeActive]}>
-            <Text style={[styles.tabBadgeText, activeTab === 'active' && styles.tabBadgeTextActive]}>
-              {activePosts.length}
+          <View style={styles.tabLabelRow}>
+            <Text style={[styles.tabButtonText, activeTab === 'active' && styles.tabButtonTextActive]}>
+              Đang hoạt động
             </Text>
+            <View style={[styles.tabBadge, activeTab === 'active' && styles.tabBadgeActive]}>
+              <Text style={[styles.tabBadgeText, activeTab === 'active' && styles.tabBadgeTextActive]}>
+                {activePosts.length}
+              </Text>
+            </View>
           </View>
+          {activeTab === 'active' && <View style={styles.activeIndicator} />}
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'resolved' && styles.tabButtonActive]}
+          style={styles.tabButton}
           onPress={() => setActiveTab('resolved')}
-          activeOpacity={0.8}
+          activeOpacity={0.7}
         >
-          <Ionicons
-            name="checkmark-done-circle-outline"
-            size={16}
-            color={activeTab === 'resolved' ? '#00A896' : '#64748B'}
-            style={{ marginRight: 6 }}
-          />
-          <Text style={[styles.tabButtonText, activeTab === 'resolved' && styles.tabButtonTextActive]}>
-            Đã giải quyết
-          </Text>
-          <View style={[styles.tabBadge, activeTab === 'resolved' && styles.tabBadgeActive]}>
-            <Text style={[styles.tabBadgeText, activeTab === 'resolved' && styles.tabBadgeTextActive]}>
-              {resolvedPosts.length}
+          <View style={styles.tabLabelRow}>
+            <Text style={[styles.tabButtonText, activeTab === 'resolved' && styles.tabButtonTextActive]}>
+              Đã giải quyết
             </Text>
+            <View style={[styles.tabBadge, activeTab === 'resolved' && styles.tabBadgeActive]}>
+              <Text style={[styles.tabBadgeText, activeTab === 'resolved' && styles.tabBadgeTextActive]}>
+                {resolvedPosts.length}
+              </Text>
+            </View>
           </View>
+          {activeTab === 'resolved' && <View style={styles.activeIndicator} />}
         </TouchableOpacity>
       </View>
 
@@ -157,53 +151,60 @@ const styles = StyleSheet.create({
   tabBarContainer: {
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 10,
-    gap: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: '#E2E8F0',
+    height: 46,
   },
   tabButton: {
     flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  tabLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  tabButtonActive: {
-    backgroundColor: '#F0FDFA',
-    borderColor: '#00A896',
   },
   tabButtonText: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '600',
     color: '#64748B',
   },
   tabButtonTextActive: {
+    fontWeight: '800',
     color: '#00A896',
   },
   tabBadge: {
     marginLeft: 6,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#F1F5F9',
     borderRadius: 10,
-    paddingHorizontal: 7,
+    paddingHorizontal: 6,
     paddingVertical: 2,
+    minWidth: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   tabBadgeActive: {
-    backgroundColor: '#00A896',
+    backgroundColor: 'rgba(0, 168, 150, 0.12)',
   },
   tabBadgeText: {
     fontSize: 11,
-    fontWeight: '800',
+    fontWeight: '700',
     color: '#64748B',
   },
   tabBadgeTextActive: {
-    color: '#FFFFFF',
+    color: '#00A896',
+  },
+  activeIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    left: 24,
+    right: 24,
+    height: 3,
+    backgroundColor: '#00A896',
+    borderTopLeftRadius: 3,
+    borderTopRightRadius: 3,
   },
   listWrapper: {
     flex: 1,
