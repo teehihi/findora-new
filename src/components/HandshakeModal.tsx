@@ -385,7 +385,9 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
                   <View style={styles.selectedUserCard}>
                     <Image
                       source={{
-                        uri: selectedParticipant.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+                        uri:
+                          selectedParticipant.avatarUrl ||
+                          `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedParticipant.name)}&background=00A896&color=fff&size=150`,
                       }}
                       style={styles.selectedUserAvatar}
                     />
@@ -778,7 +780,9 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
                       >
                         <Image
                           source={{
-                            uri: p.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+                            uri:
+                              p.avatarUrl ||
+                              `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=00A896&color=fff&size=150`,
                           }}
                           style={styles.participantAvatar}
                         />

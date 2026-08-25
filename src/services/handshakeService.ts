@@ -78,23 +78,27 @@ export async function getChatParticipantsForPost(
         seenIds.add(otherId);
         
         // Get user details
-        let name = 'Người dùng Findora';
-        let avatarUrl = undefined;
+        let name = data.otherUserName || data.userName || 'Người dùng Findora';
+        let avatarUrl = data.otherUserAvatar || data.userAvatar || undefined;
         try {
           const userDoc = await getDoc(doc(db, 'users', otherId));
           if (userDoc.exists()) {
             const uData = userDoc.data();
-            name = uData.name || uData.displayName || name;
-            avatarUrl = uData.avatarUrl || uData.photoURL;
+            name = uData.fullName || uData.name || uData.displayName || uData.username || name;
+            avatarUrl = uData.avatarUrl || uData.photoURL || uData.photoUrl || uData.avatar || uData.profileImage || uData.image || avatarUrl;
           }
         } catch {}
+
+        if (!avatarUrl || typeof avatarUrl !== 'string' || avatarUrl.trim() === '') {
+          avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=00A896&color=fff&size=150`;
+        }
 
         participants.push({
           id: otherId,
           name,
           avatarUrl,
           chatId: d.id,
-          lastMessage: data.lastMessage || '',
+          lastMessage: data.lastMessage || data.lastMsg || '',
         });
       }
     }
