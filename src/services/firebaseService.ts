@@ -360,6 +360,8 @@ export async function fetchNotificationsList(userId: string): Promise<Notificati
         senderName: data.senderName,
         senderAvatar: data.senderAvatar,
         imageUrl: data.imageUrl,
+        otpCode: data.otpCode,
+        handshakeId: data.handshakeId,
         createdAt: data.createdAt,
         read: data.read || false
       });

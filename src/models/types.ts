@@ -94,6 +94,8 @@ export interface Notification {
   senderName?: string;
   senderAvatar?: string;
   imageUrl?: string;
+  otpCode?: string;
+  handshakeId?: string;
   createdAt?: Timestamp | any;
   read?: boolean;
 }

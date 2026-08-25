@@ -264,13 +264,17 @@ export default function NotificationsScreen() {
     }
 
     // Check if notification contains an OTP handshake code
-    const hasOtp =
-      (item as any).otpCode ||
+    const isOtpNotif =
+      Boolean((item as any).otpCode) ||
       (item.type as string) === 'handshake_otp' ||
-      (item.type === 'resolve' && (item as any).otpCode) ||
-      (item.message && item.message.includes('Mã OTP'));
+      (item.title && (item.title.includes('OTP') || item.title.includes('Mã'))) ||
+      (item.message && (
+        item.message.includes('Mã OTP') ||
+        item.message.includes('mã OTP') ||
+        item.message.includes('OTP')
+      ));
 
-    if (hasOtp) {
+    if (isOtpNotif) {
       setSelectedOtpNotif(item);
       return;
     }
