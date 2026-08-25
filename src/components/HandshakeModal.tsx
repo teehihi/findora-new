@@ -355,7 +355,6 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
               styles.content,
               {
                 transform: [{ translateY: slideAnim }],
-                paddingBottom: Math.max(insets.bottom, 16) + 16,
               },
             ]}
           >
@@ -463,26 +462,6 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
                     </View>
                   </View>
                 )}
-
-                {/* Continue to Step 2 Button */}
-                <TouchableOpacity
-                  style={[
-                    styles.primaryActionBtn,
-                    !selectedParticipant && { opacity: 0.5 }
-                  ]}
-                  onPress={() => {
-                    if (!selectedParticipant) {
-                      Alert.alert('Chưa chọn người nhận', 'Vui lòng bấm chọn người nhận đồ từ danh sách tin nhắn.');
-                      return;
-                    }
-                    setStep(2);
-                  }}
-                  disabled={!selectedParticipant}
-                  activeOpacity={0.85}
-                >
-                  <Text style={styles.primaryActionBtnText}>Tiếp tục</Text>
-                  <Ionicons name="arrow-forward" size={18} color="#FFFFFF" style={{ marginLeft: 6 }} />
-                </TouchableOpacity>
               </View>
             )}
 
@@ -511,7 +490,7 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
                   <View style={styles.confirmRow}>
                     <Text style={styles.confirmLabel}>Người nhận:</Text>
                     <Text style={styles.confirmVal}>
-                      {selectedParticipant ? selectedParticipant.name : manualReceiverName.trim() || 'Chưa nhập'}
+                      {selectedParticipant ? selectedParticipant.name : 'Chưa chọn'}
                     </Text>
                   </View>
                   <View style={styles.confirmDivider} />
@@ -521,34 +500,6 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
                       +{rewardPoints} Điểm Findora
                     </Text>
                   </View>
-                </View>
-
-                {/* Actions: Back to Step 1 & Create OTP */}
-                <View style={styles.confirmActionsRow}>
-                  <TouchableOpacity
-                    style={styles.backOutlineBtn}
-                    onPress={() => setStep(1)}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="arrow-back" size={16} color="#64748B" style={{ marginRight: 4 }} />
-                    <Text style={styles.backOutlineBtnText}>Quay lại</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.primaryActionBtnFlex, loading && { opacity: 0.7 }]}
-                    onPress={handleCreateOtp}
-                    disabled={loading}
-                    activeOpacity={0.85}
-                  >
-                    {loading ? (
-                      <ActivityIndicator size="small" color="#FFFFFF" />
-                    ) : (
-                      <>
-                        <Ionicons name="key" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-                        <Text style={styles.primaryActionBtnText}>Tạo Mã OTP</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
                 </View>
               </View>
             )}
@@ -604,26 +555,6 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
                     })}
                   </View>
                 </View>
-
-                {/* Verify OTP Button */}
-                <TouchableOpacity
-                  style={[
-                    styles.primaryActionBtn,
-                    (enteredOtp.length < 6 || loading) && { opacity: 0.5 },
-                  ]}
-                  onPress={handleVerifyOtp}
-                  disabled={enteredOtp.length < 6 || loading}
-                  activeOpacity={0.85}
-                >
-                  {loading ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <>
-                      <Ionicons name="shield-checkmark" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
-                      <Text style={styles.primaryActionBtnText}>Xác Thực Mã OTP</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
               </View>
             )}
 
@@ -674,29 +605,6 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
                     </TouchableOpacity>
                   </View>
                 )}
-
-                {/* AI Submit Button */}
-                <TouchableOpacity
-                  style={[
-                    styles.primaryActionBtn,
-                    (!capturedPhotoUri || aiVerifying) && { opacity: 0.5 },
-                  ]}
-                  onPress={handleSubmitAiVerification}
-                  disabled={!capturedPhotoUri || aiVerifying}
-                  activeOpacity={0.85}
-                >
-                  {aiVerifying ? (
-                    <View style={styles.aiLoadingRow}>
-                      <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
-                      <Text style={styles.primaryActionBtnText}>AI Gemini Đang Phân Tích...</Text>
-                    </View>
-                  ) : (
-                    <>
-                      <MaterialCommunityIcons name="robot-confused-outline" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
-                      <Text style={styles.primaryActionBtnText}>Xác Thực Bằng AI & Hoàn Tất</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
               </View>
             )}
 
@@ -765,19 +673,120 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
                     multiline
                   />
                 </View>
-
-                {/* Complete Button */}
-                <TouchableOpacity
-                  style={[styles.primaryActionBtn, loading && { opacity: 0.7 }]}
-                  onPress={handleFinalRatingSubmit}
-                  disabled={loading}
-                  activeOpacity={0.85}
-                >
-                  <Text style={styles.primaryActionBtnText}>Đóng & Lưu Đánh Giá</Text>
-                </TouchableOpacity>
               </View>
             )}
           </ScrollView>
+
+          {/* ========================================================================= */}
+          {/* FIXED BOTTOM ACTION FOOTER (Guaranteed full visibility on all screens)    */}
+          {/* ========================================================================= */}
+          <View style={[styles.bottomFooterContainer, { paddingBottom: Math.max(insets.bottom, 16) + 8 }]}>
+            {step === 1 && (
+              <TouchableOpacity
+                style={[
+                  styles.primaryActionBtn,
+                  !selectedParticipant && { opacity: 0.5 }
+                ]}
+                onPress={() => {
+                  if (!selectedParticipant) {
+                    Alert.alert('Chưa chọn người nhận', 'Vui lòng bấm chọn người nhận đồ từ danh sách tin nhắn.');
+                    return;
+                  }
+                  setStep(2);
+                }}
+                disabled={!selectedParticipant}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.primaryActionBtnText}>Tiếp tục</Text>
+                <Ionicons name="arrow-forward" size={18} color="#FFFFFF" style={{ marginLeft: 6 }} />
+              </TouchableOpacity>
+            )}
+
+            {step === 2 && (
+              <View style={styles.confirmActionsRow}>
+                <TouchableOpacity
+                  style={styles.backOutlineBtn}
+                  onPress={() => setStep(1)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="arrow-back" size={16} color="#64748B" style={{ marginRight: 4 }} />
+                  <Text style={styles.backOutlineBtnText}>Quay lại</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.primaryActionBtnFlex, loading && { opacity: 0.7 }]}
+                  onPress={handleCreateOtp}
+                  disabled={loading}
+                  activeOpacity={0.85}
+                >
+                  {loading ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <Ionicons name="key" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                      <Text style={styles.primaryActionBtnText}>Tạo Mã OTP</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {step === 3 && (
+              <TouchableOpacity
+                style={[
+                  styles.primaryActionBtn,
+                  (enteredOtp.length < 6 || loading) && { opacity: 0.5 },
+                ]}
+                onPress={handleVerifyOtp}
+                disabled={enteredOtp.length < 6 || loading}
+                activeOpacity={0.85}
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Ionicons name="shield-checkmark" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
+                    <Text style={styles.primaryActionBtnText}>Xác Thực Mã OTP</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
+
+            {step === 4 && (
+              <TouchableOpacity
+                style={[
+                  styles.primaryActionBtn,
+                  (!capturedPhotoUri || aiVerifying) && { opacity: 0.5 },
+                ]}
+                onPress={handleSubmitAiVerification}
+                disabled={!capturedPhotoUri || aiVerifying}
+                activeOpacity={0.85}
+              >
+                {aiVerifying ? (
+                  <View style={styles.aiLoadingRow}>
+                    <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
+                    <Text style={styles.primaryActionBtnText}>AI Gemini Đang Phân Tích...</Text>
+                  </View>
+                ) : (
+                  <>
+                    <MaterialCommunityIcons name="robot-confused-outline" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
+                    <Text style={styles.primaryActionBtnText}>Xác Thực Bằng AI & Hoàn Tất</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
+
+            {step === 5 && (
+              <TouchableOpacity
+                style={[styles.primaryActionBtn, loading && { opacity: 0.7 }]}
+                onPress={handleFinalRatingSubmit}
+                disabled={loading}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.primaryActionBtnText}>Đóng & Lưu Đánh Giá</Text>
+              </TouchableOpacity>
+            )}
+          </View>
           </Animated.View>
         </KeyboardAvoidingView>
       </Animated.View>
@@ -876,14 +885,23 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   keyboardAvoidWrap: {
+    width: '100%',
     justifyContent: 'flex-end',
   },
   content: {
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
+    width: '100%',
     maxHeight: '90%',
-    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+  },
+  bottomFooterContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    backgroundColor: '#FFFFFF',
+    width: '100%',
   },
   headerRow: {
     flexDirection: 'row',
