@@ -782,6 +782,22 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
                     </>
                   )}
                 </TouchableOpacity>
+
+                {/* Temporary Skip Button for Testing */}
+                <TouchableOpacity
+                  style={styles.skipStep4Btn}
+                  onPress={() => {
+                    setAiResult({
+                      score: 95,
+                      explanation: 'Đã bỏ qua bước ảnh kiểm thử. Giao dịch hợp lệ!',
+                    });
+                    goToStep(5);
+                  }}
+                  activeOpacity={0.75}
+                >
+                  <Ionicons name="play-skip-forward-outline" size={16} color="#64748B" style={{ marginRight: 6 }} />
+                  <Text style={styles.skipStep4BtnText}>Bỏ qua bước chụp ảnh (Test nhanh)</Text>
+                </TouchableOpacity>
               </View>
             )}
 
@@ -1503,6 +1519,23 @@ const styles = StyleSheet.create({
   aiLoadingRow: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  skipStep4Btn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  skipStep4BtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748B',
   },
   celebrationBox: {
     alignItems: 'center',
