@@ -56,6 +56,7 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
   onSuccess,
 }) => {
   const insets = useSafeAreaInsets();
+  const bottomSafeArea = Math.max(insets.bottom, Platform.OS === 'ios' ? 34 : 16) + 14;
   // Steps: 
   // 1: Chọn/Nhập người nhận lại đồ
   // 2: Xem lại thông tin tổng quan và nhấn tạo mã OTP
@@ -396,7 +397,7 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
             /* ========================================================================= */
             /* STEP 1: SELECT RECIPIENT FROM CHAT (Clean native view, perfect sizing)   */
             /* ========================================================================= */
-            <View style={[styles.step1Wrapper, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]}>
+            <View style={[styles.step1Wrapper, { paddingBottom: bottomSafeArea }]}>
               <View style={styles.stepHeaderRow}>
                 <Ionicons name="person-outline" size={18} color="#00A896" style={{ marginRight: 6 }} />
                 <Text style={styles.stepTitle}>Bước 1: Chọn Người Nhận Đồ</Text>
@@ -693,7 +694,7 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
               </ScrollView>
 
               {/* Fixed Bottom Action Footer for Steps 2..5 */}
-              <View style={[styles.bottomFooterContainer, { paddingBottom: Math.max(insets.bottom, 16) + 10 }]}>
+              <View style={[styles.bottomFooterContainer, { paddingBottom: bottomSafeArea }]}>
                 {step === 2 && (
                   <View style={styles.confirmActionsRow}>
                     <TouchableOpacity
