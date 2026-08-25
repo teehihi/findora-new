@@ -571,7 +571,7 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
                   <Text style={styles.stepTitle}>Bước 3: Nhập Mã OTP Trao Trả</Text>
                 </View>
                 <Text style={styles.stepSubtitle}>
-                  Người mất đồ đã nhận được thông báo mã OTP 6 số. Vui lòng yêu cầu họ đọc mã và nhập vào ô dưới đây:
+                  Nhập mã 6 chữ số do người nhận cung cấp để xác thực giao dịch trao trả:
                 </Text>
 
                 {/* Waiting for receiver to read OTP card */}
@@ -580,13 +580,11 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
                     <Ionicons name="notifications" size={22} color="#00A896" />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.otpWaitingTitle}>Mã đã gửi tới người nhận</Text>
+                    <Text style={styles.otpWaitingTitle}>
+                      Mã đã gửi tới {selectedParticipant ? selectedParticipant.name : 'người nhận'}
+                    </Text>
                     <Text style={styles.otpWaitingSub}>
-                      Mã OTP gồm 6 chữ số đã được gửi qua thông báo tài khoản của{' '}
-                      <Text style={{ fontWeight: '700', color: '#0F172A' }}>
-                        {selectedParticipant ? selectedParticipant.name : 'người nhận'}
-                      </Text>
-                      . Hãy yêu cầu họ đọc mã để nhập vào ô dưới đây.
+                      Yêu cầu họ mở thông báo trên ứng dụng Findora và đọc mã cho bạn.
                     </Text>
                   </View>
                 </View>

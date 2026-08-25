@@ -84,8 +84,8 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/favicon.png",
-          "color": "#10B981",
+          "icon": "./assets/images/android-icon-monochrome.png",
+          "color": "#00A896",
           "sounds": [
             "./assets/sounds/chat_noti_sound.mp3",
             "./assets/sounds/sound_noti.mp3"

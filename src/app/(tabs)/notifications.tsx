@@ -10,6 +10,7 @@ import {
   Platform,
   Modal,
   Pressable,
+  TouchableWithoutFeedback,
   Animated,
   PanResponder,
 } from 'react-native';
@@ -162,6 +163,7 @@ export default function NotificationsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'unread'>('all');
   const [optionsModalVisible, setOptionsModalVisible] = useState(false);
+  const [selectedOtpNotif, setSelectedOtpNotif] = useState<Notification | null>(null);
 
   // Pagination state: Total visible items start at 10
   const [displayLimit, setDisplayLimit] = useState(10);
@@ -215,6 +217,18 @@ export default function NotificationsScreen() {
         prev.map((n) => (n.id === item.id ? { ...n, read: true } : n))
       );
       markNotificationAsRead(item.id);
+    }
+
+    // Check if notification contains an OTP handshake code
+    const hasOtp =
+      (item as any).otpCode ||
+      (item.type as string) === 'handshake_otp' ||
+      (item.type === 'resolve' && (item as any).otpCode) ||
+      (item.message && item.message.includes('Mã OTP'));
+
+    if (hasOtp) {
+      setSelectedOtpNotif(item);
+      return;
     }
 
     if (item.postId) {
@@ -647,6 +661,103 @@ export default function NotificationsScreen() {
         onClose={() => setOptionsModalVisible(false)}
         onMarkAllAsRead={handleMarkAllAsRead}
       />
+
+      {/* 5. OTP Display Modal for Lost Item Owner */}
+      {selectedOtpNotif && (
+        <Modal
+          visible={!!selectedOtpNotif}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setSelectedOtpNotif(null)}
+        >
+          <View style={styles.otpModalOverlay}>
+            <TouchableWithoutFeedback onPress={() => setSelectedOtpNotif(null)}>
+              <View style={StyleSheet.absoluteFill} />
+            </TouchableWithoutFeedback>
+
+            <View style={styles.otpModalCard}>
+              <View style={styles.otpModalHeader}>
+                <View style={styles.otpModalHeaderLeft}>
+                  <View style={styles.otpModalIconCircle}>
+                    <Ionicons name="shield-checkmark" size={24} color="#00A896" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.otpModalTitle}>Mã OTP Nhận Lại Đồ</Text>
+                    <Text style={styles.otpModalSubtitle}>Xác nhận cuộc gặp mặt trao trả</Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  style={styles.otpModalCloseBtn}
+                  onPress={() => setSelectedOtpNotif(null)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons name="close" size={22} color="#64748B" />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.otpModalInstruction}>
+                Vui lòng đọc mã OTP 6 số này cho{' '}
+                <Text style={{ fontWeight: '700', color: '#0F172A' }}>
+                  {selectedOtpNotif.senderName || 'người trả đồ'}
+                </Text>{' '}
+                khi hai bên gặp mặt trực tiếp:
+              </Text>
+
+              {/* 6 Large Styled Digit Boxes */}
+              {(() => {
+                const rawOtp =
+                  (selectedOtpNotif as any).otpCode ||
+                  selectedOtpNotif.message?.match(/\b\d{6}\b/)?.[0] ||
+                  '123456';
+                const digits = rawOtp.padEnd(6, '-').split('').slice(0, 6);
+                return (
+                  <View style={styles.otpModalBoxesRow}>
+                    {digits.map((d: string, i: number) => (
+                      <View key={i} style={styles.otpModalDigitBox}>
+                        <Text style={styles.otpModalDigitText}>{d}</Text>
+                      </View>
+                    ))}
+                  </View>
+                );
+              })()}
+
+              {/* Security Hint */}
+              <View style={styles.otpModalSecurityBox}>
+                <Ionicons name="lock-closed" size={16} color="#00A896" style={{ marginRight: 8 }} />
+                <Text style={styles.otpModalSecurityText}>
+                  Chỉ cung cấp mã sau khi bạn đã kiểm tra và nhận lại đúng món đồ của mình.
+                </Text>
+              </View>
+
+              {/* Action Buttons */}
+              <View style={styles.otpModalActionsRow}>
+                {selectedOtpNotif.postId ? (
+                  <TouchableOpacity
+                    style={styles.otpModalPostBtn}
+                    onPress={() => {
+                      const pId = selectedOtpNotif.postId;
+                      setSelectedOtpNotif(null);
+                      router.push(`/post/${pId}`);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="document-text-outline" size={18} color="#00A896" style={{ marginRight: 6 }} />
+                    <Text style={styles.otpModalPostBtnText}>Xem Bài Viết</Text>
+                  </TouchableOpacity>
+                ) : null}
+
+                <TouchableOpacity
+                  style={styles.otpModalDoneBtn}
+                  onPress={() => setSelectedOtpNotif(null)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.otpModalDoneBtnText}>Đã Hiểu & Đóng</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 }
@@ -911,5 +1022,168 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#0F172A',
+  },
+  // ==================== OTP RECEIVER MODAL STYLES ====================
+  otpModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.72)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  otpModalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    width: '100%',
+    maxWidth: 380,
+    padding: 22,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.25,
+        shadowRadius: 24,
+      },
+      android: {
+        elevation: 20,
+      },
+    }),
+  },
+  otpModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  otpModalHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  otpModalIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0, 168, 150, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  otpModalTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  otpModalSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  otpModalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  otpModalInstruction: {
+    fontSize: 13.5,
+    color: '#475569',
+    lineHeight: 19,
+    marginBottom: 18,
+  },
+  otpModalBoxesRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  otpModalDigitBox: {
+    flex: 1,
+    height: 52,
+    marginHorizontal: 3,
+    backgroundColor: '#F0FDFA',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#00A896',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#00A896',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  otpModalDigitText: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#00A896',
+  },
+  otpModalSecurityBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 20,
+  },
+  otpModalSecurityText: {
+    fontSize: 11.5,
+    color: '#64748B',
+    flex: 1,
+    lineHeight: 16,
+  },
+  otpModalActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  otpModalPostBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F0FDFA',
+    borderRadius: 14,
+    paddingVertical: 13,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 168, 150, 0.3)',
+  },
+  otpModalPostBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#00A896',
+  },
+  otpModalDoneBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#00A896',
+    borderRadius: 14,
+    paddingVertical: 13,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#00A896',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.3,
+        shadowRadius: 6,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
+  },
+  otpModalDoneBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
 });
