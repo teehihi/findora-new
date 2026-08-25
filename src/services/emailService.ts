@@ -69,72 +69,73 @@ export function generateAppointmentHtmlEmail(params: {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Lịch Hẹn Gặp Mặt - Findora</title>
 </head>
-<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #0f172a;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #f8fafc; padding: 24px 0;">
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f1f5f9; color: #0f172a; -webkit-font-smoothing: antialiased;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #f1f5f9; padding: 36px 16px;">
     <tr>
       <td align="center">
-        <table role="presentation" width="100%" max-width="600" cellspacing="0" cellpadding="0" border="0" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.06); border: 1px solid #e2e8f0;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width: 560px; width: 100%; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(15, 23, 42, 0.05); border: 1px solid #e2e8f0;">
           
           <!-- Header Banner -->
           <tr>
-            <td style="background: linear-gradient(135deg, #00A896 0%, #028090 100%); padding: 32px 28px; text-align: center;">
-              <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">FINDORA</h1>
-              <p style="margin: 6px 0 0 0; color: #ccfbf1; font-size: 14px; font-weight: 500;">Thông Báo Xác Nhận Lịch Hẹn Gặp Mặt</p>
+            <td style="background-color: #00A896; padding: 28px 24px; text-align: center;">
+              <h1 style="margin: 0; color: #ffffff; font-size: 22px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;">FINDORA</h1>
+              <p style="margin: 4px 0 0 0; color: #ccfbf1; font-size: 13.5px; font-weight: 500;">Xác Nhận Lịch Hẹn Gặp Mặt</p>
             </td>
           </tr>
 
           <!-- Main Content -->
           <tr>
-            <td style="padding: 28px;">
-              <div style="background-color: #f0fdfa; border: 1px solid #ccfbf1; border-radius: 14px; padding: 16px; margin-bottom: 24px; text-align: center;">
-                <span style="font-size: 12px; font-weight: 800; color: #0f766e; text-transform: uppercase; letter-spacing: 0.5px;">Cuộc hẹn mới được thiết lập</span>
-                <h2 style="margin: 6px 0 0 0; color: #0f172a; font-size: 18px; font-weight: 800;">${params.title}</h2>
+            <td style="padding: 32px 28px;">
+              <!-- Title Card -->
+              <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #00A896; border-radius: 8px; padding: 16px 18px; margin-bottom: 24px;">
+                <div style="font-size: 11.5px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Cuộc hẹn</div>
+                <h2 style="margin: 0; color: #0f172a; font-size: 17px; font-weight: 700; line-height: 1.4;">${params.title}</h2>
               </div>
 
               <!-- Details Table -->
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 24px;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 28px;">
                 <tr>
-                  <td style="padding: 10px 0; border-bottom: 1px solid #f1f5f9; color: #64748b; font-size: 14px; width: 35%;">👥 <strong>Người tham gia:</strong></td>
-                  <td style="padding: 10px 0; border-bottom: 1px solid #f1f5f9; color: #0f172a; font-size: 14px; font-weight: 600;">${params.creatorName} & ${params.partnerName}</td>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #f1f5f9; color: #64748b; font-size: 13.5px; width: 34%; font-weight: 500;">Người tham gia</td>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #f1f5f9; color: #0f172a; font-size: 14px; font-weight: 600;">${params.creatorName} &amp; ${params.partnerName}</td>
                 </tr>
                 <tr>
-                  <td style="padding: 10px 0; border-bottom: 1px solid #f1f5f9; color: #64748b; font-size: 14px;">📅 <strong>Ngày hẹn:</strong></td>
-                  <td style="padding: 10px 0; border-bottom: 1px solid #f1f5f9; color: #0f172a; font-size: 14px; font-weight: 600;">${params.dateText}</td>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #f1f5f9; color: #64748b; font-size: 13.5px; font-weight: 500;">Ngày hẹn</td>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #f1f5f9; color: #0f172a; font-size: 14px; font-weight: 600;">${params.dateText}</td>
                 </tr>
                 <tr>
-                  <td style="padding: 10px 0; border-bottom: 1px solid #f1f5f9; color: #64748b; font-size: 14px;">⏰ <strong>Giờ hẹn:</strong></td>
-                  <td style="padding: 10px 0; border-bottom: 1px solid #f1f5f9; color: #00A896; font-size: 14px; font-weight: 700;">${params.timeText}</td>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #f1f5f9; color: #64748b; font-size: 13.5px; font-weight: 500;">Giờ hẹn</td>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #f1f5f9; color: #00A896; font-size: 14px; font-weight: 700;">${params.timeText}</td>
                 </tr>
                 <tr>
-                  <td style="padding: 10px 0; border-bottom: 1px solid #f1f5f9; color: #64748b; font-size: 14px;">📍 <strong>Địa điểm:</strong></td>
-                  <td style="padding: 10px 0; border-bottom: 1px solid #f1f5f9; color: #0f172a; font-size: 14px; font-weight: 600;">${params.locationText}</td>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #f1f5f9; color: #64748b; font-size: 13.5px; font-weight: 500;">Địa điểm</td>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #f1f5f9; color: #0f172a; font-size: 14px; font-weight: 600;">${params.locationText}</td>
                 </tr>
                 ${params.noteText ? `
                 <tr>
-                  <td style="padding: 10px 0; border-bottom: 1px solid #f1f5f9; color: #64748b; font-size: 14px;">📝 <strong>Ghi chú:</strong></td>
-                  <td style="padding: 10px 0; border-bottom: 1px solid #f1f5f9; color: #475569; font-size: 14px;">${params.noteText}</td>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #f1f5f9; color: #64748b; font-size: 13.5px; font-weight: 500;">Ghi chú</td>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #f1f5f9; color: #334155; font-size: 13.5px;">${params.noteText}</td>
                 </tr>
                 ` : ''}
               </table>
 
               <!-- Google Calendar Action Button -->
-              <div style="text-align: center; margin: 28px 0 16px 0;">
-                <a href="${params.googleCalendarUrl}" target="_blank" style="background-color: #00A896; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 12px; font-weight: 700; font-size: 15px; display: inline-block; box-shadow: 0 4px 12px rgba(0, 168, 150, 0.3);">
-                  📅 Thêm Vào Google Calendar & Nhắc Nhở
+              <div style="text-align: center; margin: 30px 0 16px 0;">
+                <a href="${params.googleCalendarUrl}" target="_blank" style="background-color: #00A896; color: #ffffff; text-decoration: none; padding: 13px 28px; border-radius: 10px; font-weight: 700; font-size: 14px; display: inline-block; letter-spacing: 0.2px;">
+                  Thêm Vào Google Calendar
                 </a>
               </div>
 
-              <p style="text-align: center; color: #94a3b8; font-size: 12.5px; margin-top: 16px;">
-                Vui lòng đến đúng giờ và chuẩn bị đầy đủ thông tin để quá trình trao nhận đồ diễn ra thuận lợi!
+              <p style="text-align: center; color: #94a3b8; font-size: 12px; margin-top: 20px; line-height: 1.5;">
+                Vui lòng đến đúng giờ và chuẩn bị đầy đủ giấy tờ cần thiết để đối chiếu.
               </p>
             </td>
           </tr>
 
           <!-- Footer -->
           <tr>
-            <td style="background-color: #f8fafc; padding: 20px; text-align: center; border-top: 1px solid #e2e8f0;">
-              <p style="margin: 0; color: #64748b; font-size: 12px;">© 2026 Findora - Nền tảng tìm kiếm và trao trả đồ thất lạc thông minh.</p>
-              <p style="margin: 4px 0 0 0; color: #94a3b8; font-size: 11px;">Email tự động được gửi từ hệ thống Findora. Vui lòng không trả lời trực tiếp email này.</p>
+            <td style="background-color: #f8fafc; padding: 18px 24px; text-align: center; border-top: 1px solid #f1f5f9;">
+              <p style="margin: 0; color: #64748b; font-size: 12px;">Findora &bull; Nền tảng tìm kiếm và trao trả đồ thất lạc</p>
+              <p style="margin: 4px 0 0 0; color: #94a3b8; font-size: 11px;">Email tự động từ hệ thống. Vui lòng không trả lời thư này.</p>
             </td>
           </tr>
 
