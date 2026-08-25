@@ -52,9 +52,13 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
   rewardPoints = 50,
   onSuccess,
 }) => {
-  // Steps: 1: Select Receiver & Create OTP, 2: Enter OTP, 3: AI Photo Verification, 4: Rating & Success
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
-  const [subStep, setSubStep] = useState<'input' | 'confirm'>('input');
+  // Steps: 
+  // 1: Chọn/Nhập người nhận lại đồ
+  // 2: Xem lại thông tin tổng quan và nhấn tạo mã OTP
+  // 3: Nhập mã OTP trao trả (giữa màn hình)
+  // 4: Chụp ảnh xác nhận đối soát AI
+  // 5: Hoàn tất, cộng điểm thưởng & Đánh giá sao
+  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
   const [showParticipantModal, setShowParticipantModal] = useState<boolean>(false);
   const [loading, setLoading] = useState(false);
   const [loadingParticipants, setLoadingParticipants] = useState(false);
@@ -84,7 +88,6 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
   useEffect(() => {
     if (visible && currentUser) {
       setStep(1);
-      setSubStep('input');
       setShowParticipantModal(false);
       setLoadingParticipants(true);
       getChatParticipantsForPost(postId, currentUser.uid)
@@ -99,7 +102,7 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
     }
   }, [visible, postId]);
 
-  // Step 1: Create Handshake & Generate OTP
+  // Step 2: Create Handshake & Generate OTP (Transitions to Step 3)
   const handleCreateOtp = async () => {
     if (!currentUser) return;
     const receiverName = selectedParticipant ? selectedParticipant.name : manualReceiverName.trim() || 'Người nhận đồ';
@@ -120,7 +123,7 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
       setHandshakeId(session.handshakeId);
       setOtpCode(session.otpCode);
       setEnteredOtp('');
-      setStep(2);
+      setStep(3);
       setLoading(false);
     } catch (e: any) {
       console.log('Handshake session creation notice:', e);
@@ -129,12 +132,12 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
       setHandshakeId(`local_${Date.now()}`);
       setOtpCode(fallbackOtp);
       setEnteredOtp('');
-      setStep(2);
+      setStep(3);
       setLoading(false);
     }
   };
 
-  // Step 2: Verify OTP
+  // Step 3: Verify OTP (Transitions to Step 4)
   const handleVerifyOtp = async () => {
     if (enteredOtp.length < 6) {
       Alert.alert('Nhập mã OTP', 'Vui lòng nhập đủ 6 chữ số mã OTP.');
@@ -145,7 +148,7 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
       setLoading(true);
       if (handshakeId.startsWith('local_')) {
         if (enteredOtp.trim() === otpCode.trim()) {
-          setStep(3);
+          setStep(4);
         } else {
           Alert.alert('Xác thực thất bại', 'Mã OTP không chính xác. Vui lòng kiểm tra lại!');
         }
@@ -157,7 +160,7 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
       setLoading(false);
 
       if (res.success) {
-        setStep(3);
+        setStep(4);
       } else {
         Alert.alert('Xác thực thất bại', res.message);
       }
@@ -165,14 +168,14 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
       setLoading(false);
       // Fallback comparison
       if (enteredOtp.trim() === otpCode.trim()) {
-        setStep(3);
+        setStep(4);
       } else {
         Alert.alert('Lỗi', e.message || 'Xác thực OTP thất bại.');
       }
     }
   };
 
-  // Step 3: Take / Pick Handover Photo
+  // Step 4: Take / Pick Handover Photo
   const handleTakePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
@@ -209,7 +212,7 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
     }
   };
 
-  // Step 3: Submit Handover Photo to Gemini AI
+  // Step 4: Submit Handover Photo to Gemini AI (Transitions to Step 5)
   const handleSubmitAiVerification = async () => {
     if (!capturedPhotoBase64 || !currentUser) {
       Alert.alert('Chưa có ảnh', 'Vui lòng chụp hoặc chọn ảnh xác nhận trao trả đồ.');
@@ -233,7 +236,7 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
 
       if (res.success) {
         setAiResult({ score: res.matchScore, explanation: res.explanation });
-        setStep(4);
+        setStep(5);
         if (onSuccess) onSuccess();
       } else {
         Alert.alert(
@@ -300,7 +303,7 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
             </TouchableOpacity>
           </View>
 
-          {/* Step Progress Pills */}
+          {/* Step Progress Pills (5 Steps) */}
           <View style={styles.stepProgressBar}>
             <View style={[styles.stepDot, step >= 1 && styles.stepDotActive]}>
               <Text style={[styles.stepDotText, step >= 1 && styles.stepDotTextActive]}>1</Text>
@@ -317,25 +320,29 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
             <View style={[styles.stepDot, step >= 4 && styles.stepDotActive]}>
               <Text style={[styles.stepDotText, step >= 4 && styles.stepDotTextActive]}>4</Text>
             </View>
+            <View style={[styles.stepLine, step >= 5 && styles.stepLineActive]} />
+            <View style={[styles.stepDot, step >= 5 && styles.stepDotActive]}>
+              <Text style={[styles.stepDotText, step >= 5 && styles.stepDotTextActive]}>5</Text>
+            </View>
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
             {/* ========================================================================= */}
-            {/* STEP 1: CHOOSE RECIPIENT & CREATE OTP                                     */}
+            {/* STEP 1: SELECT / ENTER RECIPIENT                                          */}
             {/* ========================================================================= */}
             {step === 1 && (
               <View style={styles.stepContainer}>
                 <View style={styles.stepHeaderRow}>
                   <Ionicons name="person-outline" size={18} color="#00A896" style={{ marginRight: 6 }} />
-                  <Text style={styles.stepTitle}>Bước 1: Chọn Người Nhận Đồ</Text>
+                  <Text style={styles.stepTitle}>Bước 1: Chọn/Nhập Người Nhận Đồ</Text>
                 </View>
                 <Text style={styles.stepSubtitle}>
-                  Nhập thông tin hoặc chọn người bạn đang gặp mặt để trao trả món đồ "{postTitle}".
+                  Nhập thông tin hoặc bấm "Chọn người" từ danh sách đã nhắn tin với bạn về món đồ "{postTitle}".
                 </Text>
 
                 {/* Recipient Input Field with Side 'Chọn người' Button */}
                 <View style={styles.inputSectionBox}>
-                  <Text style={styles.sectionLabel}>Thông tin người nhận đồ:</Text>
+                  <Text style={styles.sectionLabel}>Thông tin người nhận lại đồ:</Text>
                   <View style={styles.inputWithSideBtnRow}>
                     <TextInput
                       style={styles.textInputFlex}
@@ -384,7 +391,42 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
                   </View>
                 ) : null}
 
-                {/* Summary Card */}
+                {/* Continue to Step 2 Button */}
+                <TouchableOpacity
+                  style={[
+                    styles.primaryActionBtn,
+                    !selectedParticipant && !manualReceiverName.trim() && { opacity: 0.5 }
+                  ]}
+                  onPress={() => {
+                    if (!selectedParticipant && !manualReceiverName.trim()) {
+                      Alert.alert('Chưa có thông tin', 'Vui lòng nhập tên/SĐT hoặc chọn người nhận đồ.');
+                      return;
+                    }
+                    setStep(2);
+                  }}
+                  disabled={!selectedParticipant && !manualReceiverName.trim()}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.primaryActionBtnText}>Tiếp tục</Text>
+                  <Ionicons name="arrow-forward" size={18} color="#FFFFFF" style={{ marginLeft: 6 }} />
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* ========================================================================= */}
+            {/* STEP 2: REVIEW OVERVIEW & CREATE OTP                                      */}
+            {/* ========================================================================= */}
+            {step === 2 && (
+              <View style={styles.stepContainer}>
+                <View style={styles.stepHeaderRow}>
+                  <Ionicons name="shield-checkmark-outline" size={18} color="#00A896" style={{ marginRight: 6 }} />
+                  <Text style={styles.stepTitle}>Bước 2: Xem Lại Thông Tin & Tạo Mã</Text>
+                </View>
+                <Text style={styles.stepSubtitle}>
+                  Xem lại thông tin tổng quan trước khi nhấn tạo mã OTP:
+                </Text>
+
+                {/* Overview Summary Card */}
                 <View style={styles.confirmSummaryCard}>
                   <View style={styles.confirmRow}>
                     <Text style={styles.confirmLabel}>Món đồ trao trả:</Text>
@@ -408,36 +450,44 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
                   </View>
                 </View>
 
-                {/* Single Create OTP Action Button */}
-                <TouchableOpacity
-                  style={[
-                    styles.primaryActionBtn,
-                    (!selectedParticipant && !manualReceiverName.trim()) || loading ? { opacity: 0.6 } : null
-                  ]}
-                  onPress={handleCreateOtp}
-                  disabled={(!selectedParticipant && !manualReceiverName.trim()) || loading}
-                  activeOpacity={0.85}
-                >
-                  {loading ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <>
-                      <Ionicons name="key" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-                      <Text style={styles.primaryActionBtnText}>Tạo Mã OTP</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
+                {/* Actions: Back to Step 1 & Create OTP */}
+                <View style={styles.confirmActionsRow}>
+                  <TouchableOpacity
+                    style={styles.backOutlineBtn}
+                    onPress={() => setStep(1)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="arrow-back" size={16} color="#64748B" style={{ marginRight: 4 }} />
+                    <Text style={styles.backOutlineBtnText}>Quay lại</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.primaryActionBtnFlex, loading && { opacity: 0.7 }]}
+                    onPress={handleCreateOtp}
+                    disabled={loading}
+                    activeOpacity={0.85}
+                  >
+                    {loading ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <Ionicons name="key" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                        <Text style={styles.primaryActionBtnText}>Tạo Mã OTP</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
               </View>
             )}
 
             {/* ========================================================================= */}
-            {/* STEP 2: ENTER OTP CODE                                                    */}
+            {/* STEP 3: ENTER OTP CODE                                                    */}
             {/* ========================================================================= */}
-            {step === 2 && (
+            {step === 3 && (
               <View style={styles.stepContainer}>
                 <View style={styles.stepHeaderRow}>
                   <Ionicons name="key-outline" size={18} color="#00A896" style={{ marginRight: 6 }} />
-                  <Text style={styles.stepTitle}>Bước 2: Nhập Mã OTP Trao Trả</Text>
+                  <Text style={styles.stepTitle}>Bước 3: Nhập Mã OTP Trao Trả</Text>
                 </View>
                 <Text style={styles.stepSubtitle}>
                   Người mất đồ đã nhận được thông báo mã OTP 6 số. Vui lòng yêu cầu họ đọc mã và nhập vào ô dưới đây:
@@ -505,13 +555,13 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
             )}
 
             {/* ========================================================================= */}
-            {/* STEP 3: AI GEMINI PHOTO VERIFICATION                                      */}
+            {/* STEP 4: AI GEMINI PHOTO VERIFICATION                                      */}
             {/* ========================================================================= */}
-            {step === 3 && (
+            {step === 4 && (
               <View style={styles.stepContainer}>
                 <View style={styles.stepHeaderRow}>
                   <Ionicons name="camera-outline" size={18} color="#00A896" style={{ marginRight: 6 }} />
-                  <Text style={styles.stepTitle}>Bước 3: Chụp Ảnh Xác Nhận Trao Trả</Text>
+                  <Text style={styles.stepTitle}>Bước 4: Chụp Ảnh Xác Nhận Trao Trả</Text>
                 </View>
                 <Text style={styles.stepSubtitle}>
                   Chụp rõ món đồ vừa được trao trả hoặc khoảnh khắc 2 người cùng nhau trao nhận đồ tại điểm hẹn.
@@ -578,9 +628,9 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
             )}
 
             {/* ========================================================================= */}
-            {/* STEP 4: CELEBRATION & RATING                                              */}
+            {/* STEP 5: CELEBRATION & RATING                                              */}
             {/* ========================================================================= */}
-            {step === 4 && (
+            {step === 5 && (
               <View style={styles.stepContainer}>
                 {/* Celebration Badge */}
                 <View style={styles.celebrationBox}>
