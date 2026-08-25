@@ -130,6 +130,11 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && isOwner(resource.data.userId);
     }
     
+    // ===== HANDSHAKES =====
+    match /handshakes/{handshakeId} {
+      allow read, write: if isAuthenticated();
+    }
+    
     // ===== OTP CODES =====
     match /otpCodes/{otpId} {
       // User A (người mất đồ) tạo OTP
