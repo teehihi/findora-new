@@ -392,301 +392,77 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
             </View>
           </View>
 
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            scrollEnabled={step !== 1}
-            bounces={step !== 1}
-            contentContainerStyle={styles.scrollContent}
-          >
-            {/* ========================================================================= */}
-            {/* STEP 1: SELECT RECIPIENT FROM CHAT                                        */}
-            {/* ========================================================================= */}
-            {step === 1 && (
-              <View style={styles.stepContainer}>
-                <View style={styles.stepHeaderRow}>
-                  <Ionicons name="person-outline" size={18} color="#00A896" style={{ marginRight: 6 }} />
-                  <Text style={styles.stepTitle}>Bước 1: Chọn Người Nhận Đồ</Text>
-                </View>
-                <Text style={styles.stepSubtitle}>
-                  Vui lòng chọn người bạn đã trao đổi qua tin nhắn để xác nhận trao trả món đồ "{postTitle}".
-                </Text>
-
-                {/* Receiver Selection Box */}
-                {!selectedParticipant ? (
-                  <TouchableOpacity
-                    style={styles.chooseFromChatBtn}
-                    onPress={() => setShowParticipantModal(true)}
-                    activeOpacity={0.85}
-                  >
-                    <View style={styles.chooseFromChatIconCircle}>
-                      <Ionicons name="chatbubbles" size={24} color="#00A896" />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.chooseFromChatTitle}>Chọn Người Nhận Từ Tin Nhắn</Text>
-                      <Text style={styles.chooseFromChatSub}>
-                        {participants.length > 0
-                          ? `Có ${participants.length} người đã nhắn tin với bạn về bài viết này`
-                          : 'Bấm để mở danh sách người nhắn tin'}
-                      </Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={20} color="#00A896" />
-                  </TouchableOpacity>
-                ) : (
-                  /* Selected Participant Card with 'Thay đổi' and 'X' clear button */
-                  <View style={styles.selectedUserCard}>
-                    <Image
-                      source={{
-                        uri:
-                          selectedParticipant.avatarUrl ||
-                          `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedParticipant.name)}&background=00A896&color=fff&size=150`,
-                      }}
-                      style={styles.selectedUserAvatar}
-                    />
-                    <View style={styles.selectedUserInfo}>
-                      <Text style={styles.selectedUserName}>{selectedParticipant.name}</Text>
-                      <Text style={styles.selectedUserSub}>Đã chọn từ danh sách tin nhắn</Text>
-                    </View>
-                    <View style={styles.userCardActionsRow}>
-                      <TouchableOpacity
-                        style={styles.changeUserBtn}
-                        onPress={() => setShowParticipantModal(true)}
-                        activeOpacity={0.8}
-                      >
-                        <Ionicons name="swap-horizontal" size={14} color="#00A896" style={{ marginRight: 3 }} />
-                        <Text style={styles.changeUserBtnText}>Đổi</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.clearUserBtn}
-                        onPress={() => setSelectedParticipant(null)}
-                        activeOpacity={0.7}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      >
-                        <Ionicons name="close-circle" size={22} color="#94A3B8" />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                )}
+          {step === 1 ? (
+            /* ========================================================================= */
+            /* STEP 1: SELECT RECIPIENT FROM CHAT (Clean native view, perfect sizing)   */
+            /* ========================================================================= */
+            <View style={[styles.step1Wrapper, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]}>
+              <View style={styles.stepHeaderRow}>
+                <Ionicons name="person-outline" size={18} color="#00A896" style={{ marginRight: 6 }} />
+                <Text style={styles.stepTitle}>Bước 1: Chọn Người Nhận Đồ</Text>
               </View>
-            )}
+              <Text style={styles.stepSubtitle}>
+                Vui lòng chọn người bạn đã trao đổi qua tin nhắn để xác nhận trao trả món đồ "{postTitle}".
+              </Text>
 
-            {/* ========================================================================= */}
-            {/* STEP 2: REVIEW OVERVIEW & CREATE OTP                                      */}
-            {/* ========================================================================= */}
-            {step === 2 && (
-              <View style={styles.stepContainer}>
-                <View style={styles.stepHeaderRow}>
-                  <Ionicons name="shield-checkmark-outline" size={18} color="#00A896" style={{ marginRight: 6 }} />
-                  <Text style={styles.stepTitle}>Bước 2: Xem Lại Thông Tin & Tạo Mã</Text>
-                </View>
-                <Text style={styles.stepSubtitle}>
-                  Xem lại thông tin tổng quan trước khi nhấn tạo mã OTP:
-                </Text>
-
-                {/* Overview Summary Card */}
-                <View style={styles.confirmSummaryCard}>
-                  <View style={styles.confirmRow}>
-                    <Text style={styles.confirmLabel}>Món đồ trao trả:</Text>
-                    <Text style={styles.confirmVal} numberOfLines={1}>
-                      {postTitle}
+              {/* Receiver Selection Box */}
+              {!selectedParticipant ? (
+                <TouchableOpacity
+                  style={styles.chooseFromChatBtn}
+                  onPress={() => setShowParticipantModal(true)}
+                  activeOpacity={0.85}
+                >
+                  <View style={styles.chooseFromChatIconCircle}>
+                    <Ionicons name="chatbubbles" size={24} color="#00A896" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.chooseFromChatTitle}>Chọn Người Nhận Từ Tin Nhắn</Text>
+                    <Text style={styles.chooseFromChatSub}>
+                      {participants.length > 0
+                        ? `Có ${participants.length} người đã nhắn tin với bạn về bài viết này`
+                        : 'Bấm để mở danh sách người nhắn tin'}
                     </Text>
                   </View>
-                  <View style={styles.confirmDivider} />
-                  <View style={styles.confirmRow}>
-                    <Text style={styles.confirmLabel}>Người nhận:</Text>
-                    <Text style={styles.confirmVal}>
-                      {selectedParticipant ? selectedParticipant.name : 'Chưa chọn'}
-                    </Text>
-                  </View>
-                  <View style={styles.confirmDivider} />
-                  <View style={styles.confirmRow}>
-                    <Text style={styles.confirmLabel}>Thưởng hoàn tất:</Text>
-                    <Text style={[styles.confirmVal, { color: '#00A896', fontWeight: '800' }]}>
-                      +{rewardPoints} Điểm Findora
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            )}
-
-            {/* ========================================================================= */}
-            {/* STEP 3: ENTER OTP CODE                                                    */}
-            {/* ========================================================================= */}
-            {step === 3 && (
-              <View style={styles.stepContainer}>
-                <View style={styles.stepHeaderRow}>
-                  <Ionicons name="key-outline" size={18} color="#00A896" style={{ marginRight: 6 }} />
-                  <Text style={styles.stepTitle}>Bước 3: Nhập Mã OTP Trao Trả</Text>
-                </View>
-                <Text style={styles.stepSubtitle}>
-                  Người mất đồ đã nhận được thông báo mã OTP 6 số. Vui lòng yêu cầu họ đọc mã và nhập vào ô dưới đây:
-                </Text>
-
-                {/* Glowing OTP Display (For testing/reference) */}
-                <View style={styles.otpCardBox}>
-                  <Text style={styles.otpCardLabel}>Mã OTP tạo cho phiên này:</Text>
-                  <Text style={styles.otpCardValue}>{otpCode}</Text>
-                  <Text style={styles.otpCardHint}>
-                    (Thông báo đã được gửi tới tài khoản người nhận)
-                  </Text>
-                </View>
-
-                {/* 6-Digit Styled Input */}
-                <View style={styles.otpInputContainer}>
-                  <TextInput
-                    style={styles.otpHiddenInput}
-                    value={enteredOtp}
-                    onChangeText={(text) => setEnteredOtp(text.replace(/[^0-9]/g, '').slice(0, 6))}
-                    keyboardType="number-pad"
-                    maxLength={6}
-                    autoFocus
+                  <Ionicons name="chevron-forward" size={20} color="#00A896" />
+                </TouchableOpacity>
+              ) : (
+                /* Selected Participant Card with 'Thay đổi' and 'X' clear button */
+                <View style={styles.selectedUserCard}>
+                  <Image
+                    source={{
+                      uri:
+                        selectedParticipant.avatarUrl ||
+                        `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedParticipant.name)}&background=00A896&color=fff&size=150`,
+                    }}
+                    style={styles.selectedUserAvatar}
                   />
-                  <View style={styles.otpBoxesRow}>
-                    {[0, 1, 2, 3, 4, 5].map((idx) => {
-                      const digit = enteredOtp[idx] || '';
-                      const isFocused = enteredOtp.length === idx;
-                      return (
-                        <View
-                          key={idx}
-                          style={[
-                            styles.otpDigitBox,
-                            isFocused && styles.otpDigitBoxFocused,
-                            digit !== '' && styles.otpDigitBoxFilled,
-                          ]}
-                        >
-                          <Text style={styles.otpDigitText}>{digit}</Text>
-                        </View>
-                      );
-                    })}
+                  <View style={styles.selectedUserInfo}>
+                    <Text style={styles.selectedUserName}>{selectedParticipant.name}</Text>
+                    <Text style={styles.selectedUserSub}>Đã chọn từ danh sách tin nhắn</Text>
                   </View>
-                </View>
-              </View>
-            )}
-
-            {/* ========================================================================= */}
-            {/* STEP 4: AI GEMINI PHOTO VERIFICATION                                      */}
-            {/* ========================================================================= */}
-            {step === 4 && (
-              <View style={styles.stepContainer}>
-                <View style={styles.stepHeaderRow}>
-                  <Ionicons name="camera-outline" size={18} color="#00A896" style={{ marginRight: 6 }} />
-                  <Text style={styles.stepTitle}>Bước 4: Chụp Ảnh Xác Nhận Trao Trả</Text>
-                </View>
-                <Text style={styles.stepSubtitle}>
-                  Chụp rõ món đồ vừa được trao trả hoặc khoảnh khắc 2 người cùng nhau trao nhận đồ tại điểm hẹn.
-                </Text>
-
-                {/* Tip Guidance Box */}
-                <View style={styles.guideTipBox}>
-                  <Ionicons name="sparkles" size={18} color="#00A896" style={{ marginRight: 8 }} />
-                  <Text style={styles.guideTipText}>
-                    Hệ thống AI Gemini 3.5 Flash Lite sẽ tự động đối chiếu hình ảnh thực tế với bài đăng gốc để xác thực tính minh bạch.
-                  </Text>
-                </View>
-
-                {/* Photo Preview or Capture Buttons */}
-                {capturedPhotoUri ? (
-                  <View style={styles.photoPreviewBox}>
-                    <Image source={{ uri: capturedPhotoUri }} style={styles.photoPreviewImg} />
+                  <View style={styles.userCardActionsRow}>
                     <TouchableOpacity
-                      style={styles.retakeBtn}
-                      onPress={handleTakePhoto}
+                      style={styles.changeUserBtn}
+                      onPress={() => setShowParticipantModal(true)}
                       activeOpacity={0.8}
                     >
-                      <Ionicons name="camera-reverse" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                      <Text style={styles.retakeBtnText}>Chụp lại</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <View style={styles.captureActionRow}>
-                    <TouchableOpacity style={styles.captureBtn} onPress={handleTakePhoto} activeOpacity={0.85}>
-                      <Ionicons name="camera" size={32} color="#00A896" />
-                      <Text style={styles.captureBtnText}>Chụp Ảnh Mới</Text>
+                      <Ionicons name="swap-horizontal" size={14} color="#00A896" style={{ marginRight: 3 }} />
+                      <Text style={styles.changeUserBtnText}>Đổi</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={styles.captureBtn} onPress={handlePickFromGallery} activeOpacity={0.85}>
-                      <Ionicons name="images" size={32} color="#00A896" />
-                      <Text style={styles.captureBtnText}>Chọn Từ Thư Viện</Text>
+                    <TouchableOpacity
+                      style={styles.clearUserBtn}
+                      onPress={() => setSelectedParticipant(null)}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Ionicons name="close-circle" size={22} color="#94A3B8" />
                     </TouchableOpacity>
-                  </View>
-                )}
-              </View>
-            )}
-
-            {/* ========================================================================= */}
-            {/* STEP 5: CELEBRATION & RATING                                              */}
-            {/* ========================================================================= */}
-            {step === 5 && (
-              <View style={styles.stepContainer}>
-                {/* Celebration Badge */}
-                <View style={styles.celebrationBox}>
-                  <View style={styles.celebrationIconCircle}>
-                    <Ionicons name="trophy" size={36} color="#F59E0B" />
-                  </View>
-                  <Text style={styles.celebrationTitle}>Trao Trả Đồ Thành Công</Text>
-                  <Text style={styles.celebrationSubtitle}>
-                    {aiResult?.explanation || 'AI đã xác thực đối soát hình ảnh thành công 100%!'}
-                  </Text>
-                  <View style={styles.pointsEarnedBadge}>
-                    <Ionicons name="gift" size={18} color="#00A896" style={{ marginRight: 6 }} />
-                    <Text style={styles.pointsEarnedText}>+{rewardPoints} Điểm thưởng Findora</Text>
                   </View>
                 </View>
+              )}
 
-                {/* Interactive Star Rating */}
-                <View style={styles.ratingSection}>
-                  <Text style={styles.ratingLabel}>Đánh giá mức độ hài lòng:</Text>
-                  <View style={styles.starsRow}>
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <TouchableOpacity key={star} onPress={() => setRating(star)} activeOpacity={0.7}>
-                        <Ionicons
-                          name={star <= rating ? 'star' : 'star-outline'}
-                          size={36}
-                          color={star <= rating ? '#F59E0B' : '#CBD5E1'}
-                          style={{ marginHorizontal: 4 }}
-                        />
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-
-                  {/* Compliments Tags */}
-                  <View style={styles.tagsWrap}>
-                    {['Nhiệt tình', 'Đúng hẹn', 'Tốt bụng', 'Cẩn thận', 'Tuyệt vời'].map((tag) => {
-                      const isTagSelected = selectedTags.includes(tag);
-                      return (
-                        <TouchableOpacity
-                          key={tag}
-                          style={[styles.tagPill, isTagSelected && styles.tagPillSelected]}
-                          onPress={() => toggleTag(tag)}
-                          activeOpacity={0.8}
-                        >
-                          <Text style={[styles.tagPillText, isTagSelected && styles.tagPillTextSelected]}>
-                            {tag}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-
-                  {/* Feedback Comment Input */}
-                  <TextInput
-                    style={styles.commentInput}
-                    placeholder="Viết vài lời cảm ơn chân thành..."
-                    placeholderTextColor="#94A3B8"
-                    value={ratingComment}
-                    onChangeText={setRatingComment}
-                    multiline
-                  />
-                </View>
-              </View>
-            )}
-          </ScrollView>
-
-          {/* ========================================================================= */}
-          {/* FIXED BOTTOM ACTION FOOTER (Guaranteed full visibility on all screens)    */}
-          {/* ========================================================================= */}
-          <View style={[styles.bottomFooterContainer, { paddingBottom: Math.max(insets.bottom, 16) + 8 }]}>
-            {step === 1 && (
+              {/* Continue to Step 2 Button */}
               <TouchableOpacity
                 style={[
                   styles.primaryActionBtn,
@@ -705,93 +481,306 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
                 <Text style={styles.primaryActionBtnText}>Tiếp tục</Text>
                 <Ionicons name="arrow-forward" size={18} color="#FFFFFF" style={{ marginLeft: 6 }} />
               </TouchableOpacity>
-            )}
+            </View>
+          ) : (
+            /* ========================================================================= */
+            /* STEPS 2..5: SCROLLABLE BODY WITH FIXED FOOTER                             */
+            /* ========================================================================= */
+            <>
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+                {/* STEP 2: REVIEW OVERVIEW & CREATE OTP */}
+                {step === 2 && (
+                  <View style={styles.stepContainer}>
+                    <View style={styles.stepHeaderRow}>
+                      <Ionicons name="shield-checkmark-outline" size={18} color="#00A896" style={{ marginRight: 6 }} />
+                      <Text style={styles.stepTitle}>Bước 2: Xem Lại Thông Tin & Tạo Mã</Text>
+                    </View>
+                    <Text style={styles.stepSubtitle}>
+                      Xem lại thông tin tổng quan trước khi nhấn tạo mã OTP:
+                    </Text>
 
-            {step === 2 && (
-              <View style={styles.confirmActionsRow}>
-                <TouchableOpacity
-                  style={styles.backOutlineBtn}
-                  onPress={() => setStep(1)}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="arrow-back" size={16} color="#64748B" style={{ marginRight: 4 }} />
-                  <Text style={styles.backOutlineBtnText}>Quay lại</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.primaryActionBtnFlex, loading && { opacity: 0.7 }]}
-                  onPress={handleCreateOtp}
-                  disabled={loading}
-                  activeOpacity={0.85}
-                >
-                  {loading ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <>
-                      <Ionicons name="key" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-                      <Text style={styles.primaryActionBtnText}>Tạo Mã OTP</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {step === 3 && (
-              <TouchableOpacity
-                style={[
-                  styles.primaryActionBtn,
-                  (enteredOtp.length < 6 || loading) && { opacity: 0.5 },
-                ]}
-                onPress={handleVerifyOtp}
-                disabled={enteredOtp.length < 6 || loading}
-                activeOpacity={0.85}
-              >
-                {loading ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <>
-                    <Ionicons name="shield-checkmark" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
-                    <Text style={styles.primaryActionBtnText}>Xác Thực Mã OTP</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            )}
-
-            {step === 4 && (
-              <TouchableOpacity
-                style={[
-                  styles.primaryActionBtn,
-                  (!capturedPhotoUri || aiVerifying) && { opacity: 0.5 },
-                ]}
-                onPress={handleSubmitAiVerification}
-                disabled={!capturedPhotoUri || aiVerifying}
-                activeOpacity={0.85}
-              >
-                {aiVerifying ? (
-                  <View style={styles.aiLoadingRow}>
-                    <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
-                    <Text style={styles.primaryActionBtnText}>AI Gemini Đang Phân Tích...</Text>
+                    {/* Overview Summary Card */}
+                    <View style={styles.confirmSummaryCard}>
+                      <View style={styles.confirmRow}>
+                        <Text style={styles.confirmLabel}>Món đồ trao trả:</Text>
+                        <Text style={styles.confirmVal} numberOfLines={1}>
+                          {postTitle}
+                        </Text>
+                      </View>
+                      <View style={styles.confirmDivider} />
+                      <View style={styles.confirmRow}>
+                        <Text style={styles.confirmLabel}>Người nhận:</Text>
+                        <Text style={styles.confirmVal}>
+                          {selectedParticipant ? selectedParticipant.name : 'Chưa chọn'}
+                        </Text>
+                      </View>
+                      <View style={styles.confirmDivider} />
+                      <View style={styles.confirmRow}>
+                        <Text style={styles.confirmLabel}>Thưởng hoàn tất:</Text>
+                        <Text style={[styles.confirmVal, { color: '#00A896', fontWeight: '800' }]}>
+                          +{rewardPoints} Điểm Findora
+                        </Text>
+                      </View>
+                    </View>
                   </View>
-                ) : (
-                  <>
-                    <MaterialCommunityIcons name="robot-confused-outline" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
-                    <Text style={styles.primaryActionBtnText}>Xác Thực Bằng AI & Hoàn Tất</Text>
-                  </>
                 )}
-              </TouchableOpacity>
-            )}
 
-            {step === 5 && (
-              <TouchableOpacity
-                style={[styles.primaryActionBtn, loading && { opacity: 0.7 }]}
-                onPress={handleFinalRatingSubmit}
-                disabled={loading}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.primaryActionBtnText}>Đóng & Lưu Đánh Giá</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+                {/* STEP 3: ENTER OTP CODE */}
+                {step === 3 && (
+                  <View style={styles.stepContainer}>
+                    <View style={styles.stepHeaderRow}>
+                      <Ionicons name="key-outline" size={18} color="#00A896" style={{ marginRight: 6 }} />
+                      <Text style={styles.stepTitle}>Bước 3: Nhập Mã OTP Trao Trả</Text>
+                    </View>
+                    <Text style={styles.stepSubtitle}>
+                      Người mất đồ đã nhận được thông báo mã OTP 6 số. Vui lòng yêu cầu họ đọc mã và nhập vào ô dưới đây:
+                    </Text>
+
+                    {/* Glowing OTP Display (For testing/reference) */}
+                    <View style={styles.otpCardBox}>
+                      <Text style={styles.otpCardLabel}>Mã OTP tạo cho phiên này:</Text>
+                      <Text style={styles.otpCardValue}>{otpCode}</Text>
+                      <Text style={styles.otpCardHint}>
+                        (Thông báo đã được gửi tới tài khoản người nhận)
+                      </Text>
+                    </View>
+
+                    {/* 6-Digit Styled Input */}
+                    <View style={styles.otpInputContainer}>
+                      <TextInput
+                        style={styles.otpHiddenInput}
+                        value={enteredOtp}
+                        onChangeText={(text) => setEnteredOtp(text.replace(/[^0-9]/g, '').slice(0, 6))}
+                        keyboardType="number-pad"
+                        maxLength={6}
+                        autoFocus
+                      />
+                      <View style={styles.otpBoxesRow}>
+                        {[0, 1, 2, 3, 4, 5].map((idx) => {
+                          const digit = enteredOtp[idx] || '';
+                          const isFocused = enteredOtp.length === idx;
+                          return (
+                            <View
+                              key={idx}
+                              style={[
+                                styles.otpDigitBox,
+                                isFocused && styles.otpDigitBoxFocused,
+                                digit !== '' && styles.otpDigitBoxFilled,
+                              ]}
+                            >
+                              <Text style={styles.otpDigitText}>{digit}</Text>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  </View>
+                )}
+
+                {/* STEP 4: AI GEMINI PHOTO VERIFICATION */}
+                {step === 4 && (
+                  <View style={styles.stepContainer}>
+                    <View style={styles.stepHeaderRow}>
+                      <Ionicons name="camera-outline" size={18} color="#00A896" style={{ marginRight: 6 }} />
+                      <Text style={styles.stepTitle}>Bước 4: Chụp Ảnh Xác Nhận Trao Trả</Text>
+                    </View>
+                    <Text style={styles.stepSubtitle}>
+                      Chụp rõ món đồ vừa được trao trả hoặc khoảnh khắc 2 người cùng nhau trao nhận đồ tại điểm hẹn.
+                    </Text>
+
+                    {/* Tip Guidance Box */}
+                    <View style={styles.guideTipBox}>
+                      <Ionicons name="sparkles" size={18} color="#00A896" style={{ marginRight: 8 }} />
+                      <Text style={styles.guideTipText}>
+                        Hệ thống AI Gemini 3.5 Flash Lite sẽ tự động đối chiếu hình ảnh thực tế với bài đăng gốc để xác thực tính minh bạch.
+                      </Text>
+                    </View>
+
+                    {/* Photo Preview or Capture Buttons */}
+                    {capturedPhotoUri ? (
+                      <View style={styles.photoPreviewBox}>
+                        <Image source={{ uri: capturedPhotoUri }} style={styles.photoPreviewImg} />
+                        <TouchableOpacity
+                          style={styles.retakeBtn}
+                          onPress={handleTakePhoto}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="camera-reverse" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                          <Text style={styles.retakeBtnText}>Chụp lại</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <View style={styles.captureActionRow}>
+                        <TouchableOpacity style={styles.captureBtn} onPress={handleTakePhoto} activeOpacity={0.85}>
+                          <Ionicons name="camera" size={32} color="#00A896" />
+                          <Text style={styles.captureBtnText}>Chụp Ảnh Mới</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.captureBtn} onPress={handlePickFromGallery} activeOpacity={0.85}>
+                          <Ionicons name="images" size={32} color="#00A896" />
+                          <Text style={styles.captureBtnText}>Chọn Từ Thư Viện</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                {/* STEP 5: CELEBRATION & RATING */}
+                {step === 5 && (
+                  <View style={styles.stepContainer}>
+                    {/* Celebration Badge */}
+                    <View style={styles.celebrationBox}>
+                      <View style={styles.celebrationIconCircle}>
+                        <Ionicons name="trophy" size={36} color="#F59E0B" />
+                      </View>
+                      <Text style={styles.celebrationTitle}>Trao Trả Đồ Thành Công</Text>
+                      <Text style={styles.celebrationSubtitle}>
+                        {aiResult?.explanation || 'AI đã xác thực đối soát hình ảnh thành công 100%!'}
+                      </Text>
+                      <View style={styles.pointsEarnedBadge}>
+                        <Ionicons name="gift" size={18} color="#00A896" style={{ marginRight: 6 }} />
+                        <Text style={styles.pointsEarnedText}>+{rewardPoints} Điểm thưởng Findora</Text>
+                      </View>
+                    </View>
+
+                    {/* Interactive Star Rating */}
+                    <View style={styles.ratingSection}>
+                      <Text style={styles.ratingLabel}>Đánh giá mức độ hài lòng:</Text>
+                      <View style={styles.starsRow}>
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <TouchableOpacity key={star} onPress={() => setRating(star)} activeOpacity={0.7}>
+                            <Ionicons
+                              name={star <= rating ? 'star' : 'star-outline'}
+                              size={36}
+                              color={star <= rating ? '#F59E0B' : '#CBD5E1'}
+                              style={{ marginHorizontal: 4 }}
+                            />
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+
+                      {/* Compliments Tags */}
+                      <View style={styles.tagsWrap}>
+                        {['Nhiệt tình', 'Đúng hẹn', 'Tốt bụng', 'Cẩn thận', 'Tuyệt vời'].map((tag) => {
+                          const isTagSelected = selectedTags.includes(tag);
+                          return (
+                            <TouchableOpacity
+                              key={tag}
+                              style={[styles.tagPill, isTagSelected && styles.tagPillSelected]}
+                              onPress={() => toggleTag(tag)}
+                              activeOpacity={0.8}
+                            >
+                              <Text style={[styles.tagPillText, isTagSelected && styles.tagPillTextSelected]}>
+                                {tag}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+
+                      {/* Feedback Comment Input */}
+                      <TextInput
+                        style={styles.commentInput}
+                        placeholder="Viết vài lời cảm ơn chân thành..."
+                        placeholderTextColor="#94A3B8"
+                        value={ratingComment}
+                        onChangeText={setRatingComment}
+                        multiline
+                      />
+                    </View>
+                  </View>
+                )}
+              </ScrollView>
+
+              {/* Fixed Bottom Action Footer for Steps 2..5 */}
+              <View style={[styles.bottomFooterContainer, { paddingBottom: Math.max(insets.bottom, 16) + 10 }]}>
+                {step === 2 && (
+                  <View style={styles.confirmActionsRow}>
+                    <TouchableOpacity
+                      style={styles.backOutlineBtn}
+                      onPress={() => setStep(1)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="arrow-back" size={16} color="#64748B" style={{ marginRight: 4 }} />
+                      <Text style={styles.backOutlineBtnText}>Quay lại</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.primaryActionBtnFlex, loading && { opacity: 0.7 }]}
+                      onPress={handleCreateOtp}
+                      disabled={loading}
+                      activeOpacity={0.85}
+                    >
+                      {loading ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <>
+                          <Ionicons name="key" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                          <Text style={styles.primaryActionBtnText}>Tạo Mã OTP</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {step === 3 && (
+                  <TouchableOpacity
+                    style={[
+                      styles.primaryActionBtn,
+                      (enteredOtp.length < 6 || loading) && { opacity: 0.5 },
+                    ]}
+                    onPress={handleVerifyOtp}
+                    disabled={enteredOtp.length < 6 || loading}
+                    activeOpacity={0.85}
+                  >
+                    {loading ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <Ionicons name="shield-checkmark" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
+                        <Text style={styles.primaryActionBtnText}>Xác Thực Mã OTP</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                )}
+
+                {step === 4 && (
+                  <TouchableOpacity
+                    style={[
+                      styles.primaryActionBtn,
+                      (!capturedPhotoUri || aiVerifying) && { opacity: 0.5 },
+                    ]}
+                    onPress={handleSubmitAiVerification}
+                    disabled={!capturedPhotoUri || aiVerifying}
+                    activeOpacity={0.85}
+                  >
+                    {aiVerifying ? (
+                      <View style={styles.aiLoadingRow}>
+                        <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
+                        <Text style={styles.primaryActionBtnText}>AI Gemini Đang Phân Tích...</Text>
+                      </View>
+                    ) : (
+                      <>
+                        <MaterialCommunityIcons name="robot-confused-outline" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
+                        <Text style={styles.primaryActionBtnText}>Xác Thực Bằng AI & Hoàn Tất</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                )}
+
+                {step === 5 && (
+                  <TouchableOpacity
+                    style={[styles.primaryActionBtn, loading && { opacity: 0.7 }]}
+                    onPress={handleFinalRatingSubmit}
+                    disabled={loading}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.primaryActionBtnText}>Đóng & Lưu Đánh Giá</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </>
+          )}
           </Animated.View>
         </KeyboardAvoidingView>
       </Animated.View>
@@ -964,10 +953,14 @@ const styles = StyleSheet.create({
   stepLineActive: {
     backgroundColor: '#00A896',
   },
-  scrollContent: {
+  step1Wrapper: {
     paddingHorizontal: 20,
     paddingTop: 4,
-    paddingBottom: 4,
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 6,
+    paddingBottom: 10,
   },
   stepContainer: {
     paddingTop: 2,
@@ -975,18 +968,18 @@ const styles = StyleSheet.create({
   stepHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   stepTitle: {
-    fontSize: 16.5,
+    fontSize: 17,
     fontWeight: '800',
     color: '#0F172A',
   },
   stepSubtitle: {
-    fontSize: 13,
+    fontSize: 13.5,
     color: '#64748B',
-    lineHeight: 19,
-    marginBottom: 10,
+    lineHeight: 20,
+    marginBottom: 16,
   },
   participantsSection: {
     marginBottom: 16,
@@ -1037,13 +1030,13 @@ const styles = StyleSheet.create({
   chooseFromChatBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
+    padding: 16,
     backgroundColor: '#F8FAFC',
     borderRadius: 16,
     borderWidth: 1.5,
     borderColor: '#00A896',
     borderStyle: 'dashed',
-    marginBottom: 4,
+    marginBottom: 16,
   },
   chooseFromChatIconCircle: {
     width: 44,
@@ -1061,9 +1054,9 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   chooseFromChatSub: {
-    fontSize: 12,
+    fontSize: 12.5,
     color: '#64748B',
-    lineHeight: 16,
+    lineHeight: 17,
   },
   userCardActionsRow: {
     flexDirection: 'row',
@@ -1089,12 +1082,12 @@ const styles = StyleSheet.create({
   selectedUserCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
+    padding: 16,
     backgroundColor: 'rgba(0, 168, 150, 0.08)',
     borderRadius: 16,
     borderWidth: 1.5,
     borderColor: '#00A896',
-    marginBottom: 4,
+    marginBottom: 16,
   },
   selectedUserAvatar: {
     width: 44,
