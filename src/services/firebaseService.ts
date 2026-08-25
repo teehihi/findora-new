@@ -919,7 +919,7 @@ export async function completePostResolve(
   const notifRef = collection(db, 'notifications');
   await addDoc(notifRef, {
     userId: helperUserId,
-    title: '🎉 Nhận điểm thưởng thành công!',
+    title: 'Nhận điểm thưởng thành công!',
     message: `Bạn nhận được ${rewardPoints} điểm Findora từ việc trả lại đồ thành công. Cảm ơn tấm lòng của bạn!`,
     type: 'points',
     postId,

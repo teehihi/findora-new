@@ -165,7 +165,7 @@ export async function createHandshakeSession(params: {
     try {
       await addDoc(collection(db, 'notifications'), {
         userId: params.receiverId,
-        title: '🤝 Mã OTP Xác Nhận Nhận Lại Đồ',
+        title: 'Mã OTP Xác Nhận Nhận Lại Đồ',
         message: `${params.finderName} đang xác nhận trao trả "${params.postTitle}". Mã OTP của bạn là: ${otpCode}. Vui lòng đọc mã này cho họ khi gặp mặt!`,
         type: 'resolve',
         postId: params.postId,
@@ -261,7 +261,7 @@ export async function resendHandshakeOtp(params: {
     if (params.receiverId) {
       await addDoc(collection(db, 'notifications'), {
         userId: params.receiverId,
-        title: '🤝 Mã OTP Mới Nhận Lại Đồ',
+        title: 'Mã OTP Mới Nhận Lại Đồ',
         message: `${params.finderName} vừa tạo mã OTP mới cho món đồ "${params.postTitle}". Mã mới của bạn là: ${newOtp}. Vui lòng đọc mã này cho họ!`,
         type: 'resolve',
         postId: params.postId,
