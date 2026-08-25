@@ -1819,8 +1819,8 @@ export default function ChatRoomScreen() {
             </Text>
           </TouchableOpacity>
 
-          {/* Handshake OTP Trigger Button */}
-          {attachedPost && attachedPost.status === 'active' && attachedPost.userId === auth.currentUser?.uid && (
+          {/* Handshake OTP Trigger Button (Only for FOUND posts) */}
+          {attachedPost && attachedPost.status === 'active' && attachedPost.type === 'found' && attachedPost.userId === auth.currentUser?.uid && (
             <TouchableOpacity
               style={styles.bannerHandshakeBtn}
               onPress={() => setIsHandshakeModalVisible(true)}

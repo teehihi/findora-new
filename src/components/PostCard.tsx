@@ -220,8 +220,8 @@ export const PostCard: React.FC<PostCardProps> = ({ post, onPress, onHandshakePr
         </TouchableOpacity>
       </View>
 
-      {/* In-Card Handshake Action Button - Positioned Below Like & Comment */}
-      {onHandshakePress && post.status === 'active' && (
+      {/* In-Card Handshake Action Button - Only for FOUND posts (Nhặt được) */}
+      {onHandshakePress && post.status === 'active' && post.type === 'found' && (
         <TouchableOpacity
           style={styles.cardHandshakeBtn}
           onPress={onHandshakePress}

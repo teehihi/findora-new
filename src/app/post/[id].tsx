@@ -788,8 +788,8 @@ export default function PostDetailScreen() {
             <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
           </TouchableOpacity>
 
-          {/* OTP Resolve Button for Owner */}
-          {isOwner && post.status === 'active' && (
+          {/* OTP Resolve Button for Owner of FOUND post */}
+          {isOwner && post.type === 'found' && post.status === 'active' && (
             <TouchableOpacity style={styles.otpBtn} onPress={() => setResolveModalVisible(true)} activeOpacity={0.85}>
               <Ionicons name="shield-checkmark" size={22} color="#FFFFFF" style={{ marginRight: 8 }} />
               <Text style={styles.otpBtnText}>Xác Nhận Trả Đồ</Text>

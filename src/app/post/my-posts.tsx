@@ -50,7 +50,7 @@ export default function MyPostsScreen() {
                 <PostCard
                   post={item}
                   onPress={() => router.push(`/post/${item.id}`)}
-                  onHandshakePress={item.status === 'active' ? () => setSelectedPostForHandshake(item) : undefined}
+                  onHandshakePress={item.status === 'active' && item.type === 'found' ? () => setSelectedPostForHandshake(item) : undefined}
                 />
               </View>
             )}
