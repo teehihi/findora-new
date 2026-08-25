@@ -2261,9 +2261,10 @@ export default function ChatRoomScreen() {
                                 </Text>
                               </TouchableOpacity>
 
-                              {/* Smart Sticky Appointment Suggestion Pill below receiver message */}
-                              {!isMe && detectAppointmentIntent(item.message || '') && (
+                              {/* Smart Sticky Appointment Suggestion Pill below message for both sender & receiver */}
+                              {detectAppointmentIntent(item.message || '') && (
                                 <SmartAppointmentPill
+                                  isMe={isMe}
                                   onPress={() => {
                                     setAppointmentTriggerText(item.message || '');
                                     setIsAppointmentModalVisible(true);

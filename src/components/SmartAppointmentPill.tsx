@@ -4,11 +4,19 @@ import { Ionicons } from '@expo/vector-icons';
 
 interface SmartAppointmentPillProps {
   onPress: () => void;
+  isMe?: boolean;
 }
 
-export const SmartAppointmentPill: React.FC<SmartAppointmentPillProps> = ({ onPress }) => {
+export const SmartAppointmentPill: React.FC<SmartAppointmentPillProps> = ({ onPress, isMe }) => {
   return (
-    <TouchableOpacity style={styles.pillContainer} onPress={onPress} activeOpacity={0.85}>
+    <TouchableOpacity
+      style={[
+        styles.pillContainer,
+        isMe ? { alignSelf: 'flex-end' } : { alignSelf: 'flex-start' },
+      ]}
+      onPress={onPress}
+      activeOpacity={0.85}
+    >
       <View style={styles.iconCircle}>
         <Ionicons name="calendar" size={13} color="#FFFFFF" />
       </View>
