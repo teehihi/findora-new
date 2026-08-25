@@ -193,18 +193,6 @@ export const PostCard: React.FC<PostCardProps> = ({ post, onPress, onHandshakePr
         </TouchableOpacity>
       ) : null}
 
-      {/* In-Card Handshake Action Button */}
-      {onHandshakePress && post.status === 'active' && (
-        <TouchableOpacity
-          style={styles.cardHandshakeBtn}
-          onPress={onHandshakePress}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="shield-checkmark" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-          <Text style={styles.cardHandshakeBtnText}>Xác Nhận Trả Đồ</Text>
-        </TouchableOpacity>
-      )}
-
       {/* 4. Bottom Action Bar: Genuine Facebook-style Like & Circle Comment Icons */}
       <View style={styles.actionsRow}>
         <TouchableOpacity 
@@ -231,6 +219,18 @@ export const PostCard: React.FC<PostCardProps> = ({ post, onPress, onHandshakePr
           )}
         </TouchableOpacity>
       </View>
+
+      {/* In-Card Handshake Action Button - Positioned Below Like & Comment */}
+      {onHandshakePress && post.status === 'active' && (
+        <TouchableOpacity
+          style={styles.cardHandshakeBtn}
+          onPress={onHandshakePress}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="shield-checkmark" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+          <Text style={styles.cardHandshakeBtnText}>Xác Nhận Trả Đồ</Text>
+        </TouchableOpacity>
+      )}
 
       {/* Card Divider */}
       <View style={styles.bottomDivider} />
@@ -266,13 +266,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#00A896',
-    borderRadius: 12,
+    borderRadius: 20,
     paddingVertical: 10,
-    marginTop: 10,
-    marginBottom: 4,
+    marginTop: 6,
+    marginBottom: 10,
     shadowColor: '#00A896',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.18,
     shadowRadius: 4,
     elevation: 2,
   },
@@ -280,6 +280,7 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     fontWeight: '800',
     color: '#FFFFFF',
+    letterSpacing: 0.2,
   },
   headerRow: {
     flexDirection: 'row',

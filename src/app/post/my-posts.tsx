@@ -35,34 +35,36 @@ export default function MyPostsScreen() {
   }, []);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <HeaderBar title="Bài Đăng Của Tôi" showBack />
 
-      {loading ? (
-        <PostListSkeleton count={3} />
-      ) : (
-        <FlatList
-          data={posts}
-          keyExtractor={(item) => item.id || Math.random().toString()}
-          renderItem={({ item }) => (
-            <View style={styles.cardWrapper}>
-              <PostCard
-                post={item}
-                onPress={() => router.push(`/post/${item.id}`)}
-                onHandshakePress={item.status === 'active' ? () => setSelectedPostForHandshake(item) : undefined}
-              />
-            </View>
-          )}
-          contentContainerStyle={styles.listContent}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Ionicons name="document-text-outline" size={56} color={COLORS.textMuted} />
-              <Text style={styles.emptyTitle}>Bạn chưa tạo bài đăng nào</Text>
-              <Text style={styles.emptySubtitle}>Các bài đăng mất đồ hoặc nhặt được của bạn sẽ hiển thị tại đây.</Text>
-            </View>
-          }
-        />
-      )}
+      <View style={styles.listWrapper}>
+        {loading ? (
+          <PostListSkeleton count={3} />
+        ) : (
+          <FlatList
+            data={posts}
+            keyExtractor={(item) => item.id || Math.random().toString()}
+            renderItem={({ item }) => (
+              <View style={styles.cardWrapper}>
+                <PostCard
+                  post={item}
+                  onPress={() => router.push(`/post/${item.id}`)}
+                  onHandshakePress={item.status === 'active' ? () => setSelectedPostForHandshake(item) : undefined}
+                />
+              </View>
+            )}
+            contentContainerStyle={styles.listContent}
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Ionicons name="document-text-outline" size={56} color={COLORS.textMuted} />
+                <Text style={styles.emptyTitle}>Bạn chưa tạo bài đăng nào</Text>
+                <Text style={styles.emptySubtitle}>Các bài đăng mất đồ hoặc nhặt được của bạn sẽ hiển thị tại đây.</Text>
+              </View>
+            }
+          />
+        )}
+      </View>
 
       {/* Handshake Modal */}
       {selectedPostForHandshake && (
@@ -86,10 +88,15 @@ export default function MyPostsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: '#FFFFFF',
+  },
+  listWrapper: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
   },
   listContent: {
     padding: SPACING.md,
+    paddingBottom: SPACING.xl * 2,
   },
   cardWrapper: {
     marginBottom: 8,
