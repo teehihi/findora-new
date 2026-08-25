@@ -288,38 +288,37 @@ export async function verifyHandshakeOtp(
 ): Promise<{ success: boolean; message: string }> {
   try {
     const memOtp = activeHandshakeOtps.get(handshakeId);
-    if (memOtp && memOtp.trim() === enteredOtp.trim()) {
+    const isMemMatch = Boolean(memOtp && memOtp.trim() === enteredOtp.trim());
+
+    if (!handshakeId.startsWith('local_')) {
+      const docRef = doc(db, 'handshakes', handshakeId);
+      const snap = await getDoc(docRef);
+
+      if (snap.exists()) {
+        const data = snap.data() as HandshakeSession;
+        if (data.status === 'completed') {
+          return { success: false, message: 'Phiên trao trả này đã hoàn tất trước đó.' };
+        }
+
+        if (data.otpCode.trim() !== enteredOtp.trim() && !isMemMatch) {
+          return { success: false, message: 'Mã OTP không chính xác. Vui lòng kiểm tra lại!' };
+        }
+
+        // Mark OTP as verified in Firestore so receiver listener updates in real-time
+        await updateDoc(docRef, {
+          status: 'otp_verified',
+          otpVerifiedAt: serverTimestamp(),
+        }).catch((err) => console.log('Notice: update handshake otp_verified error:', err));
+
+        return { success: true, message: 'Mã OTP chính xác! Chuyển sang bước chụp ảnh xác nhận.' };
+      }
+    }
+
+    if (isMemMatch) {
       return { success: true, message: 'Mã OTP chính xác! Chuyển sang bước chụp ảnh xác nhận.' };
     }
 
-    const docRef = doc(db, 'handshakes', handshakeId);
-    const snap = await getDoc(docRef);
-    if (!snap.exists()) {
-      if (memOtp) {
-        return {
-          success: memOtp.trim() === enteredOtp.trim(),
-          message: memOtp.trim() === enteredOtp.trim() ? 'Mã OTP chính xác!' : 'Mã OTP không chính xác.',
-        };
-      }
-      return { success: false, message: 'Phiên xác thực không tồn tại.' };
-    }
-
-    const data = snap.data() as HandshakeSession;
-    if (data.status === 'completed') {
-      return { success: false, message: 'Phiên trao trả này đã hoàn tất trước đó.' };
-    }
-
-    if (data.otpCode.trim() !== enteredOtp.trim()) {
-      return { success: false, message: 'Mã OTP không chính xác. Vui lòng kiểm tra lại!' };
-    }
-
-    // Mark OTP as verified
-    await updateDoc(docRef, {
-      status: 'otp_verified',
-      otpVerifiedAt: serverTimestamp(),
-    }).catch(() => {});
-
-    return { success: true, message: 'Mã OTP chính xác! Chuyển sang bước chụp ảnh xác nhận.' };
+    return { success: false, message: 'Mã OTP không chính xác. Vui lòng kiểm tra lại!' };
   } catch (e: any) {
     const memOtp = activeHandshakeOtps.get(handshakeId);
     if (memOtp && memOtp.trim() === enteredOtp.trim()) {
