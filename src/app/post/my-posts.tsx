@@ -1,16 +1,16 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { fetchPosts } from '../../services/firebaseService';
-import { Post } from '../../models/types';
+import { useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { HandshakeModal } from '../../components/HandshakeModal';
+import { HeaderBar } from '../../components/HeaderBar';
 import { PostCard } from '../../components/PostCard';
 import { PostListSkeleton } from '../../components/PostCardSkeleton';
-import { HeaderBar } from '../../components/HeaderBar';
-import { HandshakeModal } from '../../components/HandshakeModal';
 import { auth } from '../../config/firebase';
 import { COLORS, SPACING } from '../../constants/theme';
+import { Post } from '../../models/types';
+import { fetchPosts } from '../../services/firebaseService';
 
 export default function MyPostsScreen() {
   const router = useRouter();
@@ -46,19 +46,11 @@ export default function MyPostsScreen() {
           keyExtractor={(item) => item.id || Math.random().toString()}
           renderItem={({ item }) => (
             <View style={styles.cardWrapper}>
-              <PostCard post={item} onPress={() => router.push(`/post/${item.id}`)} />
-              
-              {/* Quick Handshake Action on Active Posts */}
-              {item.status === 'active' && (
-                <TouchableOpacity
-                  style={styles.quickHandshakeBtn}
-                  onPress={() => setSelectedPostForHandshake(item)}
-                  activeOpacity={0.85}
-                >
-                  <Ionicons name="shield-checkmark" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-                  <Text style={styles.quickHandshakeBtnText}>Xác Nhận Trả Đồ OTP</Text>
-                </TouchableOpacity>
-              )}
+              <PostCard
+                post={item}
+                onPress={() => router.push(`/post/${item.id}`)}
+                onHandshakePress={item.status === 'active' ? () => setSelectedPostForHandshake(item) : undefined}
+              />
             </View>
           )}
           contentContainerStyle={styles.listContent}
@@ -100,28 +92,7 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
   },
   cardWrapper: {
-    marginBottom: 16,
-  },
-  quickHandshakeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#00A896',
-    borderRadius: 14,
-    paddingVertical: 12,
-    marginTop: -8,
-    marginHorizontal: 4,
     marginBottom: 8,
-    shadowColor: '#00A896',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  quickHandshakeBtnText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#FFFFFF',
   },
   emptyContainer: {
     alignItems: 'center',

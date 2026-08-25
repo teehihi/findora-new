@@ -1,38 +1,37 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
-  Image, 
-  TouchableOpacity, 
-  TextInput, 
-  ActivityIndicator, 
-  Linking,
-  Share,
-  Alert,
-  Platform,
-  Modal,
-  Pressable,
-  Animated
-} from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
-import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Animated,
+  Image,
+  Linking,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { fetchPostById, subscribeComments, addComment, fetchPosts, getPosterDetails, toggleLikePost, deletePost } from '../../services/firebaseService';
-import { findMatches } from '../../services/aiMatching';
-import { playSoundEffect } from '../../services/soundService';
-import { Post, Comment, MatchResult, User } from '../../models/types';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HandshakeModal } from '../../components/HandshakeModal';
-import { MatchCard } from '../../components/MatchCard';
 import { ImageViewerModal } from '../../components/ImageViewerModal';
+import { MatchCard } from '../../components/MatchCard';
 import { PostDetailSkeleton } from '../../components/PostDetailSkeleton';
-import { getDisplayCategory } from '../../utils/categoryUtils';
 import { auth, db } from '../../config/firebase';
-import { COLORS, SPACING, SHADOWS } from '../../constants/theme';
+import { Comment, MatchResult, Post } from '../../models/types';
+import { findMatches } from '../../services/aiMatching';
+import { addComment, deletePost, fetchPostById, fetchPosts, getPosterDetails, subscribeComments, toggleLikePost } from '../../services/firebaseService';
+import { playSoundEffect } from '../../services/soundService';
+import { getDisplayCategory } from '../../utils/categoryUtils';
 
 interface CustomTimeModalProps {
   visible: boolean;
@@ -656,9 +655,9 @@ export default function PostDetailScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView 
-        bounces={false} 
-        showsVerticalScrollIndicator={false} 
+      <ScrollView
+        bounces={false}
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: bottomNavPadding + 30 }}
       >
         {/* Top Hero Image Banner */}
@@ -720,7 +719,7 @@ export default function PostDetailScreen() {
 
           {/* 2 Side-by-Side Info Cards (THỜI GIAN & DANH MỤC) */}
           <View style={styles.infoCardsRow}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.infoCard}
               onPress={() => setTimeModalVisible(true)}
               activeOpacity={0.7}
@@ -793,7 +792,7 @@ export default function PostDetailScreen() {
           {isOwner && post.status === 'active' && (
             <TouchableOpacity style={styles.otpBtn} onPress={() => setResolveModalVisible(true)} activeOpacity={0.85}>
               <Ionicons name="shield-checkmark" size={22} color="#FFFFFF" style={{ marginRight: 8 }} />
-              <Text style={styles.otpBtnText}>Xác Nhận Trả Đồ OTP</Text>
+              <Text style={styles.otpBtnText}>Xác Nhận Trả Đồ</Text>
             </TouchableOpacity>
           )}
 
@@ -891,17 +890,17 @@ export default function PostDetailScreen() {
           {isOwner ? (
             /* Owner Mode: Circular Trash Button (Left) + Green Rounded Pill Edit Button (Right) */
             <>
-              <TouchableOpacity 
-                style={styles.ownerDeleteCircleBtn} 
-                onPress={handleDeletePost} 
+              <TouchableOpacity
+                style={styles.ownerDeleteCircleBtn}
+                onPress={handleDeletePost}
                 activeOpacity={0.75}
               >
                 <Feather name="trash-2" size={22} color="#EF4444" />
               </TouchableOpacity>
 
-              <TouchableOpacity 
-                style={styles.ownerEditPillBtn} 
-                onPress={handleEditPost} 
+              <TouchableOpacity
+                style={styles.ownerEditPillBtn}
+                onPress={handleEditPost}
                 activeOpacity={0.85}
               >
                 <Ionicons name="create-outline" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
@@ -911,8 +910,8 @@ export default function PostDetailScreen() {
           ) : (
             /* Viewer Mode: Call Button + Message Button */
             <>
-              <TouchableOpacity 
-                style={[styles.dockOutlineBtn, !targetPhone && { opacity: 0.5 }]} 
+              <TouchableOpacity
+                style={[styles.dockOutlineBtn, !targetPhone && { opacity: 0.5 }]}
                 onPress={handleCallPhone}
                 activeOpacity={0.8}
               >

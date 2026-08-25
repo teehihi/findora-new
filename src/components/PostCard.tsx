@@ -9,9 +9,10 @@ import { ImageViewerModal } from './ImageViewerModal';
 interface PostCardProps {
   post: Post;
   onPress: () => void;
+  onHandshakePress?: () => void;
 }
 
-export const PostCard: React.FC<PostCardProps> = ({ post, onPress }) => {
+export const PostCard: React.FC<PostCardProps> = ({ post, onPress, onHandshakePress }) => {
   const currentUser = auth.currentUser;
   const isLost = post.type === 'lost';
 
@@ -192,6 +193,18 @@ export const PostCard: React.FC<PostCardProps> = ({ post, onPress }) => {
         </TouchableOpacity>
       ) : null}
 
+      {/* In-Card Handshake Action Button */}
+      {onHandshakePress && post.status === 'active' && (
+        <TouchableOpacity
+          style={styles.cardHandshakeBtn}
+          onPress={onHandshakePress}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="shield-checkmark" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+          <Text style={styles.cardHandshakeBtnText}>Xác Nhận Trả Đồ</Text>
+        </TouchableOpacity>
+      )}
+
       {/* 4. Bottom Action Bar: Genuine Facebook-style Like & Circle Comment Icons */}
       <View style={styles.actionsRow}>
         <TouchableOpacity 
@@ -247,6 +260,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 14,
     marginBottom: 8
+  },
+  cardHandshakeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#00A896',
+    borderRadius: 12,
+    paddingVertical: 10,
+    marginTop: 10,
+    marginBottom: 4,
+    shadowColor: '#00A896',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  cardHandshakeBtnText: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
   headerRow: {
     flexDirection: 'row',
