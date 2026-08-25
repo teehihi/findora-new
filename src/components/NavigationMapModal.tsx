@@ -262,9 +262,9 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
     }
   };
 
-  // Start Realtime Navigation: Swoop into 3D driving view aligned with road
+  // Start Realtime Navigation: Instant Swoop into 3D driving view aligned with road (0ms delay)
   const handleStartNavigation = () => {
-    setNavState('STARTING');
+    setNavState('NAVIGATING');
     setIsManualExploring(false);
 
     if (userLocation && mapRef.current) {
@@ -292,12 +292,8 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
         nextStep: nextManeuver,
       });
 
-      mapRef.current.animateCamera(targetCam, { duration: 900 });
+      mapRef.current.animateCamera(targetCam, { duration: 600 });
     }
-
-    setTimeout(() => {
-      setNavState('NAVIGATING');
-    }, 300);
   };
 
   // In-App PiP Minimize Handler
