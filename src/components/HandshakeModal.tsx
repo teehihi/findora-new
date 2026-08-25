@@ -730,14 +730,6 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
                   Chụp rõ món đồ vừa được trao trả hoặc khoảnh khắc 2 người cùng nhau trao nhận đồ tại điểm hẹn.
                 </Text>
 
-                {/* Tip Guidance Box */}
-                <View style={styles.guideTipBox}>
-                  <Ionicons name="sparkles" size={18} color="#00A896" style={{ marginRight: 8 }} />
-                  <Text style={styles.guideTipText}>
-                    Hệ thống AI Gemini 3.5 Flash Lite sẽ tự động đối chiếu hình ảnh thực tế với bài đăng gốc để xác thực tính minh bạch.
-                  </Text>
-                </View>
-
                 {/* Photo Preview or Capture Buttons */}
                 {capturedPhotoUri ? (
                   <View style={styles.photoPreviewBox}>
