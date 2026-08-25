@@ -181,6 +181,14 @@ export const PostCard: React.FC<PostCardProps> = ({ post, onPress, onHandshakePr
             </Text>
           </View>
 
+          {/* Resolved Status Badge */}
+          {post.status === 'resolved' && (
+            <View style={styles.resolvedBadge}>
+              <Ionicons name="checkmark-circle" size={12} color="#FFFFFF" style={{ marginRight: 4 }} />
+              <Text style={styles.resolvedBadgeText}>ĐÃ GIẢI QUYẾT</Text>
+            </View>
+          )}
+
           {/* Location Overlay Bar */}
           {post.address ? (
             <View style={styles.locationOverlay}>
@@ -399,6 +407,24 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#FFFFFF',
     letterSpacing: 0.5
+  },
+  resolvedBadge: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0F766E',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    zIndex: 10,
+  },
+  resolvedBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
   locationOverlay: {
     position: 'absolute',
