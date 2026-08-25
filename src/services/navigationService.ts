@@ -33,6 +33,23 @@ export function getDistanceKm(lat1: number, lon1: number, lat2: number, lon2: nu
   return R * c;
 }
 
+// Calculate bearing in degrees (0 - 360) between two points
+export function calculateBearing(startLat: number, startLng: number, endLat: number, endLng: number): number {
+  const startLatRad = (startLat * Math.PI) / 180;
+  const startLngRad = (startLng * Math.PI) / 180;
+  const endLatRad = (endLat * Math.PI) / 180;
+  const endLngRad = (endLng * Math.PI) / 180;
+
+  const dLng = endLngRad - startLngRad;
+
+  const y = Math.sin(dLng) * Math.cos(endLatRad);
+  const x = Math.cos(startLatRad) * Math.sin(endLatRad) -
+            Math.sin(startLatRad) * Math.cos(endLatRad) * Math.cos(dLng);
+
+  let brng = (Math.atan2(y, x) * 180) / Math.PI;
+  return (brng + 360) % 360;
+}
+
 // Format arrival ETA clock time (e.g. "21:45")
 export function formatEtaTime(durationSeconds: number): string {
   const now = new Date();

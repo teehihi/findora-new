@@ -23,6 +23,7 @@ import {
   formatDistanceText,
   formatDurationText,
   getDistanceKm,
+  calculateBearing,
 } from '../services/navigationService';
 import { navigationCamera } from '../services/navigationCameraController';
 import { enterPipMode, setAutoPip } from '../services/pipService';
@@ -200,16 +201,27 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
     setIsManualExploring(false);
     if (!mapRef.current) return;
     if (navState === 'NAVIGATING' && userLocation) {
+      let forwardHeading = userLocation.heading || 0;
+      if (routeData?.coordinates && routeData.coordinates.length > 1) {
+        const targetPt = routeData.coordinates[Math.min(3, routeData.coordinates.length - 1)];
+        forwardHeading = calculateBearing(
+          userLocation.latitude,
+          userLocation.longitude,
+          targetPt.latitude,
+          targetPt.longitude
+        );
+      }
+      navigationCamera.reset(forwardHeading);
       const currentManeuver = routeData?.steps[currentStepIndex];
       const nextManeuver = routeData?.steps[currentStepIndex + 1] || null;
       const targetCam = navigationCamera.computeCameraTarget({
         currentLocation: userLocation,
-        currentBearing: userLocation.heading || 0,
-        speedKmh: Math.max((userLocation.speed || 0) * 3.6, 0),
+        currentBearing: forwardHeading,
+        speedKmh: Math.max((userLocation.speed || 0) * 3.6, 20),
         distanceToNextManeuverMeters: currentManeuver?.distanceMeters || 100,
         nextStep: nextManeuver,
       });
-      mapRef.current.animateCamera(targetCam, { duration: 600 });
+      mapRef.current.animateCamera(targetCam, { duration: 700 });
     } else if (userLocation && destination) {
       mapRef.current.fitToCoordinates(
         [userLocation, { latitude: destination.latitude, longitude: destination.longitude }],
@@ -221,24 +233,41 @@ export const NavigationMapModal: React.FC<NavigationMapModalProps> = ({
     }
   };
 
-  // Start Realtime Navigation
+  // Start Realtime Navigation: Swoop into 3D driving view aligned with road
   const handleStartNavigation = () => {
     setNavState('STARTING');
     setIsManualExploring(false);
+
+    if (userLocation && mapRef.current) {
+      // Calculate exact road orientation from start along the route polyline
+      let forwardHeading = userLocation.heading || 0;
+      if (routeData?.coordinates && routeData.coordinates.length > 1) {
+        const targetPt = routeData.coordinates[Math.min(3, routeData.coordinates.length - 1)];
+        forwardHeading = calculateBearing(
+          userLocation.latitude,
+          userLocation.longitude,
+          targetPt.latitude,
+          targetPt.longitude
+        );
+      }
+
+      navigationCamera.reset(forwardHeading);
+
+      const currentManeuver = routeData?.steps[0];
+      const nextManeuver = routeData?.steps[1] || null;
+      const targetCam = navigationCamera.computeCameraTarget({
+        currentLocation: userLocation,
+        currentBearing: forwardHeading,
+        speedKmh: 25, // trigger sharp 3D driving view
+        distanceToNextManeuverMeters: currentManeuver?.distanceMeters || 100,
+        nextStep: nextManeuver,
+      });
+
+      mapRef.current.animateCamera(targetCam, { duration: 900 });
+    }
+
     setTimeout(() => {
       setNavState('NAVIGATING');
-      if (userLocation && mapRef.current) {
-        const currentManeuver = routeData?.steps[0];
-        const nextManeuver = routeData?.steps[1] || null;
-        const targetCam = navigationCamera.computeCameraTarget({
-          currentLocation: userLocation,
-          currentBearing: userLocation.heading || 0,
-          speedKmh: Math.max((userLocation.speed || 0) * 3.6, 0),
-          distanceToNextManeuverMeters: currentManeuver?.distanceMeters || 100,
-          nextStep: nextManeuver,
-        });
-        mapRef.current.animateCamera(targetCam, { duration: 600 });
-      }
     }, 300);
   };
 
