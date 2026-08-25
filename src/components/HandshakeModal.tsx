@@ -554,10 +554,7 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
                     {loading ? (
                       <ActivityIndicator size="small" color="#FFFFFF" />
                     ) : (
-                      <>
-                        <Ionicons name="key" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-                        <Text style={styles.primaryActionBtnText}>Tạo Mã OTP</Text>
-                      </>
+                      <Text style={styles.primaryActionBtnText}>Tạo Mã OTP</Text>
                     )}
                   </TouchableOpacity>
                 </View>
