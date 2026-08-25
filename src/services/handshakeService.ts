@@ -160,7 +160,7 @@ export async function createHandshakeSession(params: {
     console.log('Notice: Storing handshake locally due to rules notice:', docErr);
   }
 
-  // Send in-app notification & remote push to receiver
+  // Send in-app notification to receiver (picked up automatically by GlobalNotificationListener)
   if (params.receiverId) {
     try {
       await addDoc(collection(db, 'notifications'), {
@@ -179,24 +179,6 @@ export async function createHandshakeSession(params: {
       console.log('[HANDSHAKE] Created notification for receiver:', params.receiverId);
     } catch (notifErr) {
       console.log('Notice: Error creating in-app notification:', notifErr);
-    }
-
-    try {
-      await sendRemotePushNotification({
-        targetUserId: params.receiverId,
-        title: '🤝 Mã OTP Nhận Lại Đồ',
-        body: `${params.finderName} đang trao trả đồ. Mã OTP của bạn là: ${otpCode}`,
-        data: {
-          type: 'resolve',
-          postId: params.postId,
-          otpCode,
-          handshakeId,
-        },
-        type: 'resolve',
-      });
-      console.log('[HANDSHAKE] Dispatched push notification to receiver:', params.receiverId);
-    } catch (pushErr) {
-      console.log('Notice: Push notification notice:', pushErr);
     }
   }
 
