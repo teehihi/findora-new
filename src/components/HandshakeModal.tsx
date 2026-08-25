@@ -30,6 +30,7 @@ import { auth } from '../config/firebase';
 import {
   createHandshakeSession,
   getChatParticipantsForPost,
+  getActiveHandshakeSession,
   verifyHandshakeOtp,
   verifyAndCompleteHandshakeWithAI,
   submitReceiverRating,
@@ -118,21 +119,47 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
       ]).start();
 
       if (currentUser) {
-        setStep(1);
-        setSelectedParticipant(null);
-        setManualReceiverName('');
-        setEnteredOtp('');
-        setCapturedPhotoUri(null);
-        setCapturedPhotoBase64(null);
-        setAiResult(null);
         setShowParticipantModal(false);
         setLoadingParticipants(true);
-        getChatParticipantsForPost(postId, currentUser.uid)
-          .then((list) => {
+
+        // Fetch participants and check for active session concurrently
+        Promise.all([
+          getChatParticipantsForPost(postId, currentUser.uid),
+          getActiveHandshakeSession(postId, currentUser.uid),
+        ])
+          .then(([list, activeSession]) => {
             setParticipants(list);
             setLoadingParticipants(false);
+
+            if (activeSession) {
+              setHandshakeId(activeSession.id || '');
+              setOtpCode(activeSession.otpCode || '');
+
+              const matched = list.find((p) => p.id === activeSession.receiverId);
+              if (matched) {
+                setSelectedParticipant(matched);
+              } else if (activeSession.receiverName) {
+                setManualReceiverName(activeSession.receiverName);
+              }
+
+              if (activeSession.status === 'otp_verified' || activeSession.status === 'photo_verifying') {
+                goToStep(4);
+              } else if (activeSession.status === 'pending') {
+                goToStep(3);
+              }
+            } else {
+              setStep(1);
+              setSelectedParticipant(null);
+              setManualReceiverName('');
+              setEnteredOtp('');
+              setCapturedPhotoUri(null);
+              setCapturedPhotoBase64(null);
+              setAiResult(null);
+            }
           })
-          .catch(() => setLoadingParticipants(false));
+          .catch(() => {
+            setLoadingParticipants(false);
+          });
       }
     }
   }, [visible, postId]);
@@ -150,13 +177,6 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
         useNativeDriver: true,
       }),
     ]).start(() => {
-      setSelectedParticipant(null);
-      setManualReceiverName('');
-      setEnteredOtp('');
-      setCapturedPhotoUri(null);
-      setCapturedPhotoBase64(null);
-      setAiResult(null);
-      setStep(1);
       onClose();
     });
   };
@@ -248,21 +268,6 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
     }
 
     const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.7,
-      base64: true,
-    });
-
-    if (!result.canceled && result.assets[0]) {
-      setCapturedPhotoUri(result.assets[0].uri);
-      setCapturedPhotoBase64(result.assets[0].base64 || null);
-    }
-  };
-
-  const handlePickFromGallery = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [4, 3],
@@ -677,17 +682,19 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
                     </TouchableOpacity>
                   </View>
                 ) : (
-                  <View style={styles.captureActionRow}>
-                    <TouchableOpacity style={styles.captureBtn} onPress={handleTakePhoto} activeOpacity={0.85}>
-                      <Ionicons name="camera" size={32} color="#00A896" />
-                      <Text style={styles.captureBtnText}>Chụp Ảnh Mới</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.captureBtn} onPress={handlePickFromGallery} activeOpacity={0.85}>
-                      <Ionicons name="images" size={32} color="#00A896" />
-                      <Text style={styles.captureBtnText}>Chọn Từ Thư Viện</Text>
-                    </TouchableOpacity>
-                  </View>
+                  <TouchableOpacity
+                    style={styles.liveCameraCard}
+                    onPress={handleTakePhoto}
+                    activeOpacity={0.85}
+                  >
+                    <View style={styles.liveCameraIconCircle}>
+                      <Ionicons name="camera" size={34} color="#00A896" />
+                    </View>
+                    <Text style={styles.liveCameraTitle}>Mở Camera Chụp Ảnh Trực Tiếp</Text>
+                    <Text style={styles.liveCameraSub}>
+                      Chỉ cho phép chụp ảnh thực tế tại điểm hẹn để đảm bảo tính minh bạch
+                    </Text>
+                  </TouchableOpacity>
                 )}
 
                 {/* AI Submit Button */}
@@ -1337,27 +1344,40 @@ const styles = StyleSheet.create({
     color: '#166534',
     lineHeight: 18,
   },
-  captureActionRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
-  },
-  captureBtn: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
+  liveCameraCard: {
+    backgroundColor: '#F0FDFA',
     borderWidth: 1.5,
-    borderColor: '#E2E8F0',
+    borderColor: '#00A896',
     borderStyle: 'dashed',
-    borderRadius: 16,
+    borderRadius: 20,
     paddingVertical: 24,
+    paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 20,
   },
-  captureBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#475569',
-    marginTop: 8,
+  liveCameraIconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(0, 168, 150, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  liveCameraTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#00A896',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  liveCameraSub: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 16,
+    maxWidth: 260,
   },
   photoPreviewBox: {
     position: 'relative',

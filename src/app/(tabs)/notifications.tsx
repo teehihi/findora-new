@@ -24,6 +24,8 @@ import {
   markAllNotificationsAsRead,
   getPosterDetails
 } from '../../services/firebaseService';
+import { subscribeHandshake } from '../../services/handshakeService';
+import * as ImagePicker from 'expo-image-picker';
 import { Notification } from '../../models/types';
 import { NotificationSkeletonList } from '../../components/NotificationSkeleton';
 import { COLORS, SPACING } from '../../constants/theme';
@@ -165,10 +167,52 @@ export default function NotificationsScreen() {
   const [optionsModalVisible, setOptionsModalVisible] = useState(false);
   const [selectedOtpNotif, setSelectedOtpNotif] = useState<Notification | null>(null);
 
+  const [receiverHandshakeStatus, setReceiverHandshakeStatus] = useState<string>('pending');
+  const [receiverPhotoUri, setReceiverPhotoUri] = useState<string | null>(null);
+
   // Pagination state: Total visible items start at 10
   const [displayLimit, setDisplayLimit] = useState(10);
   const [hasActivatedInfiniteScroll, setHasActivatedInfiniteScroll] = useState(false);
   const [loadingEarlier, setLoadingEarlier] = useState(false);
+
+  useEffect(() => {
+    if (!selectedOtpNotif) {
+      setReceiverHandshakeStatus('pending');
+      setReceiverPhotoUri(null);
+      return;
+    }
+
+    const hId = (selectedOtpNotif as any).handshakeId;
+    if (hId && !hId.startsWith('local_')) {
+      const unsub = subscribeHandshake(hId, (session) => {
+        if (session) {
+          setReceiverHandshakeStatus(session.status);
+          if (session.handoverPhotoUrl) {
+            setReceiverPhotoUri(session.handoverPhotoUrl);
+          }
+        }
+      });
+      return () => unsub();
+    }
+  }, [selectedOtpNotif]);
+
+  const handleReceiverTakePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.7,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      setReceiverPhotoUri(result.assets[0].uri);
+    }
+  };
 
   const loadNotifications = async () => {
     try {
@@ -695,34 +739,78 @@ export default function NotificationsScreen() {
                 </TouchableOpacity>
               </View>
 
-              <Text style={styles.otpModalInstruction}>
-                Vui lòng đọc mã OTP 6 số này cho{' '}
-                <Text style={{ fontWeight: '700', color: '#0F172A' }}>
-                  {selectedOtpNotif.senderName || 'người trả đồ'}
-                </Text>{' '}
-                khi hai bên gặp mặt trực tiếp:
-              </Text>
-
-              {/* Massive, Ultra-Clean & Luminous OTP Code Display */}
-              {(() => {
-                const rawOtp =
-                  (selectedOtpNotif as any).otpCode ||
-                  selectedOtpNotif.message?.match(/\b\d{6}\b/)?.[0] ||
-                  '123456';
-                return (
-                  <View style={styles.otpModalBigCodeBox}>
-                    <Text style={styles.otpModalBigCodeText}>{rawOtp}</Text>
+              {receiverHandshakeStatus === 'otp_verified' || receiverHandshakeStatus === 'photo_verifying' ? (
+                <>
+                  {/* Verified Badge */}
+                  <View style={styles.verifiedSuccessBadge}>
+                    <Ionicons name="checkmark-circle" size={20} color="#059669" style={{ marginRight: 6 }} />
+                    <Text style={styles.verifiedSuccessBadgeText}>Mã OTP đã khớp thành công!</Text>
                   </View>
-                );
-              })()}
 
-              {/* Security Hint */}
-              <View style={styles.otpModalSecurityBox}>
-                <Ionicons name="lock-closed" size={16} color="#00A896" style={{ marginRight: 8 }} />
-                <Text style={styles.otpModalSecurityText}>
-                  Chỉ cung cấp mã sau khi bạn đã kiểm tra và nhận lại đúng món đồ của mình.
-                </Text>
-              </View>
+                  <Text style={styles.otpModalInstruction}>
+                    Bước tiếp theo: Cùng người trao trả chụp ảnh xác nhận thực tế tại điểm hẹn.
+                  </Text>
+
+                  {receiverPhotoUri ? (
+                    <View style={styles.photoPreviewBox}>
+                      <Image source={{ uri: receiverPhotoUri }} style={styles.photoPreviewImg} />
+                      <TouchableOpacity
+                        style={styles.retakeBtn}
+                        onPress={handleReceiverTakePhoto}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="camera-reverse" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                        <Text style={styles.retakeBtnText}>Chụp lại</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.liveCameraCard}
+                      onPress={handleReceiverTakePhoto}
+                      activeOpacity={0.85}
+                    >
+                      <View style={styles.liveCameraIconCircle}>
+                        <Ionicons name="camera" size={34} color="#00A896" />
+                      </View>
+                      <Text style={styles.liveCameraTitle}>Mở Camera Chụp Ảnh Trực Tiếp</Text>
+                      <Text style={styles.liveCameraSub}>
+                        Chụp ảnh món đồ hoặc khoảnh khắc trao nhận để lưu làm minh chứng
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Text style={styles.otpModalInstruction}>
+                    Vui lòng đọc mã OTP 6 số này cho{' '}
+                    <Text style={{ fontWeight: '700', color: '#0F172A' }}>
+                      {selectedOtpNotif.senderName || 'người trả đồ'}
+                    </Text>{' '}
+                    khi hai bên gặp mặt trực tiếp:
+                  </Text>
+
+                  {/* Massive, Ultra-Clean & Luminous OTP Code Display */}
+                  {(() => {
+                    const rawOtp =
+                      (selectedOtpNotif as any).otpCode ||
+                      selectedOtpNotif.message?.match(/\b\d{6}\b/)?.[0] ||
+                      '123456';
+                    return (
+                      <View style={styles.otpModalBigCodeBox}>
+                        <Text style={styles.otpModalBigCodeText}>{rawOtp}</Text>
+                      </View>
+                    );
+                  })()}
+
+                  {/* Security Hint */}
+                  <View style={styles.otpModalSecurityBox}>
+                    <Ionicons name="lock-closed" size={16} color="#00A896" style={{ marginRight: 8 }} />
+                    <Text style={styles.otpModalSecurityText}>
+                      Chỉ cung cấp mã sau khi bạn đã kiểm tra và nhận lại đúng món đồ của mình.
+                    </Text>
+                  </View>
+                </>
+              )}
 
               {/* Action Buttons */}
               <View style={styles.otpModalActionsRow}>
@@ -1175,6 +1263,85 @@ const styles = StyleSheet.create({
   otpModalDoneBtnText: {
     fontSize: 14,
     fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  verifiedSuccessBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 14,
+  },
+  verifiedSuccessBadgeText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  liveCameraCard: {
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1.5,
+    borderColor: '#00A896',
+    borderStyle: 'dashed',
+    borderRadius: 18,
+    paddingVertical: 20,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  liveCameraIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(0, 168, 150, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  liveCameraTitle: {
+    fontSize: 14.5,
+    fontWeight: '800',
+    color: '#00A896',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  liveCameraSub: {
+    fontSize: 11.5,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 15,
+    maxWidth: 240,
+  },
+  photoPreviewBox: {
+    position: 'relative',
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 16,
+  },
+  photoPreviewImg: {
+    width: '100%',
+    height: 180,
+    borderRadius: 16,
+    backgroundColor: '#E2E8F0',
+  },
+  retakeBtn: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  retakeBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
     color: '#FFFFFF',
   },
 });

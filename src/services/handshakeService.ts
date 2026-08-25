@@ -203,6 +203,39 @@ export function subscribeHandshake(
 }
 
 /**
+ * Find an existing active handshake session for a post (resumes from Step 3 or 4)
+ */
+export async function getActiveHandshakeSession(
+  postId: string,
+  userId: string
+): Promise<HandshakeSession | null> {
+  try {
+    const q = query(
+      collection(db, 'handshakes'),
+      where('postId', '==', postId),
+      where('status', 'in', ['pending', 'otp_verified', 'photo_verifying'])
+    );
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      for (const d of snap.docs) {
+        const data = d.data() as HandshakeSession;
+        if (data.finderId === userId || data.receiverId === userId || !data.receiverId) {
+          activeHandshakeOtps.set(d.id, data.otpCode);
+          return { id: d.id, ...data };
+        }
+      }
+      const firstDoc = snap.docs[0];
+      const data = firstDoc.data() as HandshakeSession;
+      activeHandshakeOtps.set(firstDoc.id, data.otpCode);
+      return { id: firstDoc.id, ...data };
+    }
+  } catch (e) {
+    console.log('Notice: Query active handshake session notice:', e);
+  }
+  return null;
+}
+
+/**
  * Verify OTP entered by the finder
  */
 export async function verifyHandshakeOtp(
