@@ -54,6 +54,8 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
 }) => {
   // Steps: 1: Select Receiver & Create OTP, 2: Enter OTP, 3: AI Photo Verification, 4: Rating & Success
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [subStep, setSubStep] = useState<'input' | 'confirm'>('input');
+  const [showParticipantModal, setShowParticipantModal] = useState<boolean>(false);
   const [loading, setLoading] = useState(false);
   const [loadingParticipants, setLoadingParticipants] = useState(false);
   const [participants, setParticipants] = useState<ChatParticipant[]>([]);
@@ -82,6 +84,8 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
   useEffect(() => {
     if (visible && currentUser) {
       setStep(1);
+      setSubStep('input');
+      setShowParticipantModal(false);
       setLoadingParticipants(true);
       getChatParticipantsForPost(postId, currentUser.uid)
         .then((list) => {
@@ -299,90 +303,151 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
             {/* ========================================================================= */}
             {step === 1 && (
               <View style={styles.stepContainer}>
-                <View style={styles.stepHeaderRow}>
-                  <Ionicons name="person-outline" size={18} color="#00A896" style={{ marginRight: 6 }} />
-                  <Text style={styles.stepTitle}>Bước 1: Chọn Người Nhận Đồ</Text>
-                </View>
-                <Text style={styles.stepSubtitle}>
-                  Chọn người bạn đang gặp mặt để trả lại món đồ "{postTitle}".
-                </Text>
+                {subStep === 'input' ? (
+                  <>
+                    <View style={styles.stepHeaderRow}>
+                      <Ionicons name="person-outline" size={18} color="#00A896" style={{ marginRight: 6 }} />
+                      <Text style={styles.stepTitle}>Bước 1: Nhập Thông Tin Người Nhận</Text>
+                    </View>
+                    <Text style={styles.stepSubtitle}>
+                      Nhập tên hoặc chọn người nhận từ danh sách đã nhắn tin với bạn về món đồ "{postTitle}".
+                    </Text>
 
-                {/* Chat Participants Quick Select */}
-                {loadingParticipants ? (
-                  <ActivityIndicator size="small" color="#00A896" style={{ marginVertical: 16 }} />
-                ) : participants.length > 0 ? (
-                  <View style={styles.participantsSection}>
-                    <Text style={styles.sectionLabel}>Người đã nhắn tin với bạn:</Text>
-                    {participants.map((p) => {
-                      const isSelected = selectedParticipant?.id === p.id;
-                      return (
-                        <TouchableOpacity
-                          key={p.id}
-                          style={[styles.participantCard, isSelected && styles.participantCardSelected]}
-                          onPress={() => {
-                            setSelectedParticipant(p);
-                            setManualReceiverName('');
+                    {/* Recipient Input Field with Side 'Chọn người' Button */}
+                    <View style={styles.inputSectionBox}>
+                      <Text style={styles.sectionLabel}>Thông tin người nhận đồ:</Text>
+                      <View style={styles.inputWithSideBtnRow}>
+                        <TextInput
+                          style={styles.textInputFlex}
+                          placeholder="Nhập tên hoặc SĐT người nhận..."
+                          placeholderTextColor="#94A3B8"
+                          value={selectedParticipant ? selectedParticipant.name : manualReceiverName}
+                          onChangeText={(text) => {
+                            setManualReceiverName(text);
+                            if (selectedParticipant) setSelectedParticipant(null);
                           }}
+                        />
+                        <TouchableOpacity
+                          style={styles.pickUserBtn}
+                          onPress={() => setShowParticipantModal(true)}
                           activeOpacity={0.8}
                         >
-                          <Image
-                            source={{
-                              uri: p.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-                            }}
-                            style={styles.participantAvatar}
-                          />
-                          <View style={styles.participantInfo}>
-                            <Text style={[styles.participantName, isSelected && styles.participantNameSelected]}>
-                              {p.name}
-                            </Text>
-                            {p.lastMessage ? (
-                              <Text style={styles.participantLastMsg} numberOfLines={1}>
-                                {p.lastMessage}
-                              </Text>
-                            ) : null}
-                          </View>
-                          <Ionicons
-                            name={isSelected ? 'checkmark-circle' : 'ellipse-outline'}
-                            size={22}
-                            color={isSelected ? '#00A896' : '#94A3B8'}
-                          />
+                          <Ionicons name="people" size={16} color="#00A896" style={{ marginRight: 4 }} />
+                          <Text style={styles.pickUserBtnText}>Chọn người</Text>
                         </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                ) : null}
+                      </View>
+                    </View>
 
-                {/* Manual Name Input */}
-                <View style={styles.manualInputSection}>
-                  <Text style={styles.sectionLabel}>Hoặc nhập tên/SĐT người nhận:</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="Ví dụ: Anh Nam - 0987654321"
-                    placeholderTextColor="#94A3B8"
-                    value={manualReceiverName}
-                    onChangeText={(text) => {
-                      setManualReceiverName(text);
-                      if (text.trim()) setSelectedParticipant(null);
-                    }}
-                  />
-                </View>
+                    {/* Selected Participant Card if picked from list */}
+                    {selectedParticipant ? (
+                      <View style={styles.selectedUserCard}>
+                        <Image
+                          source={{
+                            uri: selectedParticipant.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+                          }}
+                          style={styles.selectedUserAvatar}
+                        />
+                        <View style={styles.selectedUserInfo}>
+                          <Text style={styles.selectedUserName}>{selectedParticipant.name}</Text>
+                          <Text style={styles.selectedUserSub}>Người nhắn tin về bài viết này</Text>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.removeUserBtn}
+                          onPress={() => {
+                            setSelectedParticipant(null);
+                            setManualReceiverName('');
+                          }}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Ionicons name="close-circle" size={20} color="#94A3B8" />
+                        </TouchableOpacity>
+                      </View>
+                    ) : null}
 
-                {/* Create OTP Action Button */}
-                <TouchableOpacity
-                  style={[styles.primaryActionBtn, loading && { opacity: 0.7 }]}
-                  onPress={handleCreateOtp}
-                  disabled={loading}
-                  activeOpacity={0.85}
-                >
-                  {loading ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <>
-                      <Ionicons name="key" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
-                      <Text style={styles.primaryActionBtnText}>Tạo Mã OTP Xác Nhận</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
+                    {/* Continue Button */}
+                    <TouchableOpacity
+                      style={[
+                        styles.primaryActionBtn,
+                        !selectedParticipant && !manualReceiverName.trim() && { opacity: 0.5 }
+                      ]}
+                      onPress={() => {
+                        if (!selectedParticipant && !manualReceiverName.trim()) {
+                          Alert.alert('Chưa có thông tin', 'Vui lòng nhập tên/SĐT hoặc chọn người nhận đồ.');
+                          return;
+                        }
+                        setSubStep('confirm');
+                      }}
+                      disabled={!selectedParticipant && !manualReceiverName.trim()}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={styles.primaryActionBtnText}>Tiếp tục</Text>
+                      <Ionicons name="arrow-forward" size={18} color="#FFFFFF" style={{ marginLeft: 6 }} />
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  /* SubStep: Confirm & Generate OTP */
+                  <>
+                    <View style={styles.stepHeaderRow}>
+                      <Ionicons name="shield-checkmark-outline" size={18} color="#00A896" style={{ marginRight: 6 }} />
+                      <Text style={styles.stepTitle}>Xác Nhận & Tạo Mã OTP</Text>
+                    </View>
+                    <Text style={styles.stepSubtitle}>
+                      Kiểm tra thông tin trước khi tạo mã OTP xác nhận trao trả:
+                    </Text>
+
+                    {/* Summary Card */}
+                    <View style={styles.confirmSummaryCard}>
+                      <View style={styles.confirmRow}>
+                        <Text style={styles.confirmLabel}>Người nhận:</Text>
+                        <Text style={styles.confirmVal}>
+                          {selectedParticipant ? selectedParticipant.name : manualReceiverName}
+                        </Text>
+                      </View>
+                      <View style={styles.confirmDivider} />
+                      <View style={styles.confirmRow}>
+                        <Text style={styles.confirmLabel}>Món đồ trao trả:</Text>
+                        <Text style={styles.confirmVal} numberOfLines={1}>
+                          {postTitle}
+                        </Text>
+                      </View>
+                      <View style={styles.confirmDivider} />
+                      <View style={styles.confirmRow}>
+                        <Text style={styles.confirmLabel}>Thưởng hoàn tất:</Text>
+                        <Text style={[styles.confirmVal, { color: '#00A896', fontWeight: '800' }]}>
+                          +{rewardPoints} Điểm Findora
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Bottom Actions: Back & Create OTP */}
+                    <View style={styles.confirmActionsRow}>
+                      <TouchableOpacity
+                        style={styles.backOutlineBtn}
+                        onPress={() => setSubStep('input')}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="arrow-back" size={16} color="#64748B" style={{ marginRight: 4 }} />
+                        <Text style={styles.backOutlineBtnText}>Quay lại</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[styles.primaryActionBtnFlex, loading && { opacity: 0.7 }]}
+                        onPress={handleCreateOtp}
+                        disabled={loading}
+                        activeOpacity={0.85}
+                      >
+                        {loading ? (
+                          <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : (
+                          <>
+                            <Ionicons name="key" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                            <Text style={styles.primaryActionBtnText}>Tạo Mã OTP</Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                )}
               </View>
             )}
 
@@ -613,6 +678,88 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Participant Picker Popup Sheet */}
+      {showParticipantModal && (
+        <Modal
+          visible={showParticipantModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowParticipantModal(false)}
+        >
+          <View style={styles.pickerOverlay}>
+            <View style={styles.pickerCard}>
+              <View style={styles.pickerHeader}>
+                <View style={styles.pickerTitleRow}>
+                  <Ionicons name="people" size={20} color="#00A896" style={{ marginRight: 8 }} />
+                  <Text style={styles.pickerTitle}>Chọn Người Nhận Đồ</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.pickerCloseBtn}
+                  onPress={() => setShowParticipantModal(false)}
+                >
+                  <Ionicons name="close" size={22} color="#64748B" />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.pickerSubtitle}>
+                Danh sách những người đã nhắn tin với bạn về bài đăng này:
+              </Text>
+
+              <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+                {loadingParticipants ? (
+                  <ActivityIndicator size="small" color="#00A896" style={{ marginVertical: 24 }} />
+                ) : participants.length > 0 ? (
+                  participants.map((p) => {
+                    const isSelected = selectedParticipant?.id === p.id;
+                    return (
+                      <TouchableOpacity
+                        key={p.id}
+                        style={[styles.participantCard, isSelected && styles.participantCardSelected]}
+                        onPress={() => {
+                          setSelectedParticipant(p);
+                          setManualReceiverName('');
+                          setShowParticipantModal(false);
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <Image
+                          source={{
+                            uri: p.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+                          }}
+                          style={styles.participantAvatar}
+                        />
+                        <View style={styles.participantInfo}>
+                          <Text style={[styles.participantName, isSelected && styles.participantNameSelected]}>
+                            {p.name}
+                          </Text>
+                          {p.lastMessage ? (
+                            <Text style={styles.participantLastMsg} numberOfLines={1}>
+                              {p.lastMessage}
+                            </Text>
+                          ) : null}
+                        </View>
+                        <Ionicons
+                          name={isSelected ? 'checkmark-circle' : 'ellipse-outline'}
+                          size={22}
+                          color={isSelected ? '#00A896' : '#94A3B8'}
+                        />
+                      </TouchableOpacity>
+                    );
+                  })
+                ) : (
+                  <View style={styles.pickerEmptyBox}>
+                    <Ionicons name="chatbubbles-outline" size={40} color="#CBD5E1" />
+                    <Text style={styles.pickerEmptyText}>
+                      Chưa có ai nhắn tin về bài viết này. Bạn có thể nhập trực tiếp tên/SĐT ở màn hình trước.
+                    </Text>
+                  </View>
+                )}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+      )}
     </Modal>
   );
 };
@@ -757,10 +904,16 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 2,
   },
-  manualInputSection: {
-    marginBottom: 20,
+  inputSectionBox: {
+    marginBottom: 16,
   },
-  textInput: {
+  inputWithSideBtnRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  textInputFlex: {
+    flex: 1,
     backgroundColor: '#F8FAFC',
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
@@ -769,6 +922,175 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 14,
     color: '#0F172A',
+  },
+  pickUserBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 168, 150, 0.1)',
+    borderWidth: 1.5,
+    borderColor: '#00A896',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  pickUserBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#00A896',
+  },
+  selectedUserCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: 'rgba(0, 168, 150, 0.08)',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#00A896',
+    marginBottom: 16,
+  },
+  selectedUserAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    marginRight: 10,
+    backgroundColor: '#E2E8F0',
+  },
+  selectedUserInfo: {
+    flex: 1,
+  },
+  selectedUserName: {
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  selectedUserSub: {
+    fontSize: 11.5,
+    color: '#00A896',
+    marginTop: 1,
+  },
+  removeUserBtn: {
+    padding: 4,
+  },
+  confirmSummaryCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    padding: 16,
+    marginBottom: 20,
+  },
+  confirmRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  confirmLabel: {
+    fontSize: 13.5,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  confirmVal: {
+    fontSize: 14,
+    color: '#0F172A',
+    fontWeight: '700',
+    maxWidth: '65%',
+    textAlign: 'right',
+  },
+  confirmDivider: {
+    height: 1,
+    backgroundColor: '#E2E8F0',
+    marginVertical: 4,
+  },
+  confirmActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 6,
+  },
+  backOutlineBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  backOutlineBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  primaryActionBtnFlex: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#00A896',
+    borderRadius: 14,
+    paddingVertical: 14,
+    shadowColor: '#00A896',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  pickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  pickerCard: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  pickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  pickerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  pickerTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  pickerCloseBtn: {
+    padding: 4,
+  },
+  pickerSubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    marginBottom: 14,
+  },
+  pickerEmptyBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 32,
+    paddingHorizontal: 16,
+  },
+  pickerEmptyText: {
+    fontSize: 13,
+    color: '#94A3B8',
+    textAlign: 'center',
+    marginTop: 10,
+    lineHeight: 18,
   },
   primaryActionBtn: {
     flexDirection: 'row',
