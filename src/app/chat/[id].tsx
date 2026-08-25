@@ -2918,7 +2918,7 @@ export default function ChatRoomScreen() {
             const msgData = {
               chatId: curChatId,
               senderId: auth.currentUser.uid,
-              message: `📅 Lịch hẹn: ${appPayload.title} lúc ${appPayload.timeText} ngày ${appPayload.dateText} tại ${appPayload.locationText}`,
+              message: `[Lịch hẹn] ${appPayload.title} lúc ${appPayload.timeText} ngày ${appPayload.dateText} tại ${appPayload.locationText}`,
               type: 'appointment',
               appointmentData: appPayload,
               timestamp: serverTimestamp(),
@@ -2927,7 +2927,7 @@ export default function ChatRoomScreen() {
 
             await addDoc(collection(db, 'chats', curChatId, 'messages'), msgData);
             await updateDoc(doc(db, 'chats', curChatId), {
-              lastMessage: `📅 Lịch hẹn: ${appPayload.title}`,
+              lastMessage: `[Lịch hẹn] ${appPayload.title}`,
               lastMessageTime: serverTimestamp(),
               lastSenderId: auth.currentUser.uid,
               unreadCount: increment(1),

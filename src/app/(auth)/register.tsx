@@ -127,7 +127,7 @@ export default function RegisterScreen() {
       });
 
       setLoading(false);
-      Alert.alert('Tạo tài khoản thành công 🎉', 'Chào mừng bạn đến với Findora! Đã thưởng 100 điểm khởi tạo.', [
+      Alert.alert('Tạo tài khoản thành công', 'Chào mừng bạn đến với Findora! Đã thưởng 100 điểm khởi tạo.', [
         { text: 'Bắt đầu ngay', onPress: () => router.replace('/(tabs)') }
       ]);
     } catch (error: any) {
@@ -139,7 +139,7 @@ export default function RegisterScreen() {
   const handleGoogleBtnPress = async () => {
     if (!GoogleSigninModule || !NativeModules.RNGoogleSignin) {
       Alert.alert(
-        'Yêu cầu Expo Development Build 🚀',
+        'Yêu cầu Expo Development Build',
         'Đăng nhập Google Native yêu cầu bản Expo Development Build (npx expo run:ios --device).\n\nVui lòng sử dụng Đăng Nhập Email/Mật khẩu khi chạy trên ứng dụng Expo Go.'
       );
       return;

@@ -240,7 +240,7 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
       }
 
       setLoading(false);
-      Alert.alert('Thành công 🎉', 'Cảm ơn bạn! Trao trả đồ và cộng điểm thưởng hoàn tất.');
+      Alert.alert('Thành công', 'Cảm ơn bạn! Trao trả đồ và cộng điểm thưởng hoàn tất.');
       onClose();
     } catch (e) {
       setLoading(false);
@@ -299,7 +299,10 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
             {/* ========================================================================= */}
             {step === 1 && (
               <View style={styles.stepContainer}>
-                <Text style={styles.stepTitle}>Bước 1: Chọn Người Nhận Đồ 👤</Text>
+                <View style={styles.stepHeaderRow}>
+                  <Ionicons name="person-outline" size={18} color="#00A896" style={{ marginRight: 6 }} />
+                  <Text style={styles.stepTitle}>Bước 1: Chọn Người Nhận Đồ</Text>
+                </View>
                 <Text style={styles.stepSubtitle}>
                   Chọn người bạn đang gặp mặt để trả lại món đồ "{postTitle}".
                 </Text>
@@ -388,7 +391,10 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
             {/* ========================================================================= */}
             {step === 2 && (
               <View style={styles.stepContainer}>
-                <Text style={styles.stepTitle}>Bước 2: Nhập Mã OTP Trao Trả 🔑</Text>
+                <View style={styles.stepHeaderRow}>
+                  <Ionicons name="key-outline" size={18} color="#00A896" style={{ marginRight: 6 }} />
+                  <Text style={styles.stepTitle}>Bước 2: Nhập Mã OTP Trao Trả</Text>
+                </View>
                 <Text style={styles.stepSubtitle}>
                   Người mất đồ đã nhận được thông báo mã OTP 6 số. Vui lòng yêu cầu họ đọc mã và nhập vào ô dưới đây:
                 </Text>
@@ -459,7 +465,10 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
             {/* ========================================================================= */}
             {step === 3 && (
               <View style={styles.stepContainer}>
-                <Text style={styles.stepTitle}>Bước 3: Chụp Ảnh Xác Nhận Trao Trả 📸</Text>
+                <View style={styles.stepHeaderRow}>
+                  <Ionicons name="camera-outline" size={18} color="#00A896" style={{ marginRight: 6 }} />
+                  <Text style={styles.stepTitle}>Bước 3: Chụp Ảnh Xác Nhận Trao Trả</Text>
+                </View>
                 <Text style={styles.stepSubtitle}>
                   Chụp rõ món đồ vừa được trao trả hoặc khoảnh khắc 2 người cùng nhau trao nhận đồ tại điểm hẹn.
                 </Text>
@@ -534,7 +543,7 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
                   <View style={styles.celebrationIconCircle}>
                     <Ionicons name="trophy" size={36} color="#F59E0B" />
                   </View>
-                  <Text style={styles.celebrationTitle}>Trao Trả Đồ Thành Công! 🎉</Text>
+                  <Text style={styles.celebrationTitle}>Trao Trả Đồ Thành Công</Text>
                   <Text style={styles.celebrationSubtitle}>
                     {aiResult?.explanation || 'AI đã xác thực đối soát hình ảnh thành công 100%!'}
                   </Text>
@@ -562,7 +571,7 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
 
                   {/* Compliments Tags */}
                   <View style={styles.tagsWrap}>
-                    {['Nhiệt tình', 'Đúng hẹn', 'Tốt bụng', 'Cẩn thận', 'Tuyệt vời 🌟'].map((tag) => {
+                    {['Nhiệt tình', 'Đúng hẹn', 'Tốt bụng', 'Cẩn thận', 'Tuyệt vời'].map((tag) => {
                       const isTagSelected = selectedTags.includes(tag);
                       return (
                         <TouchableOpacity
@@ -686,11 +695,15 @@ const styles = StyleSheet.create({
   stepContainer: {
     paddingTop: 4,
   },
+  stepHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
   stepTitle: {
     fontSize: 17,
     fontWeight: '800',
     color: '#0F172A',
-    marginBottom: 4,
   },
   stepSubtitle: {
     fontSize: 13.5,
