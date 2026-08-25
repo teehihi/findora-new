@@ -10,7 +10,7 @@ import { PostListSkeleton } from '../../components/PostCardSkeleton';
 import { auth } from '../../config/firebase';
 import { COLORS, SPACING } from '../../constants/theme';
 import { Post } from '../../models/types';
-import { fetchPosts } from '../../services/firebaseService';
+import { fetchMyPosts } from '../../services/firebaseService';
 
 export default function MyPostsScreen() {
   const router = useRouter();
@@ -22,8 +22,8 @@ export default function MyPostsScreen() {
   const loadMyPosts = () => {
     const user = auth.currentUser;
     if (user) {
-      fetchPosts('all').then((all) => {
-        setPosts(all.filter((p) => p.userId === user.uid));
+      fetchMyPosts(user.uid).then((myList) => {
+        setPosts(myList);
         setLoading(false);
       });
     } else {

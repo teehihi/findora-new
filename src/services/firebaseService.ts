@@ -122,7 +122,11 @@ export async function getCurrentAddressFromGPS(): Promise<string> {
 
 // ==================== POSTS ====================
 
-export async function fetchPosts(typeFilter: string = 'all', searchQuery: string = ''): Promise<Post[]> {
+export async function fetchPosts(
+  typeFilter: string = 'all',
+  searchQuery: string = '',
+  includeResolved: boolean = false
+): Promise<Post[]> {
   try {
     const postsRef = collection(db, 'posts');
     const querySnapshot = await getDocs(postsRef);
@@ -132,8 +136,8 @@ export async function fetchPosts(typeFilter: string = 'all', searchQuery: string
       const data = docSnap.data();
       const status = data.status || 'active';
 
-      // Hide resolved and closed posts from Home feed
-      if (status !== 'resolved' && status !== 'closed') {
+      // Hide resolved and closed posts from Home feed unless includeResolved is true
+      if (includeResolved || (status !== 'resolved' && status !== 'closed')) {
         const img = data.imageUrl || data.image_url || data.image || data.photoUrl || data.url || '';
         const post: Post = {
           id: docSnap.id,
@@ -188,6 +192,19 @@ export async function fetchPosts(typeFilter: string = 'all', searchQuery: string
     return posts;
   } catch (error) {
     console.error('Error fetching posts:', error);
+    return [];
+  }
+}
+
+/**
+ * Fetch all posts related to the user (Created by user OR Resolved by user)
+ */
+export async function fetchMyPosts(userId: string): Promise<Post[]> {
+  try {
+    const all = await fetchPosts('all', '', true);
+    return all.filter((p) => p.userId === userId || p.resolvedBy === userId);
+  } catch (error) {
+    console.error('Error fetching my posts:', error);
     return [];
   }
 }
