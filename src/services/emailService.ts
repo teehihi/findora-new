@@ -10,9 +10,10 @@ export interface SendEmailParams {
   from?: string;
 }
 
-// Relay endpoint: Uses Vercel / Cloud URL if provided, otherwise defaults to local relay
+// Relay endpoint: Uses deployed Vercel Cloud endpoint, with fallback
 const RELAY_ENDPOINT =
-  process.env.EXPO_PUBLIC_EMAIL_RELAY_URL || 'http://localhost:5005/send-appointment-email';
+  process.env.EXPO_PUBLIC_EMAIL_RELAY_URL ||
+  'https://findora-new-api.vercel.app/api/send-appointment-email';
 
 /**
  * Send an email via the zero-dependency Gmail SMTP Relay Server
