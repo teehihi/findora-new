@@ -392,7 +392,12 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
             </View>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            scrollEnabled={step !== 1}
+            bounces={step !== 1}
+            contentContainerStyle={styles.scrollContent}
+          >
             {/* ========================================================================= */}
             {/* STEP 1: SELECT RECIPIENT FROM CHAT                                        */}
             {/* ========================================================================= */}
