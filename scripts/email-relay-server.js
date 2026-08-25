@@ -63,7 +63,7 @@ function sendMailViaGmailTls({ to, subject, html }) {
       } else if (step === 7 && msg.startsWith('354')) {
         step = 8;
         const mailContent = [
-          `From: Findora App <${GMAIL_USER}>`,
+          `From: Findora Support <${GMAIL_USER}>`,
           `To: ${validEmails.join(', ')}`,
           `Subject: ${subject}`,
           'MIME-Version: 1.0',
