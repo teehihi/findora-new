@@ -898,14 +898,11 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     width: '100%',
-    minHeight: 400,
-    maxHeight: '92%',
+    maxHeight: '90%',
   },
   bottomFooterContainer: {
     paddingHorizontal: 20,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    paddingTop: 4,
     backgroundColor: '#FFFFFF',
     width: '100%',
   },
@@ -969,8 +966,8 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 20,
-    paddingTop: 6,
-    paddingBottom: 10,
+    paddingTop: 4,
+    paddingBottom: 4,
   },
   stepContainer: {
     paddingTop: 2,
@@ -989,7 +986,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#64748B',
     lineHeight: 19,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   participantsSection: {
     marginBottom: 16,
@@ -1046,7 +1043,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#00A896',
     borderStyle: 'dashed',
-    marginBottom: 12,
+    marginBottom: 4,
   },
   chooseFromChatIconCircle: {
     width: 44,
@@ -1097,7 +1094,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1.5,
     borderColor: '#00A896',
-    marginBottom: 20,
+    marginBottom: 4,
   },
   selectedUserAvatar: {
     width: 44,
