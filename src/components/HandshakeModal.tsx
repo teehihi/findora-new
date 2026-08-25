@@ -361,7 +361,7 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
                     <Ionicons name="chevron-forward" size={20} color="#00A896" />
                   </TouchableOpacity>
                 ) : (
-                  /* Selected Participant Card with 'Thay đổi' button */
+                  /* Selected Participant Card with 'Thay đổi' and 'X' clear button */
                   <View style={styles.selectedUserCard}>
                     <Image
                       source={{
@@ -373,14 +373,25 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
                       <Text style={styles.selectedUserName}>{selectedParticipant.name}</Text>
                       <Text style={styles.selectedUserSub}>Đã chọn từ danh sách tin nhắn</Text>
                     </View>
-                    <TouchableOpacity
-                      style={styles.changeUserBtn}
-                      onPress={() => setShowParticipantModal(true)}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons name="swap-horizontal" size={15} color="#00A896" style={{ marginRight: 4 }} />
-                      <Text style={styles.changeUserBtnText}>Thay đổi</Text>
-                    </TouchableOpacity>
+                    <View style={styles.userCardActionsRow}>
+                      <TouchableOpacity
+                        style={styles.changeUserBtn}
+                        onPress={() => setShowParticipantModal(true)}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="swap-horizontal" size={14} color="#00A896" style={{ marginRight: 3 }} />
+                        <Text style={styles.changeUserBtnText}>Đổi</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.clearUserBtn}
+                        onPress={() => setSelectedParticipant(null)}
+                        activeOpacity={0.7}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Ionicons name="close-circle" size={22} color="#94A3B8" />
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 )}
 
@@ -957,6 +968,11 @@ const styles = StyleSheet.create({
     color: '#64748B',
     lineHeight: 16,
   },
+  userCardActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   changeUserBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -969,6 +985,9 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     fontWeight: '700',
     color: '#00A896',
+  },
+  clearUserBtn: {
+    padding: 2,
   },
   selectedUserCard: {
     flexDirection: 'row',
