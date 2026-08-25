@@ -3,11 +3,15 @@ import { StatusBar } from 'expo-status-bar';
 import { User as FirebaseUser, onAuthStateChanged } from 'firebase/auth';
 import { useEffect, useState } from 'react';
 import { LogBox } from 'react-native';
+import * as ExpoSplashScreen from 'expo-splash-screen';
 import { auth } from '../config/firebase';
 import { callManager } from '../services/callManager';
 import { setupOnlinePresence } from '../services/presenceService';
 import { SimpleIncomingCallHandler } from '../components/SimpleIncomingCallHandler';
 import { GlobalNotificationListener } from '../components/GlobalNotificationListener';
+
+// Hide native OS splash screen immediately so React Native in-app splash is shown seamlessly
+ExpoSplashScreen.hideAsync().catch(() => {});
 
 LogBox.ignoreLogs([
   'FirebaseError: [code=permission-denied]',
@@ -20,6 +24,7 @@ export default function RootLayout() {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
 
   useEffect(() => {
+    ExpoSplashScreen.hideAsync().catch(() => {});
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
       if (user) {
