@@ -328,45 +328,40 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
 
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
             {/* ========================================================================= */}
-            {/* STEP 1: SELECT / ENTER RECIPIENT                                          */}
+            {/* STEP 1: SELECT RECIPIENT FROM CHAT                                        */}
             {/* ========================================================================= */}
             {step === 1 && (
               <View style={styles.stepContainer}>
                 <View style={styles.stepHeaderRow}>
                   <Ionicons name="person-outline" size={18} color="#00A896" style={{ marginRight: 6 }} />
-                  <Text style={styles.stepTitle}>Bước 1: Chọn/Nhập Người Nhận Đồ</Text>
+                  <Text style={styles.stepTitle}>Bước 1: Chọn Người Nhận Đồ</Text>
                 </View>
                 <Text style={styles.stepSubtitle}>
-                  Nhập thông tin hoặc bấm "Chọn người" từ danh sách đã nhắn tin với bạn về món đồ "{postTitle}".
+                  Vui lòng chọn người bạn đã trao đổi qua tin nhắn để xác nhận trao trả món đồ "{postTitle}".
                 </Text>
 
-                {/* Recipient Input Field with Side 'Chọn người' Button */}
-                <View style={styles.inputSectionBox}>
-                  <Text style={styles.sectionLabel}>Thông tin người nhận lại đồ:</Text>
-                  <View style={styles.inputWithSideBtnRow}>
-                    <TextInput
-                      style={styles.textInputFlex}
-                      placeholder="Nhập tên hoặc SĐT người nhận..."
-                      placeholderTextColor="#94A3B8"
-                      value={selectedParticipant ? selectedParticipant.name : manualReceiverName}
-                      onChangeText={(text) => {
-                        setManualReceiverName(text);
-                        if (selectedParticipant) setSelectedParticipant(null);
-                      }}
-                    />
-                    <TouchableOpacity
-                      style={styles.pickUserBtn}
-                      onPress={() => setShowParticipantModal(true)}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons name="people" size={16} color="#00A896" style={{ marginRight: 4 }} />
-                      <Text style={styles.pickUserBtnText}>Chọn người</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                {/* Selected Participant Card if picked from list */}
-                {selectedParticipant ? (
+                {/* Receiver Selection Box */}
+                {!selectedParticipant ? (
+                  <TouchableOpacity
+                    style={styles.chooseFromChatBtn}
+                    onPress={() => setShowParticipantModal(true)}
+                    activeOpacity={0.85}
+                  >
+                    <View style={styles.chooseFromChatIconCircle}>
+                      <Ionicons name="chatbubbles" size={24} color="#00A896" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.chooseFromChatTitle}>Chọn Người Nhận Từ Tin Nhắn</Text>
+                      <Text style={styles.chooseFromChatSub}>
+                        {participants.length > 0
+                          ? `Có ${participants.length} người đã nhắn tin với bạn về bài viết này`
+                          : 'Bấm để mở danh sách người nhắn tin'}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color="#00A896" />
+                  </TouchableOpacity>
+                ) : (
+                  /* Selected Participant Card with 'Thay đổi' button */
                   <View style={styles.selectedUserCard}>
                     <Image
                       source={{
@@ -379,32 +374,30 @@ export const HandshakeModal: React.FC<HandshakeModalProps> = ({
                       <Text style={styles.selectedUserSub}>Đã chọn từ danh sách tin nhắn</Text>
                     </View>
                     <TouchableOpacity
-                      style={styles.removeUserBtn}
-                      onPress={() => {
-                        setSelectedParticipant(null);
-                        setManualReceiverName('');
-                      }}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      style={styles.changeUserBtn}
+                      onPress={() => setShowParticipantModal(true)}
+                      activeOpacity={0.8}
                     >
-                      <Ionicons name="close-circle" size={20} color="#94A3B8" />
+                      <Ionicons name="swap-horizontal" size={15} color="#00A896" style={{ marginRight: 4 }} />
+                      <Text style={styles.changeUserBtnText}>Thay đổi</Text>
                     </TouchableOpacity>
                   </View>
-                ) : null}
+                )}
 
                 {/* Continue to Step 2 Button */}
                 <TouchableOpacity
                   style={[
                     styles.primaryActionBtn,
-                    !selectedParticipant && !manualReceiverName.trim() && { opacity: 0.5 }
+                    !selectedParticipant && { opacity: 0.5 }
                   ]}
                   onPress={() => {
-                    if (!selectedParticipant && !manualReceiverName.trim()) {
-                      Alert.alert('Chưa có thông tin', 'Vui lòng nhập tên/SĐT hoặc chọn người nhận đồ.');
+                    if (!selectedParticipant) {
+                      Alert.alert('Chưa chọn người nhận', 'Vui lòng bấm chọn người nhận đồ từ danh sách tin nhắn.');
                       return;
                     }
                     setStep(2);
                   }}
-                  disabled={!selectedParticipant && !manualReceiverName.trim()}
+                  disabled={!selectedParticipant}
                   activeOpacity={0.85}
                 >
                   <Text style={styles.primaryActionBtnText}>Tiếp tục</Text>
@@ -933,70 +926,79 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 2,
   },
-  inputSectionBox: {
-    marginBottom: 16,
-  },
-  inputWithSideBtnRow: {
+  chooseFromChatBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-  },
-  textInputFlex: {
-    flex: 1,
+    padding: 16,
     backgroundColor: '#F8FAFC',
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: '#0F172A',
-  },
-  pickUserBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0, 168, 150, 0.1)',
+    borderRadius: 16,
     borderWidth: 1.5,
     borderColor: '#00A896',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    borderStyle: 'dashed',
+    marginBottom: 20,
   },
-  pickUserBtnText: {
-    fontSize: 13,
+  chooseFromChatIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0, 168, 150, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  chooseFromChatTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 2,
+  },
+  chooseFromChatSub: {
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 16,
+  },
+  changeUserBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0, 168, 150, 0.12)',
+  },
+  changeUserBtnText: {
+    fontSize: 12.5,
     fontWeight: '700',
     color: '#00A896',
   },
   selectedUserCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
+    padding: 14,
     backgroundColor: 'rgba(0, 168, 150, 0.08)',
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1.5,
     borderColor: '#00A896',
-    marginBottom: 16,
+    marginBottom: 20,
   },
   selectedUserAvatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    marginRight: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    marginRight: 12,
     backgroundColor: '#E2E8F0',
   },
   selectedUserInfo: {
     flex: 1,
   },
   selectedUserName: {
-    fontSize: 14.5,
+    fontSize: 15,
     fontWeight: '700',
     color: '#0F172A',
   },
   selectedUserSub: {
-    fontSize: 11.5,
+    fontSize: 12,
     color: '#00A896',
-    marginTop: 1,
+    marginTop: 2,
   },
   removeUserBtn: {
     padding: 4,
