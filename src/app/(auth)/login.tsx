@@ -17,6 +17,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { 
   signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword,
+  signInAnonymously,
   GoogleAuthProvider, 
   signInWithCredential,
   updateProfile
@@ -179,22 +181,59 @@ export default function LoginScreen() {
     }
   };
 
+  const handleGuestDemoLogin = async () => {
+    try {
+      setLoading(true);
+      let user = auth.currentUser;
+      if (!user) {
+        try {
+          const userCredential = await signInWithEmailAndPassword(auth, 'demo_judge@findora.vn', '12345678');
+          user = userCredential.user;
+        } catch {
+          try {
+            const newCred = await createUserWithEmailAndPassword(auth, 'demo_judge@findora.vn', '12345678');
+            user = newCred.user;
+          } catch {
+            const anonCred = await signInAnonymously(auth);
+            user = anonCred.user;
+          }
+        }
+      }
+
+      if (user) {
+        await updateProfile(user, {
+          displayName: 'Ban Giám Khảo (Demo)',
+          photoURL: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+        }).catch(() => {});
+        const userDocRef = doc(db, 'users', user.uid);
+        await setDoc(userDocRef, {
+          uid: user.uid,
+          name: 'Ban Giám Khảo (Demo)',
+          email: user.email || 'demo_judge@findora.vn',
+          avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+          points: 500,
+          reputationScore: 100,
+          resolvedCount: 5,
+          authProvider: 'demo',
+          createdAt: serverTimestamp(),
+        }, { merge: true }).catch(() => {});
+      }
+
+      setLoading(false);
+      router.replace('/(tabs)');
+    } catch {
+      setLoading(false);
+      router.replace('/(tabs)');
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView 
         style={{ flex: 1 }} 
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        {/* Futuristic Modern Loader Component */}
-        <ModernLoader
-          visible={googleLoading || loading}
-          title={googleLoading ? 'Đang kết nối với Google' : 'Đang xác thực tài khoản'}
-          subtitle="Vui lòng chờ trong giây lát"
-          accentColor="#00A896"
-        />
-
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-          {/* Genuine Brand Logo */}
           <View style={styles.brandContainer}>
             <Image
               source={require('../../../assets/images/Logo_noBG.png')}
@@ -204,7 +243,6 @@ export default function LoginScreen() {
             <Text style={styles.tagline}>Nền tảng tìm đồ thất lạc AI thông minh</Text>
           </View>
 
-          {/* Login Form */}
           <View style={styles.formContainer}>
             <Text style={styles.formTitle}>Đăng Nhập</Text>
 
@@ -260,14 +298,12 @@ export default function LoginScreen() {
               )}
             </TouchableOpacity>
 
-            {/* Social Sign-In Divider */}
             <View style={styles.dividerRow}>
               <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>HOẶC ĐĂNG NHẬP VỚI</Text>
+              <Text style={styles.dividerText}>HOẶC</Text>
               <View style={styles.dividerLine} />
             </View>
 
-            {/* Official Multi-Color Google Sign-In Button */}
             <TouchableOpacity 
               style={styles.googleBtn} 
               onPress={handleGoogleBtnPress}
@@ -282,7 +318,16 @@ export default function LoginScreen() {
               </View>
             </TouchableOpacity>
 
-            {/* Register Link */}
+            <TouchableOpacity 
+              style={styles.demoBtn} 
+              onPress={handleGuestDemoLogin}
+              disabled={loading || googleLoading}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="sparkles" size={17} color="#00A896" style={{ marginRight: 8 }} />
+              <Text style={styles.demoBtnText}>Trải Nghiệm Nhanh (Dành Cho BGK)</Text>
+            </TouchableOpacity>
+
             <View style={styles.registerRow}>
               <Text style={styles.registerLabel}>Chưa có tài khoản? </Text>
               <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
@@ -407,6 +452,22 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: '#1F1F1F'
+  },
+  demoBtn: {
+    flexDirection: 'row',
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    borderColor: '#CCFBF1',
+    backgroundColor: '#F0FDF4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+  },
+  demoBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#00A896',
   },
   registerRow: {
     flexDirection: 'row',
