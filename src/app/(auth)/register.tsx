@@ -527,7 +527,7 @@ const styles = StyleSheet.create({
     color: '#1F1F1F'
   },
   otpModalOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',

@@ -24,10 +24,12 @@ import { Post } from '../models/types';
 
 // Safely require @callstack/liquid-glass for iOS Liquid Glass effect
 let LiquidGlassView: any = null;
-try {
-  LiquidGlassView = require('@callstack/liquid-glass').LiquidGlassView;
-} catch (e) {
-  // Gracefully fallback to Expo BlurView when native module is not in current binary
+if (Platform.OS === 'ios') {
+  try {
+    LiquidGlassView = require('@callstack/liquid-glass').LiquidGlassView;
+  } catch (e) {
+    // Gracefully fallback to Expo BlurView when native module is not in current binary
+  }
 }
 
 interface ImageViewerModalProps {
