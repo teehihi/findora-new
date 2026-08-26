@@ -1,30 +1,20 @@
 import React, { useImperativeHandle, useRef } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
 
 export const MapView = React.forwardRef(({ children, style, onRegionChangeComplete, ...props }: any, ref: any) => {
   const containerRef = useRef<View>(null);
 
   useImperativeHandle(ref, () => ({
-    animateToRegion: (region: any, duration?: number) => {
+    animateToRegion: (region: any) => {
       if (typeof onRegionChangeComplete === 'function') {
         onRegionChangeComplete(region);
       }
     },
-    fitToCoordinates: (coordinates: any[], options?: any) => {
-      // Gracefully no-op on web
-    },
-    fitToElements: (options?: any) => {
-      // Gracefully no-op on web
-    },
-    fitToSuppliedMarkers: (markers: string[], options?: any) => {
-      // Gracefully no-op on web
-    },
-    animateCamera: (camera: any, options?: any) => {
-      // Gracefully no-op on web
-    },
-    setCamera: (camera: any) => {
-      // Gracefully no-op on web
-    },
+    fitToCoordinates: () => {},
+    fitToElements: () => {},
+    fitToSuppliedMarkers: () => {},
+    animateCamera: () => {},
+    setCamera: () => {},
     getCamera: async () => ({
       center: { latitude: 10.8506, longitude: 106.7720 },
       heading: 0,
@@ -40,22 +30,45 @@ export const MapView = React.forwardRef(({ children, style, onRegionChangeComple
     coordinateForPoint: async () => ({ latitude: 10.8506, longitude: 106.7720 }),
   }));
 
-  return (
-    <View ref={containerRef} style={[styles.mapMock, style]} {...props}>
-      <View style={styles.mapGridPattern}>
-        <Text style={styles.mapTitle}>🗺️ Bản đồ Findora (Web Interactive View)</Text>
-        <Text style={styles.mapSubtitle}>Khu vực TP. Hồ Chí Minh &amp; ĐH Sư phạm Kỹ thuật (HCMUTE)</Text>
+  if (Platform.OS === 'web') {
+    return (
+      <View ref={containerRef} style={[styles.container, style]} {...props}>
+        {/* Real Interactive Google Maps Embed for Web */}
+        <iframe
+          src="https://maps.google.com/maps?q=10.8506,106.7720&z=15&output=embed"
+          style={{
+            width: '100%',
+            height: '100%',
+            border: 0,
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+          } as any}
+          title="Findora Live Web Map"
+        />
+        <View style={styles.overlay} pointerEvents="box-none">
+          {children}
+        </View>
       </View>
+    );
+  }
+
+  return (
+    <View ref={containerRef} style={[styles.container, style]} {...props}>
       {children}
     </View>
   );
 });
 
-export const Marker = ({ children, style, onPress, ...props }: any) => (
-  <View style={[styles.markerContainer, style]} {...props}>
-    {children}
-  </View>
-);
+export const Marker = ({ children, style, onPress, ...props }: any) => {
+  return (
+    <View style={[styles.markerContainer, style]} pointerEvents="box-none" {...props}>
+      {children}
+    </View>
+  );
+};
 
 export const Callout = ({ children, style, ...props }: any) => (
   <View style={[styles.calloutContainer, style]} {...props}>
@@ -74,32 +87,14 @@ export const PROVIDER_GOOGLE = 'google';
 export const PROVIDER_DEFAULT = 'default';
 
 const styles = StyleSheet.create({
-  mapMock: {
-    backgroundColor: '#E2E8F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
+  container: {
+    flex: 1,
     position: 'relative',
+    backgroundColor: '#E2E8F0',
+    overflow: 'hidden',
   },
-  mapGridPattern: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.85)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-  },
-  mapTitle: {
-    color: '#0F172A',
-    fontSize: 13,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  mapSubtitle: {
-    color: '#64748B',
-    fontSize: 11,
-    fontWeight: '500',
+  overlay: {
+    ...StyleSheet.absoluteFill,
   },
   markerContainer: {
     position: 'absolute',
