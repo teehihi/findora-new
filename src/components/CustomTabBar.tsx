@@ -8,7 +8,7 @@ import {
   Keyboard,
   Animated,
   Easing,
-  Dimensions
+  useWindowDimensions
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,8 +20,15 @@ export function CustomTabBar({ state, descriptors, navigation }: any) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const pathname = usePathname();
+  const { width: windowWidth } = useWindowDimensions();
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
-  const [barWidth, setBarWidth] = useState<number>(Dimensions.get('window').width - 36);
+  
+  const calculatedBarWidth = Math.min(windowWidth - 36, 430);
+  const [barWidth, setBarWidth] = useState<number>(calculatedBarWidth);
+
+  useEffect(() => {
+    setBarWidth(calculatedBarWidth);
+  }, [calculatedBarWidth]);
 
   // Animated values for tab scale feedback
   const homeScale = useRef(new Animated.Value(1)).current;
@@ -121,27 +128,31 @@ export function CustomTabBar({ state, descriptors, navigation }: any) {
   const isMapActive = activeIndex === 1;
   const isProfileActive = activeIndex === 4;
 
-  // Compute 5 equal slot widths & slightly longer active pill indicator (+8px wide)
-  const usableWidth = Math.max(barWidth - 8, 200);
+  // Compute 5 equal slot widths & perfectly symmetrical active pill indicator
+  const usableWidth = Math.max(barWidth, 200);
   const slotWidth = usableWidth / 5;
-  const extraWidth = 8;
-  const pillWidth = slotWidth + extraWidth;
-  const offsetShift = extraWidth / 2;
+  const pillWidth = slotWidth;
 
   const translateX = slideAnim.interpolate({
     inputRange: [0, 1, 2, 3, 4],
     outputRange: [
-      -offsetShift,
-      slotWidth - offsetShift,
-      slotWidth * 2 - offsetShift,
-      slotWidth * 3 - offsetShift,
-      slotWidth * 4 - offsetShift,
+      0,
+      slotWidth,
+      slotWidth * 2,
+      slotWidth * 3,
+      slotWidth * 4,
     ],
   });
 
   return (
     <View 
-      style={[styles.outerWrapper, { bottom: Math.max(insets.bottom + 8, 14) }]}
+      style={[
+        styles.outerWrapper, 
+        { 
+          bottom: Math.max(insets.bottom + 8, 14),
+          width: calculatedBarWidth,
+        }
+      ]}
       onLayout={(e) => {
         const w = e.nativeEvent.layout.width;
         if (w > 0 && Math.abs(w - barWidth) > 1) {
@@ -261,8 +272,7 @@ export function CustomTabBar({ state, descriptors, navigation }: any) {
 const styles = StyleSheet.create({
   outerWrapper: {
     position: 'absolute',
-    left: 18,
-    right: 18,
+    alignSelf: 'center',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 999,
@@ -277,21 +287,21 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 16,
     elevation: 10,
-    paddingHorizontal: 4,
+    paddingHorizontal: 0,
   },
   blurWrapper: {
     ...StyleSheet.absoluteFill,
     borderRadius: 33,
     overflow: 'hidden',
-    backgroundColor: 'rgba(255, 255, 255, 0.82)',
+    backgroundColor: 'rgba(255, 255, 255, 0.88)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.65)',
+    borderColor: 'rgba(255, 255, 255, 0.75)',
   },
   liquidActivePill: {
     position: 'absolute',
-    top: 0,
-    height: 66,
-    borderRadius: 33,
+    top: 3,
+    bottom: 3,
+    borderRadius: 30,
     backgroundColor: 'rgba(0, 168, 150, 0.14)',
     overflow: 'hidden',
     zIndex: 1,
