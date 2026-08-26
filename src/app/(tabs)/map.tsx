@@ -233,10 +233,12 @@ export default function MapScreen() {
           longitude: p.lng!,
         }));
         setTimeout(() => {
-          mapRef.current?.fitToCoordinates(coords, {
-            edgePadding: { top: 70, right: 60, bottom: 100, left: 60 },
-            animated: true,
-          });
+          if (typeof mapRef.current?.fitToCoordinates === 'function') {
+            mapRef.current.fitToCoordinates(coords, {
+              edgePadding: { top: 70, right: 60, bottom: 100, left: 60 },
+              animated: true,
+            });
+          }
         }, 600);
       }
     });
