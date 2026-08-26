@@ -35,9 +35,17 @@ export default function SettingsScreen() {
     const user = auth.currentUser;
     if (user) {
       setUserEmail(user.email || '');
+      
+      // Check directly from Firebase Auth providerData
+      const hasPasswordProvider = user.providerData?.some((p) => p.providerId === 'password');
+      if (hasPasswordProvider) {
+        setHasSetupPassword(true);
+      }
+
       getUserProfile(user.uid).then((data: any) => {
         if (data) {
-          setHasSetupPassword(!!data.hasSetupPassword);
+          const hasPass = !!data.hasSetupPassword || data.authProvider === 'email' || hasPasswordProvider;
+          setHasSetupPassword(hasPass);
           if (data.authProvider) setAuthProvider(data.authProvider);
         }
       });
@@ -58,28 +66,20 @@ export default function SettingsScreen() {
     ]);
   };
 
-  const handleLanguageChange = () => {
-    Alert.alert('Chọn ngôn ngữ', 'Vui lòng chọn ngôn ngữ hiển thị của ứng dụng:', [
-      { text: 'Tiếng Việt 🇻🇳 (Mặc định)', onPress: () => setCurrentLanguage('vi') },
-      { text: 'English 🇬🇧', onPress: () => setCurrentLanguage('en') },
-      { text: 'Hủy', style: 'cancel' }
-    ]);
-  };
-
-  const handleThemeChange = () => {
-    Alert.alert('Giao diện hiển thị', 'Chọn chế độ màu sắc giao diện:', [
-      { text: 'Giao diện Sáng ☀️ (Mặc định)', onPress: () => setThemeMode('light') },
-      { text: 'Giao diện Tối 🌙 (Dark Mode)', onPress: () => setThemeMode('dark') },
-      { text: 'Tự động theo hệ thống ⚙️', onPress: () => setThemeMode('auto') },
-      { text: 'Hủy', style: 'cancel' }
-    ]);
+  const showUnderDevelopmentAlert = (featureName: string) => {
+    Alert.alert(
+      'Tính năng đang phát triển 🚧',
+      `Cài đặt "${featureName}" đang được hoàn thiện và sẽ sớm ra mắt trong bản cập nhật tiếp theo của Findora!`,
+      [{ text: 'Đã hiểu', style: 'default' }]
+    );
   };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <HeaderBar title="Cài đặt hệ thống" showBack={true} />
+      <HeaderBar title="Cài đặt hệ thống" showBack={true} backgroundColor="#FFFFFF" />
 
       <ScrollView
+        style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
@@ -129,7 +129,11 @@ export default function SettingsScreen() {
         <Text style={styles.sectionHeader}>HỆ THỐNG</Text>
         <View style={styles.menuCard}>
           {/* Ngôn ngữ */}
-          <TouchableOpacity style={styles.menuItem} onPress={handleLanguageChange} activeOpacity={0.7}>
+          <TouchableOpacity 
+            style={styles.menuItem} 
+            onPress={() => showUnderDevelopmentAlert('Ngôn ngữ')} 
+            activeOpacity={0.7}
+          >
             <View style={[styles.iconBox, { backgroundColor: '#FEF3C7' }]}>
               <Ionicons name="language-outline" size={20} color="#D97706" />
             </View>
@@ -145,7 +149,11 @@ export default function SettingsScreen() {
           <View style={styles.separator} />
 
           {/* Chế độ giao diện */}
-          <TouchableOpacity style={styles.menuItem} onPress={handleThemeChange} activeOpacity={0.7}>
+          <TouchableOpacity 
+            style={styles.menuItem} 
+            onPress={() => showUnderDevelopmentAlert('Chế độ giao diện')} 
+            activeOpacity={0.7}
+          >
             <View style={[styles.iconBox, { backgroundColor: '#F3E8FF' }]}>
               <Ionicons name="color-palette-outline" size={20} color="#9333EA" />
             </View>
@@ -161,7 +169,11 @@ export default function SettingsScreen() {
           <View style={styles.separator} />
 
           {/* Vị trí GPS */}
-          <View style={styles.menuItem}>
+          <TouchableOpacity 
+            style={styles.menuItem} 
+            onPress={() => showUnderDevelopmentAlert('Định vị GPS độ chính xác cao')} 
+            activeOpacity={0.7}
+          >
             <View style={[styles.iconBox, { backgroundColor: '#FEE2E2' }]}>
               <Ionicons name="location-outline" size={20} color="#EF4444" />
             </View>
@@ -171,16 +183,20 @@ export default function SettingsScreen() {
             </View>
             <Switch
               value={gpsPrecision}
-              onValueChange={setGpsPrecision}
+              onValueChange={() => showUnderDevelopmentAlert('Định vị GPS độ chính xác cao')}
               trackColor={{ false: '#E2E8F0', true: '#00A896' }}
               thumbColor="#FFFFFF"
             />
-          </View>
+          </TouchableOpacity>
 
           <View style={styles.separator} />
 
           {/* Thông báo đẩy */}
-          <View style={styles.menuItem}>
+          <TouchableOpacity 
+            style={styles.menuItem} 
+            onPress={() => showUnderDevelopmentAlert('Thông báo ghép đôi AI')} 
+            activeOpacity={0.7}
+          >
             <View style={[styles.iconBox, { backgroundColor: '#E0E7FF' }]}>
               <Ionicons name="notifications-outline" size={20} color="#6366F1" />
             </View>
@@ -190,30 +206,34 @@ export default function SettingsScreen() {
             </View>
             <Switch
               value={notificationsEnabled}
-              onValueChange={setNotificationsEnabled}
+              onValueChange={() => showUnderDevelopmentAlert('Thông báo ghép đôi AI')}
               trackColor={{ false: '#E2E8F0', true: '#00A896' }}
               thumbColor="#FFFFFF"
             />
-          </View>
+          </TouchableOpacity>
 
           <View style={styles.separator} />
 
           {/* Âm thanh */}
-          <View style={styles.menuItem}>
+          <TouchableOpacity 
+            style={styles.menuItem} 
+            onPress={() => showUnderDevelopmentAlert('Âm thanh & Rung')} 
+            activeOpacity={0.7}
+          >
             <View style={[styles.iconBox, { backgroundColor: '#ECFDF5' }]}>
               <Ionicons name="volume-medium-outline" size={20} color="#10B981" />
             </View>
             <View style={styles.itemContent}>
-              <Text style={styles.itemTitle}>Âm thanh & Rung</Text>
+              <Text style={styles.itemTitle}>Âm thanh &amp; Rung</Text>
               <Text style={styles.itemSubtitle}>Âm báo khi có cuộc hẹn bàn giao hoặc tin nhắn</Text>
             </View>
             <Switch
               value={soundEnabled}
-              onValueChange={setSoundEnabled}
+              onValueChange={() => showUnderDevelopmentAlert('Âm thanh & Rung')}
               trackColor={{ false: '#E2E8F0', true: '#00A896' }}
               thumbColor="#FFFFFF"
             />
-          </View>
+          </TouchableOpacity>
         </View>
 
         {/* SECTION 3: THÔNG TIN & HỖ TRỢ */}
@@ -264,6 +284,10 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  scrollView: {
     flex: 1,
     backgroundColor: '#F8FAFC',
   },

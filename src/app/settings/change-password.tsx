@@ -4,6 +4,7 @@ import {
   updatePassword, 
   linkWithCredential, 
   EmailAuthProvider, 
+  reauthenticateWithCredential,
   sendPasswordResetEmail 
 } from 'firebase/auth';
 import React, { useEffect, useRef, useState } from 'react';
@@ -32,8 +33,10 @@ export default function ChangePasswordScreen() {
   const [userName, setUserName] = useState('');
 
   // Step 1: Input Password
+  const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showOldPassword, setShowOldPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
@@ -58,9 +61,16 @@ export default function ChangePasswordScreen() {
     if (user) {
       setEmail(user.email || '');
       setUserName(user.displayName || user.email?.split('@')[0] || '');
+      
+      const hasPasswordProvider = user.providerData?.some((p) => p.providerId === 'password');
+      if (hasPasswordProvider) {
+        setHasSetupPassword(true);
+      }
+
       getUserProfile(user.uid).then((data: any) => {
         if (data) {
-          setHasSetupPassword(!!data.hasSetupPassword);
+          const hasPass = !!data.hasSetupPassword || data.authProvider === 'email' || hasPasswordProvider;
+          setHasSetupPassword(hasPass);
           if (data.name) setUserName(data.name);
         }
       });
@@ -68,21 +78,48 @@ export default function ChangePasswordScreen() {
   }, []);
 
   const handleSendOtp = async () => {
+    const user = auth.currentUser;
+    if (!user || !email) {
+      Alert.alert('Lỗi', 'Không tìm thấy thông tin tài khoản của bạn.');
+      return;
+    }
+
+    // If account already has password, verify old password first
+    if (hasSetupPassword) {
+      if (!oldPassword.trim()) {
+        Alert.alert('Chưa nhập mật khẩu cũ', 'Vui lòng nhập mật khẩu hiện tại để xác thực.');
+        return;
+      }
+    }
+
     if (!newPassword || newPassword.length < 6) {
       Alert.alert('Mật khẩu quá ngắn', 'Mật khẩu mới phải có tối thiểu 6 ký tự.');
       return;
     }
     if (newPassword !== confirmPassword) {
-      Alert.alert('Mật khẩu không khớp', 'Mật khẩu xác nhận không trùng khớp.');
+      Alert.alert('Mật khẩu không khớp', 'Mật khẩu xác nhận không trùng khớp với mật khẩu mới.');
       return;
     }
-    if (!email) {
-      Alert.alert('Lỗi', 'Không tìm thấy địa chỉ email của bạn.');
+    if (hasSetupPassword && newPassword === oldPassword) {
+      Alert.alert('Mật khẩu trùng lặp', 'Mật khẩu mới phải khác mật khẩu hiện tại.');
       return;
     }
 
     try {
       setSendingOtp(true);
+
+      // If user has old password, verify with Firebase first
+      if (hasSetupPassword) {
+        const oldCred = EmailAuthProvider.credential(email, oldPassword);
+        try {
+          await reauthenticateWithCredential(user, oldCred);
+        } catch (authErr: any) {
+          setSendingOtp(false);
+          Alert.alert('Mật khẩu cũ không chính xác', 'Mật khẩu hiện tại bạn vừa nhập chưa đúng. Vui lòng kiểm tra lại!');
+          return;
+        }
+      }
+
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
       setGeneratedOtp(otp);
 
@@ -93,7 +130,7 @@ export default function ChangePasswordScreen() {
 
       await sendEmail({
         to: email,
-        subject: '[Findora] Mã xác thực OTP thay đổi mật khẩu',
+        subject: hasSetupPassword ? '[Findora] Mã xác thực OTP thay đổi mật khẩu' : '[Findora] Mã xác thực OTP thiết lập mật khẩu',
         html,
       });
 
@@ -175,6 +212,7 @@ export default function ChangePasswordScreen() {
       <HeaderBar 
         title={hasSetupPassword ? 'Đổi mật khẩu' : 'Thiết lập mật khẩu'} 
         showBack={true} 
+        backgroundColor="#FFFFFF"
       />
 
       <KeyboardAvoidingView
@@ -182,6 +220,7 @@ export default function ChangePasswordScreen() {
         style={{ flex: 1 }}
       >
         <ScrollView
+          style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
@@ -209,7 +248,35 @@ export default function ChangePasswordScreen() {
           {step === 'input' ? (
             /* STEP 1: FORM NHẬP MẬT KHẨU */
             <View style={styles.formCard}>
-              <Text style={styles.fieldLabel}>Mật khẩu mới</Text>
+              {/* Field 1: Mật khẩu cũ (Chỉ hiện khi tài khoản ĐÃ CÓ mật khẩu) */}
+              {hasSetupPassword && (
+                <View style={{ marginBottom: 16 }}>
+                  <Text style={styles.fieldLabel}>Mật khẩu hiện tại</Text>
+                  <View style={styles.inputBox}>
+                    <Ionicons name="key-outline" size={20} color="#00A896" style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.textInput}
+                      secureTextEntry={!showOldPassword}
+                      value={oldPassword}
+                      onChangeText={setOldPassword}
+                      placeholder="Nhập mật khẩu hiện tại của bạn"
+                      placeholderTextColor="#94A3B8"
+                    />
+                    <TouchableOpacity onPress={() => setShowOldPassword(!showOldPassword)}>
+                      <Ionicons 
+                        name={showOldPassword ? 'eye-off-outline' : 'eye-outline'} 
+                        size={20} 
+                        color="#94A3B8" 
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
+              {/* Field 2: Mật khẩu mới */}
+              <Text style={styles.fieldLabel}>
+                {hasSetupPassword ? 'Mật khẩu mới' : 'Tạo mật khẩu đăng nhập'}
+              </Text>
               <View style={styles.inputBox}>
                 <Ionicons name="lock-closed-outline" size={20} color="#00A896" style={styles.inputIcon} />
                 <TextInput
@@ -229,6 +296,7 @@ export default function ChangePasswordScreen() {
                 </TouchableOpacity>
               </View>
 
+              {/* Field 3: Xác nhận mật khẩu mới */}
               <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Xác nhận mật khẩu mới</Text>
               <View style={styles.inputBox}>
                 <Ionicons name="checkmark-done-outline" size={20} color="#00A896" style={styles.inputIcon} />
@@ -252,10 +320,10 @@ export default function ChangePasswordScreen() {
               <TouchableOpacity
                 style={[
                   styles.primaryBtn,
-                  (!newPassword || newPassword.length < 6) && styles.primaryBtnDisabled
+                  ((hasSetupPassword && !oldPassword) || !newPassword || newPassword.length < 6) && styles.primaryBtnDisabled
                 ]}
                 onPress={handleSendOtp}
-                disabled={sendingOtp || !newPassword || newPassword.length < 6}
+                disabled={sendingOtp || (hasSetupPassword && !oldPassword) || !newPassword || newPassword.length < 6}
                 activeOpacity={0.85}
               >
                 {sendingOtp ? (
@@ -343,6 +411,10 @@ export default function ChangePasswordScreen() {
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  scrollView: {
     flex: 1,
     backgroundColor: '#F8FAFC',
   },

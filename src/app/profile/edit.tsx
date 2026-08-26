@@ -192,13 +192,14 @@ export default function EditProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <HeaderBar title="Chỉnh Sửa Cá Nhân" showBack backgroundColor="#F8FAFC" />
+      <HeaderBar title="Chỉnh Sửa Cá Nhân" showBack backgroundColor="#FFFFFF" />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}
       >
         <ScrollView
+          style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
@@ -373,6 +374,10 @@ export default function EditProfileScreen() {
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  scrollView: {
     flex: 1,
     backgroundColor: '#F8FAFC',
   },
