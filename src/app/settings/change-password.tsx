@@ -1,6 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { updatePassword } from 'firebase/auth';
+import { 
+  updatePassword, 
+  linkWithCredential, 
+  EmailAuthProvider, 
+  sendPasswordResetEmail 
+} from 'firebase/auth';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -102,11 +107,26 @@ export default function ChangePasswordScreen() {
     }
 
     const user = auth.currentUser;
-    if (!user) return;
+    if (!user || !user.email) return;
 
     try {
       setSubmitting(true);
-      await updatePassword(user, newPassword);
+      const emailCred = EmailAuthProvider.credential(user.email, newPassword);
+
+      try {
+        // First try to link email & password credential (for Google users creating password for the first time)
+        await linkWithCredential(user, emailCred);
+      } catch (linkError: any) {
+        // If already linked, directly update password
+        if (linkError.code === 'auth/provider-already-linked' || linkError.code === 'auth/credential-already-in-use') {
+          await updatePassword(user, newPassword);
+        } else if (linkError.code === 'auth/requires-recent-login') {
+          await updatePassword(user, newPassword);
+        } else {
+          throw linkError;
+        }
+      }
+
       await updateUserProfile(user.uid, { hasSetupPassword: true } as any);
       setSubmitting(false);
 
@@ -117,8 +137,22 @@ export default function ChangePasswordScreen() {
       setSubmitting(false);
       if (error.code === 'auth/requires-recent-login') {
         Alert.alert(
-          'Yêu cầu xác thực lại',
-          'Vì lý do an toàn, vui lòng đăng xuất và đăng nhập lại vào Findora trước khi đổi mật khẩu.'
+          'Xác thực bảo mật từ Google/Firebase',
+          'Vì lý do an toàn, phiên làm việc hiện tại yêu cầu bạn đăng nhập lại trước khi cập nhật mật khẩu, hoặc bạn có thể nhận liên kết đặt mật khẩu nhanh qua Email.',
+          [
+            { text: 'Hủy', style: 'cancel' },
+            {
+              text: 'Gửi link qua Email',
+              onPress: async () => {
+                try {
+                  await sendPasswordResetEmail(auth, user.email!);
+                  Alert.alert('Đã gửi email! ✉️', `Liên kết đổi mật khẩu đã được gửi tới ${user.email}. Vui lòng mở Gmail để đặt lại mật khẩu!`);
+                } catch (e: any) {
+                  Alert.alert('Lỗi', e.message);
+                }
+              }
+            }
+          ]
         );
       } else {
         Alert.alert('Lỗi', error.message || 'Không thể cập nhật mật khẩu.');
