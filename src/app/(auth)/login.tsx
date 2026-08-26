@@ -176,7 +176,22 @@ export default function LoginScreen() {
       router.replace('/(tabs)');
     } catch (error: any) {
       setLoading(false);
-      Alert.alert('Đăng nhập thất bại', error.message || 'Email hoặc mật khẩu không chính xác.');
+      const code = error.code || '';
+      if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
+        Alert.alert(
+          'Đăng nhập không thành công',
+          'Email hoặc mật khẩu chưa chính xác.\n\n💡 Lưu ý: Nếu tài khoản này được tạo bằng Google, bạn vui lòng chọn "Tiếp tục với Google" hoặc bấm "Quên mật khẩu" để tạo mật khẩu đăng nhập nhé!',
+          [
+            { text: 'Đóng', style: 'cancel' },
+            { 
+              text: 'Quên mật khẩu?', 
+              onPress: () => router.push('/(auth)/forgot-password' as any) 
+            }
+          ]
+        );
+      } else {
+        Alert.alert('Đăng nhập thất bại', error.message || 'Email hoặc mật khẩu không chính xác.');
+      }
     }
   };
 

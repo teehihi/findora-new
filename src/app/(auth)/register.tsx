@@ -16,6 +16,7 @@ import { useRouter } from 'expo-router';
 import { 
   createUserWithEmailAndPassword, 
   updateProfile,
+  sendEmailVerification,
   GoogleAuthProvider,
   signInWithCredential
 } from 'firebase/auth';
@@ -69,11 +70,7 @@ export default function RegisterScreen() {
     }
   }, []);
 
-  const [isOtpModalVisible, setIsOtpModalVisible] = useState(false);
-  const [generatedEmailOtp, setGeneratedEmailOtp] = useState('');
-  const [enteredEmailOtp, setEnteredEmailOtp] = useState('');
-
-  const handleInitiateRegister = () => {
+  const handleRegister = async () => {
     if (!name.trim() || !email.trim() || !password.trim()) {
       Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ Họ và tên, Email và Mật khẩu.');
       return;
@@ -90,26 +87,12 @@ export default function RegisterScreen() {
       return;
     }
 
-    // Generate 6-digit Email Verification OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    setGeneratedEmailOtp(otp);
-    setEnteredEmailOtp('');
-    setIsOtpModalVisible(true);
-  };
-
-  const handleVerifyOtpAndCreateAccount = async () => {
-    if (enteredEmailOtp.trim() !== generatedEmailOtp) {
-      Alert.alert('Lỗi xác thực', 'Mã OTP không chính xác. Vui lòng kiểm tra lại!');
-      return;
-    }
-
     try {
-      setIsOtpModalVisible(false);
       setLoading(true);
       const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
       const user = userCredential.user;
 
-      await updateProfile(user, { displayName: name.trim() });
+      await updateProfile(user, { displayName: name.trim() }).catch(() => {});
 
       // Save complete user metadata to Firestore users collection
       await setDoc(doc(db, 'users', user.uid), {
@@ -122,17 +105,28 @@ export default function RegisterScreen() {
         reputationScore: 100,
         resolvedCount: 0,
         authProvider: 'email',
-        emailVerified: true,
+        emailVerified: false,
         createdAt: serverTimestamp()
       });
 
+      // Send Firebase official verification email in background
+      sendEmailVerification(user).catch((e) => console.log('Email verification notice:', e));
+
       setLoading(false);
-      Alert.alert('Tạo tài khoản thành công', 'Chào mừng bạn đến với Findora! Đã thưởng 100 điểm khởi tạo.', [
+      Alert.alert('Đăng ký thành công! 🎉', 'Chào mừng bạn đến với Findora. Tài khoản của bạn đã được khởi tạo với 100 điểm thưởng!', [
         { text: 'Bắt đầu ngay', onPress: () => router.replace('/(tabs)') }
       ]);
     } catch (error: any) {
       setLoading(false);
-      Alert.alert('Đăng ký thất bại', error.message || 'Không thể tạo tài khoản.');
+      let errorMsg = error.message || 'Không thể tạo tài khoản.';
+      if (error.code === 'auth/email-already-in-use') {
+        errorMsg = 'Email này đã được đăng ký trước đó. Vui lòng đăng nhập hoặc sử dụng chức năng Quên mật khẩu.';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMsg = 'Địa chỉ email không hợp lệ.';
+      } else if (error.code === 'auth/weak-password') {
+        errorMsg = 'Mật khẩu quá yếu, vui lòng chọn mật khẩu từ 6 ký tự trở lên.';
+      }
+      Alert.alert('Đăng ký thất bại', errorMsg);
     }
   };
 
@@ -311,7 +305,7 @@ export default function RegisterScreen() {
             {/* Vibrant Green Submit Button */}
             <TouchableOpacity 
               style={styles.registerBtn} 
-              onPress={handleInitiateRegister}
+              onPress={handleRegister}
               disabled={loading || googleLoading}
               activeOpacity={0.85}
             >
@@ -342,72 +336,6 @@ export default function RegisterScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-
-      {/* Email Verification OTP Modal */}
-      {isOtpModalVisible && (
-        <View style={styles.otpModalOverlay}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={styles.otpModalCard}
-          >
-            <View style={styles.otpModalHeader}>
-              <View style={styles.otpIconCircle}>
-                <Ionicons name="mail" size={24} color="#00C853" />
-              </View>
-              <Text style={styles.otpModalTitle}>Xác thực Email</Text>
-              <Text style={styles.otpModalSubtitle}>
-                Mã xác thực 6 số đã được gửi tới {email}:
-              </Text>
-            </View>
-
-            {/* Display Code for reference */}
-            <View style={styles.otpCodePreview}>
-              <Text style={styles.otpCodePreviewText}>{generatedEmailOtp}</Text>
-            </View>
-
-            {/* 6 Box OTP Input */}
-            <TextInput
-              style={styles.otpRealInput}
-              value={enteredEmailOtp}
-              onChangeText={(t) => setEnteredEmailOtp(t.replace(/[^0-9]/g, '').slice(0, 6))}
-              keyboardType="number-pad"
-              maxLength={6}
-              autoFocus
-            />
-
-            <View style={styles.otpBoxesRow}>
-              {[0, 1, 2, 3, 4, 5].map((idx) => {
-                const digit = enteredEmailOtp[idx] || '';
-                return (
-                  <View key={idx} style={[styles.otpBox, digit !== '' && styles.otpBoxFilled]}>
-                    <Text style={styles.otpBoxDigit}>{digit}</Text>
-                  </View>
-                );
-              })}
-            </View>
-
-            {/* Actions */}
-            <View style={styles.otpModalActions}>
-              <TouchableOpacity
-                style={styles.otpCancelBtn}
-                onPress={() => setIsOtpModalVisible(false)}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.otpCancelText}>Quay lại</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.otpVerifyBtn, enteredEmailOtp.length < 6 && { opacity: 0.5 }]}
-                onPress={handleVerifyOtpAndCreateAccount}
-                disabled={enteredEmailOtp.length < 6}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.otpVerifyText}>Xác nhận & Đăng ký</Text>
-              </TouchableOpacity>
-            </View>
-          </KeyboardAvoidingView>
-        </View>
-      )}
     </SafeAreaView>
   );
 }
