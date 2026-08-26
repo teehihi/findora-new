@@ -1,4 +1,3 @@
-import Head from 'expo-router/head';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { User as FirebaseUser, onAuthStateChanged } from 'firebase/auth';
@@ -48,10 +47,6 @@ export default function RootLayout() {
 
   return (
     <>
-      <Head>
-        <title>Findora - Nền tảng Tìm kiếm &amp; Trao trả Đồ Thất lạc AI</title>
-        <meta name="description" content="Findora ứng dụng Google Gemini Multimodal AI giúp tự động nhận diện đồ vật, gợi ý ghép đôi thông minh và trao trả đồ thất lạc nhanh chóng, an toàn." />
-      </Head>
       <StatusBar style="dark" />
       <GlobalNotificationListener />
       <Stack screenOptions={{ headerShown: false }} initialRouteName="index">
