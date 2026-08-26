@@ -65,6 +65,8 @@ export default function RootLayout() {
         <Stack.Screen name="wallet/vouchers" />
         <Stack.Screen name="wallet/leaderboard" />
         <Stack.Screen name="profile/edit" />
+        <Stack.Screen name="settings/index" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="settings/change-password" options={{ animation: 'slide_from_right' }} />
       </Stack>
       {/* Simple Incoming Call Handler - Shows modal when CallManager receives incoming call */}
       {currentUser && <SimpleIncomingCallHandler />}
