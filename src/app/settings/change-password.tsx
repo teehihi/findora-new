@@ -6,7 +6,7 @@ import {
   EmailAuthProvider, 
   sendPasswordResetEmail 
 } from 'firebase/auth';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -43,6 +43,15 @@ export default function ChangePasswordScreen() {
   const [enteredOtp, setEnteredOtp] = useState('');
   const [sendingOtp, setSendingOtp] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const otpInputRef = useRef<TextInput>(null);
+
+  useEffect(() => {
+    if (step === 'otp') {
+      setTimeout(() => {
+        otpInputRef.current?.focus();
+      }, 200);
+    }
+  }, [step]);
 
   useEffect(() => {
     const user = auth.currentUser;
@@ -264,8 +273,9 @@ export default function ChangePasswordScreen() {
             <View style={styles.formCard}>
               <Text style={styles.otpLabel}>Nhập mã OTP 6 chữ số</Text>
 
-              {/* Hidden text input */}
+              {/* Hidden text input with ref */}
               <TextInput
+                ref={otpInputRef}
                 style={styles.hiddenInput}
                 value={enteredOtp}
                 onChangeText={(t) => setEnteredOtp(t.replace(/[^0-9]/g, '').slice(0, 6))}
@@ -274,16 +284,28 @@ export default function ChangePasswordScreen() {
                 autoFocus
               />
 
-              <View style={styles.otpBoxesRow}>
+              <TouchableOpacity
+                style={styles.otpBoxesRow}
+                activeOpacity={1}
+                onPress={() => otpInputRef.current?.focus()}
+              >
                 {[0, 1, 2, 3, 4, 5].map((idx) => {
                   const digit = enteredOtp[idx] || '';
+                  const isCurrent = enteredOtp.length === idx;
                   return (
-                    <View key={idx} style={[styles.otpBox, digit !== '' && styles.otpBoxFilled]}>
+                    <View
+                      key={idx}
+                      style={[
+                        styles.otpBox,
+                        digit !== '' && styles.otpBoxFilled,
+                        isCurrent && styles.otpBoxActive
+                      ]}
+                    >
                       <Text style={styles.otpDigit}>{digit}</Text>
                     </View>
                   );
                 })}
-              </View>
+              </TouchableOpacity>
 
               <TouchableOpacity
                 style={[
@@ -456,6 +478,11 @@ const styles = StyleSheet.create({
   otpBoxFilled: {
     borderColor: '#00A896',
     backgroundColor: '#F0FDF4',
+  },
+  otpBoxActive: {
+    borderColor: '#00A896',
+    borderWidth: 2,
+    backgroundColor: '#FFFFFF',
   },
   otpDigit: {
     fontSize: 22,
