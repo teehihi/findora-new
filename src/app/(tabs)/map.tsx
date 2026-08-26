@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { fetchPosts } from '../../services/firebaseService';
 import { Post } from '../../models/types';
 import { COLORS, SPACING } from '../../constants/theme';
+import { WebDownloadBanner } from '../../components/WebDownloadBanner';
 
 const IC_DEFAULT = require('../../../assets/ic_default.png');
 const IC_VETINH = require('../../../assets/ic_vetinh.png');
@@ -340,6 +341,7 @@ export default function MapScreen() {
 
   return (
     <View style={styles.container}>
+      <WebDownloadBanner />
       <MapErrorBoundary>
         <MapView 
           key={`map_canvas_${mapType}`}

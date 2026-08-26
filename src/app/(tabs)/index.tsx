@@ -19,6 +19,7 @@ import { auth } from '../../config/firebase';
 import { Post, MatchResult } from '../../models/types';
 import { PostCard } from '../../components/PostCard';
 import { PostListSkeleton } from '../../components/PostCardSkeleton';
+import { WebDownloadBanner } from '../../components/WebDownloadBanner';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -113,6 +114,7 @@ export default function HomeScreen() {
 
   const renderHeader = () => (
     <View>
+      <WebDownloadBanner />
       {/* 1. Header: Real GPS Location Pin + Notification Bell Button */}
       <View style={styles.topHeaderRow}>
         <View style={styles.locationContainer}>

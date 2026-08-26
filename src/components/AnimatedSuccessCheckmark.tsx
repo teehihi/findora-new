@@ -2,8 +2,17 @@ import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Animated, Easing } from 'react-native';
 import Svg, { Circle, Polyline } from 'react-native-svg';
 
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
-const AnimatedPolyline = Animated.createAnimatedComponent(Polyline);
+const SvgCircle = React.forwardRef((props: any, ref: any) => {
+  const { collapsable, ...rest } = props;
+  return <Circle ref={ref} {...rest} />;
+});
+const SvgPolyline = React.forwardRef((props: any, ref: any) => {
+  const { collapsable, ...rest } = props;
+  return <Polyline ref={ref} {...rest} />;
+});
+
+const AnimatedCircle = Animated.createAnimatedComponent(SvgCircle);
+const AnimatedPolyline = Animated.createAnimatedComponent(SvgPolyline);
 
 export function AnimatedSuccessCheckmark({ size = 88, delay = 250 }: { size?: number; delay?: number }) {
   const anim = useRef(new Animated.Value(0)).current;

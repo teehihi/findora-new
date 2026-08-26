@@ -23,7 +23,11 @@ import { auth, db } from '../../config/firebase';
 import { getUserProfile, getLevelFromPoints } from '../../services/firebaseService';
 import { User } from '../../models/types';
 
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+const SvgCircle = React.forwardRef((props: any, ref: any) => {
+  const { collapsable, ...rest } = props;
+  return <Circle ref={ref} {...rest} />;
+});
+const AnimatedCircle = Animated.createAnimatedComponent(SvgCircle);
 
 export default function ProfileScreen() {
   const router = useRouter();
