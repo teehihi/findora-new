@@ -1,33 +1,32 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TextInput, 
-  TouchableOpacity, 
-  ActivityIndicator, 
-  Alert, 
-  KeyboardAvoidingView, 
-  Platform,
-  ScrollView,
-  Image,
-  NativeModules
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { 
-  signInWithEmailAndPassword, 
+import {
   createUserWithEmailAndPassword,
+  GoogleAuthProvider,
   signInAnonymously,
-  GoogleAuthProvider, 
   signInWithCredential,
+  signInWithEmailAndPassword,
   updateProfile
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { Ionicons } from '@expo/vector-icons';
-import { auth, db } from '../../config/firebase';
+import { doc, getDoc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  NativeModules,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { GoogleLogo } from '../../components/GoogleLogo';
-import { ModernLoader } from '../../components/ModernLoader';
+import { auth, db } from '../../config/firebase';
 import { COLORS, SPACING } from '../../constants/theme';
 
 // Safely resolve native GoogleSignin module for Expo Go / Dev Build compatibility
@@ -90,9 +89,9 @@ export default function LoginScreen() {
         offlineAccess: false
       });
       await GoogleSigninModule.hasPlayServices({ showPlayServicesUpdateDialog: true });
-      await GoogleSigninModule.signOut().catch(() => {});
+      await GoogleSigninModule.signOut().catch(() => { });
       const response = await GoogleSigninModule.signIn();
-      
+
       const googleUser = response.data?.user || (response as any).user;
       let idToken = response.data?.idToken || (response as any).idToken || googleUser?.idToken;
 
@@ -111,7 +110,7 @@ export default function LoginScreen() {
 
         // Update Firebase Auth profile if displayName is missing
         if (!user.displayName && realName) {
-          await updateProfile(user, { displayName: realName, photoURL: realAvatar }).catch(() => {});
+          await updateProfile(user, { displayName: realName, photoURL: realAvatar }).catch(() => { });
         }
 
         // Save/verify user profile in Firestore
@@ -140,7 +139,7 @@ export default function LoginScreen() {
           if (!existingData.email && user.email) updatePayload.email = user.email;
 
           if (Object.keys(updatePayload).length > 0) {
-            await updateDoc(userDocRef, updatePayload).catch(() => {});
+            await updateDoc(userDocRef, updatePayload).catch(() => { });
           }
         }
 
@@ -204,7 +203,7 @@ export default function LoginScreen() {
         await updateProfile(user, {
           displayName: 'Ban Giám Khảo (Demo)',
           photoURL: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-        }).catch(() => {});
+        }).catch(() => { });
         const userDocRef = doc(db, 'users', user.uid);
         await setDoc(userDocRef, {
           uid: user.uid,
@@ -216,7 +215,7 @@ export default function LoginScreen() {
           resolvedCount: 5,
           authProvider: 'demo',
           createdAt: serverTimestamp(),
-        }, { merge: true }).catch(() => {});
+        }, { merge: true }).catch(() => { });
       }
 
       setLoading(false);
@@ -229,8 +228,8 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView 
-        style={{ flex: 1 }} 
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
@@ -270,23 +269,23 @@ export default function LoginScreen() {
                 onChangeText={setPassword}
               />
               <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                <Ionicons 
-                  name={showPassword ? 'eye-off-outline' : 'eye-outline'} 
-                  size={20} 
-                  color={COLORS.textMuted} 
+                <Ionicons
+                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={20}
+                  color={COLORS.textMuted}
                 />
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity 
-              style={styles.forgotBtn} 
+            <TouchableOpacity
+              style={styles.forgotBtn}
               onPress={() => router.push('/(auth)/forgot-password')}
             >
               <Text style={styles.forgotText}>Quên mật khẩu?</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity 
-              style={styles.loginBtn} 
+            <TouchableOpacity
+              style={styles.loginBtn}
               onPress={handleEmailLogin}
               disabled={loading || googleLoading}
               activeOpacity={0.8}
@@ -304,8 +303,8 @@ export default function LoginScreen() {
               <View style={styles.dividerLine} />
             </View>
 
-            <TouchableOpacity 
-              style={styles.googleBtn} 
+            <TouchableOpacity
+              style={styles.googleBtn}
               onPress={handleGoogleBtnPress}
               disabled={googleLoading || loading}
               activeOpacity={0.8}
@@ -318,14 +317,13 @@ export default function LoginScreen() {
               </View>
             </TouchableOpacity>
 
-            <TouchableOpacity 
-              style={styles.demoBtn} 
+            <TouchableOpacity
+              style={styles.demoBtn}
               onPress={handleGuestDemoLogin}
               disabled={loading || googleLoading}
               activeOpacity={0.85}
             >
-              <Ionicons name="sparkles" size={17} color="#00A896" style={{ marginRight: 8 }} />
-              <Text style={styles.demoBtnText}>Trải Nghiệm Nhanh (Dành Cho BGK)</Text>
+              <Text style={styles.demoBtnText}>Trải Nghiệm Nhanh</Text>
             </TouchableOpacity>
 
             <View style={styles.registerRow}>
