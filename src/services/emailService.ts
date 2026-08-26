@@ -221,3 +221,73 @@ export function generateAppointmentHtmlEmail(params: {
 </html>
   `.trim();
 }
+
+/**
+ * Generate a luxury Findora-branded HTML email template for Password Change OTP
+ */
+export function generateOtpEmailTemplate(params: {
+  userName: string;
+  otpCode: string;
+}): string {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mã Xác Thực OTP - Findora</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f1f5f9; color: #0f172a; -webkit-font-smoothing: antialiased;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #f1f5f9; padding: 36px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width: 500px; width: 100%; background-color: #ffffff; border-radius: 18px; overflow: hidden; box-shadow: 0 10px 25px rgba(15, 23, 42, 0.06); border: 1px solid #e2e8f0;">
+          
+          <!-- Header Banner -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #00A896 0%, #028090 100%); padding: 28px 24px; text-align: center;">
+              <h1 style="margin: 0; color: #ffffff; font-size: 22px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;">FINDORA</h1>
+              <p style="margin: 6px 0 0 0; color: #ccfbf1; font-size: 13.5px; font-weight: 500;">Xác Thực Thay Đổi Mật Khẩu</p>
+            </td>
+          </tr>
+
+          <!-- Main Content -->
+          <tr>
+            <td style="padding: 32px 28px; text-align: center;">
+              <p style="margin: 0 0 16px 0; color: #334155; font-size: 15px; text-align: left;">
+                Xin chào <strong>${params.userName || 'bạn'}</strong>,
+              </p>
+              <p style="margin: 0 0 24px 0; color: #64748b; font-size: 14px; line-height: 1.5; text-align: left;">
+                Chúng tôi nhận được yêu cầu cập nhật mật khẩu cho tài khoản Findora của bạn. Vui lòng sử dụng mã OTP gồm 6 chữ số dưới đây để xác nhận:
+              </p>
+
+              <!-- Big OTP Code Box -->
+              <div style="background-color: #f0fdf4; border: 2px dashed #00A896; border-radius: 14px; padding: 18px 24px; margin: 24px 0; display: inline-block;">
+                <span style="font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #00A896; font-family: monospace;">${params.otpCode}</span>
+              </div>
+
+              <p style="margin: 16px 0 0 0; color: #94a3b8; font-size: 12.5px; line-height: 1.5;">
+                Mã này có hiệu lực trong vòng <strong>10 phút</strong>. Tuyệt đối không chia sẻ mã này cho bất kỳ ai.
+              </p>
+              <p style="margin: 8px 0 0 0; color: #94a3b8; font-size: 12px; line-height: 1.5;">
+                Nếu bạn không thực hiện yêu cầu này, vui lòng đổi mật khẩu ngay để bảo vệ tài khoản.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #f8fafc; padding: 18px 24px; text-align: center; border-top: 1px solid #f1f5f9;">
+              <p style="margin: 0; color: #64748b; font-size: 12px;">Findora &bull; Nền tảng tìm kiếm và trao trả đồ thất lạc</p>
+              <p style="margin: 4px 0 0 0; color: #94a3b8; font-size: 11px;">Email bảo mật tự động từ hệ thống.</p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `.trim();
+}
