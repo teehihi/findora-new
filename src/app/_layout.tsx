@@ -1,8 +1,9 @@
+import Head from 'expo-router/head';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { User as FirebaseUser, onAuthStateChanged } from 'firebase/auth';
 import { useEffect, useState } from 'react';
-import { LogBox } from 'react-native';
+import { LogBox, Platform } from 'react-native';
 import * as ExpoSplashScreen from 'expo-splash-screen';
 import { auth } from '../config/firebase';
 import { callManager } from '../services/callManager';
@@ -24,6 +25,12 @@ export default function RootLayout() {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
 
   useEffect(() => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      document.title = 'Findora - Nền tảng Tìm kiếm & Trao trả Đồ Thất lạc AI';
+    }
+  }, []);
+
+  useEffect(() => {
     ExpoSplashScreen.hideAsync().catch(() => {});
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
@@ -41,6 +48,10 @@ export default function RootLayout() {
 
   return (
     <>
+      <Head>
+        <title>Findora - Nền tảng Tìm kiếm &amp; Trao trả Đồ Thất lạc AI</title>
+        <meta name="description" content="Findora ứng dụng Google Gemini Multimodal AI giúp tự động nhận diện đồ vật, gợi ý ghép đôi thông minh và trao trả đồ thất lạc nhanh chóng, an toàn." />
+      </Head>
       <StatusBar style="dark" />
       <GlobalNotificationListener />
       <Stack screenOptions={{ headerShown: false }} initialRouteName="index">
