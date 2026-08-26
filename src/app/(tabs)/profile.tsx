@@ -502,7 +502,7 @@ export default function ProfileScreen() {
 
             <View style={styles.itemDivider} />
 
-            <TouchableOpacity style={styles.overviewItem} onPress={() => Alert.alert('Thông báo', 'Trang Cài đặt hệ thống đang được hoàn thiện!')}>
+            <TouchableOpacity style={styles.overviewItem} onPress={() => router.push('/settings' as any)}>
               <Ionicons name="settings-outline" size={22} color="#1F2937" style={styles.overviewIcon} />
               <Text style={styles.overviewText}>Cài đặt</Text>
               <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
