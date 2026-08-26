@@ -129,6 +129,9 @@ export default function LoginScreen() {
         const userDocRef = doc(db, 'users', user.uid);
         const userSnap = await getDoc(userDocRef);
 
+        const existingData = userSnap.data();
+        const needsPasswordSetup = !userSnap.exists() || !existingData?.hasSetupPassword;
+
         if (!userSnap.exists()) {
           await setDoc(userDocRef, {
             uid: user.uid,
@@ -143,27 +146,28 @@ export default function LoginScreen() {
             hasSetupPassword: false,
             createdAt: serverTimestamp()
           });
-
-          // Show Onboarding Modal so user can edit name, phone and setup password
-          setGoogleLoading(false);
-          setOnboardingUser(user);
-          setOnboardingName(realName);
-          setOnboardingPhone('');
-          setOnboardingPassword('');
-          setOnboardingConfirmPassword('');
-          setOnboardingModalVisible(true);
-          return;
         } else {
-          // If the user profile already exists, PRESERVE their customized name and avatar!
-          const existingData = userSnap.data();
+          // Preserve existing customized name and avatar
           const updatePayload: Record<string, any> = {};
-          if (!existingData.name) updatePayload.name = realName;
-          if (!existingData.avatarUrl && realAvatar) updatePayload.avatarUrl = realAvatar;
-          if (!existingData.email && user.email) updatePayload.email = user.email;
+          if (!existingData?.name) updatePayload.name = realName;
+          if (!existingData?.avatarUrl && realAvatar) updatePayload.avatarUrl = realAvatar;
+          if (!existingData?.email && user.email) updatePayload.email = user.email;
 
           if (Object.keys(updatePayload).length > 0) {
             await updateDoc(userDocRef, updatePayload).catch(() => { });
           }
+        }
+
+        if (needsPasswordSetup) {
+          // Show Onboarding Modal so user can review info and setup local password
+          setGoogleLoading(false);
+          setOnboardingUser(user);
+          setOnboardingName(existingData?.name || realName);
+          setOnboardingPhone(existingData?.phone || '');
+          setOnboardingPassword('');
+          setOnboardingConfirmPassword('');
+          setOnboardingModalVisible(true);
+          return;
         }
 
         setGoogleLoading(false);
