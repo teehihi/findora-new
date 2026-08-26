@@ -44,7 +44,12 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "name": "Findora - Nền tảng Tìm kiếm & Trao trả Đồ Thất lạc AI",
+      "shortName": "Findora",
+      "description": "Findora ứng dụng Google Gemini Multimodal AI giúp tự động phân tích ảnh, gợi ý ghép đôi thông minh và trao trả đồ thất lạc nhanh chóng, an toàn.",
+      "themeColor": "#00A896",
+      "backgroundColor": "#FFFFFF"
     },
     "plugins": [
       "expo-router",
