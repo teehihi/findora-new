@@ -8,7 +8,7 @@ import {
   Keyboard,
   Animated,
   Easing,
-  useWindowDimensions
+  Dimensions
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,15 +20,8 @@ export function CustomTabBar({ state, descriptors, navigation }: any) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const pathname = usePathname();
-  const { width: windowWidth } = useWindowDimensions();
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
-  
-  const calculatedBarWidth = Math.min(windowWidth - 36, 430);
-  const [barWidth, setBarWidth] = useState<number>(calculatedBarWidth);
-
-  useEffect(() => {
-    setBarWidth(calculatedBarWidth);
-  }, [calculatedBarWidth]);
+  const [barWidth, setBarWidth] = useState<number>(Dimensions.get('window').width - 36);
 
   // Animated values for tab scale feedback
   const homeScale = useRef(new Animated.Value(1)).current;
@@ -150,7 +143,6 @@ export function CustomTabBar({ state, descriptors, navigation }: any) {
         styles.outerWrapper, 
         { 
           bottom: Math.max(insets.bottom + 8, 14),
-          width: calculatedBarWidth,
         }
       ]}
       onLayout={(e) => {
@@ -218,18 +210,20 @@ export function CustomTabBar({ state, descriptors, navigation }: any) {
           </Animated.View>
         </TouchableOpacity>
 
-        {/* Center Independent Floating Action Button (+), Overlapping Bar */}
-        <TouchableOpacity
-          style={styles.centerFabSlot}
-          onPress={handleCreatePress}
-          activeOpacity={0.85}
-        >
-          <Animated.View style={[styles.fabButton, { transform: [{ scale: plusScale }] }]}>
-            <Ionicons name="add" size={32} color="#FFFFFF" />
-          </Animated.View>
-        </TouchableOpacity>
+        {/* Item 3: Nút (+) Tạo bài đăng Nổi bật ở Trung tâm */}
+        <View style={styles.centerFabSlot}>
+          <TouchableOpacity
+            style={styles.fabButton}
+            onPress={handleCreatePress}
+            activeOpacity={0.85}
+          >
+            <Animated.View style={{ transform: [{ scale: plusScale }] }}>
+              <Ionicons name="add" size={32} color="#FFFFFF" />
+            </Animated.View>
+          </TouchableOpacity>
+        </View>
 
-        {/* Item 3: Chat */}
+        {/* Item 4: Tin nhắn / Trò chuyện */}
         <TouchableOpacity
           style={styles.tabItem}
           onPress={() => handleNavPress('chat', chatScale)}
@@ -237,7 +231,7 @@ export function CustomTabBar({ state, descriptors, navigation }: any) {
         >
           <Animated.View style={[styles.iconContainer, { transform: [{ scale: chatScale }] }]}>
             <Ionicons
-              name={isChatActive ? 'chatbubbles' : 'chatbubbles-outline'}
+              name={isChatActive ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline'}
               size={22}
               color={isChatActive ? COLORS.primary : '#64748B'}
             />
@@ -247,7 +241,7 @@ export function CustomTabBar({ state, descriptors, navigation }: any) {
           </Animated.View>
         </TouchableOpacity>
 
-        {/* Item 4: Cá nhân */}
+        {/* Item 5: Cá nhân */}
         <TouchableOpacity
           style={styles.tabItem}
           onPress={() => handleNavPress('profile', profileScale)}
@@ -272,7 +266,8 @@ export function CustomTabBar({ state, descriptors, navigation }: any) {
 const styles = StyleSheet.create({
   outerWrapper: {
     position: 'absolute',
-    alignSelf: 'center',
+    left: 18,
+    right: 18,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 999,
