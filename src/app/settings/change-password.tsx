@@ -34,7 +34,8 @@ export default function ChangePasswordScreen() {
   // Step 1: Input Password
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Step 2: OTP Verification
   const [step, setStep] = useState<'input' | 'otp'>('input');
@@ -204,15 +205,15 @@ export default function ChangePasswordScreen() {
                 <Ionicons name="lock-closed-outline" size={20} color="#00A896" style={styles.inputIcon} />
                 <TextInput
                   style={styles.textInput}
-                  secureTextEntry={!showPassword}
+                  secureTextEntry={!showNewPassword}
                   value={newPassword}
                   onChangeText={setNewPassword}
                   placeholder="Nhập mật khẩu mới (tối thiểu 6 ký tự)"
                   placeholderTextColor="#94A3B8"
                 />
-                <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                <TouchableOpacity onPress={() => setShowNewPassword(!showNewPassword)}>
                   <Ionicons 
-                    name={showPassword ? 'eye-off-outline' : 'eye-outline'} 
+                    name={showNewPassword ? 'eye-off-outline' : 'eye-outline'} 
                     size={20} 
                     color="#94A3B8" 
                   />
@@ -224,12 +225,19 @@ export default function ChangePasswordScreen() {
                 <Ionicons name="checkmark-done-outline" size={20} color="#00A896" style={styles.inputIcon} />
                 <TextInput
                   style={styles.textInput}
-                  secureTextEntry={!showPassword}
+                  secureTextEntry={!showConfirmPassword}
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
                   placeholder="Nhập lại mật khẩu mới"
                   placeholderTextColor="#94A3B8"
                 />
+                <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
+                  <Ionicons 
+                    name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'} 
+                    size={20} 
+                    color="#94A3B8" 
+                  />
+                </TouchableOpacity>
               </View>
 
               <TouchableOpacity
