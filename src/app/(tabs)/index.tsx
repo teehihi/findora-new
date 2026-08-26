@@ -42,7 +42,7 @@ export default function HomeScreen() {
         setUserLocation(address);
       }
     } catch (e) {
-      console.error('Error fetching GPS location:', e);
+      console.warn('Notice: GPS location fallback used:', e);
     }
   };
 
@@ -78,7 +78,7 @@ export default function HomeScreen() {
         }
       }
     } catch (e) {
-      console.error(e);
+      console.warn('Load posts notice:', e);
     } finally {
       setLoading(false);
       setRefreshing(false);

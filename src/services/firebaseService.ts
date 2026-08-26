@@ -115,7 +115,7 @@ export async function getCurrentAddressFromGPS(): Promise<string> {
 
     return 'Thành phố Hồ Chí Minh';
   } catch (error) {
-    console.error('GPS reverse geocoding error:', error);
+    console.warn('GPS location unavailable, using default location:', error);
     return 'Thành phố Hồ Chí Minh';
   }
 }
