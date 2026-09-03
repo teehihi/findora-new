@@ -1,7 +1,8 @@
 const tls = require('tls');
 
-const GMAIL_USER = process.env.GMAIL_USER || 'hotrofindora@gmail.com';
-const GMAIL_APP_PASS = process.env.GMAIL_APP_PASS || 'rxqwjayjnfbyjgim';
+const GMAIL_USER = process.env.GMAIL_USER;
+const GMAIL_APP_PASS = process.env.GMAIL_APP_PASS;
+const EMAIL_API_SECRET = process.env.EMAIL_API_SECRET;
 
 /**
  * Send email via raw TLS to smtp.gmail.com:465
@@ -97,6 +98,19 @@ module.exports = async (req, res) => {
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // Verify API Secret if configured
+  if (EMAIL_API_SECRET) {
+    const authHeader = req.headers['authorization'] || req.headers['x-api-secret'];
+    const token = authHeader ? authHeader.replace(/^Bearer\s+/i, '') : null;
+    if (token !== EMAIL_API_SECRET) {
+      return res.status(401).json({ success: false, error: 'Unauthorized: Invalid or missing API secret' });
+    }
+  }
+
+  if (!GMAIL_USER || !GMAIL_APP_PASS) {
+    return res.status(500).json({ success: false, error: 'Email service credentials not configured in environment' });
   }
 
   try {

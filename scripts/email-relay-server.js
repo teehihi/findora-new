@@ -10,8 +10,8 @@ const http = require('http');
 const tls = require('tls');
 
 const PORT = process.env.PORT || 5005;
-const GMAIL_USER = 'hotrofindora@gmail.com';
-const GMAIL_APP_PASS = 'rxqwjayjnfbyjgim';
+const GMAIL_USER = process.env.GMAIL_USER || '';
+const GMAIL_APP_PASS = process.env.GMAIL_APP_PASS || '';
 
 /**
  * Send email via raw TLS to smtp.gmail.com:465

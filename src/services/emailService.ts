@@ -27,11 +27,16 @@ export async function sendEmail(params: SendEmailParams): Promise<{ success: boo
       return { success: false, error: 'No valid recipient email' };
     }
 
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (process.env.EXPO_PUBLIC_EMAIL_API_SECRET) {
+      headers['Authorization'] = `Bearer ${process.env.EXPO_PUBLIC_EMAIL_API_SECRET}`;
+    }
+
     const response = await fetch(RELAY_ENDPOINT, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({
         to: validEmails,
         subject: params.subject,
