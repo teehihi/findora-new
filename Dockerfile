@@ -31,4 +31,4 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 # Cloud Run dynamic port binding
 EXPOSE 8080
 
-CMD ["sh", "-c", "sed -i 's/8080/'\"$PORT\"'/g' /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
+CMD ["sh", "-c", "PORT=${PORT:-8080} && sed -i \"s/listen .*/listen $PORT;/g\" /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
