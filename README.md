@@ -27,7 +27,9 @@
 
 ## 🏆 Top 50 — AI Riser Vietnam 2026
 
-Findora bắt đầu từ một niềm tin: món đồ thất lạc vẫn có thể tìm được đường về. **Nguyễn Nhật Thiên** xây ứng dụng để con đường ấy ngắn hơn — giúp người đang tìm gặp người đã nhặt, và biến một dòng tin thành cơ hội đoàn tụ.
+Findora bắt đầu từ một điều giản dị: **mỗi món đồ thất lạc đều có một người đang mong tìm lại.** Một chiếc ví, chiếc balo hay món đồ nhỏ vô tình bị bỏ quên có thể mang nhiều giá trị hơn vẻ ngoài của nó.
+
+Từ suy nghĩ ấy, Findora ra đời với mong muốn thu hẹp khoảng cách giữa người đánh mất và người nhặt được. Thông qua hình ảnh, vị trí và thông tin đăng tải, nền tảng giúp những món đồ thất lạc có thêm cơ hội tìm về đúng chủ nhân — để một lần vô tình đánh mất không nhất thiết phải kết thúc bằng sự tiếc nuối.
 
 Năm 2026, Findora được gọi tên trong **Top 50** của AI Riser Vietnam — một cột mốc đáng nhớ trên hành trình biến ý tưởng ấy thành sản phẩm hữu ích. Bạn có thể tự đối chiếu **Findora (Nguyễn Nhật Thiên)** trong [danh sách builder chính thức của chương trình](https://rsvp.withgoogle.com/events/airiservietnam/home_vietnam); chứng nhận được lưu lại ngay bên dưới.
 
@@ -164,7 +166,7 @@ assets/readme/    # Banner, chứng nhận, video demo và ảnh UI cho README
 
 <p align="center">
   <img src="assets/images/icon.png" alt="Findora" width="76" /><br />
-  <strong>Đồ thất lạc vẫn có đường về.</strong><br />
+  <strong>Findora — Vì mỗi món đồ thất lạc đều xứng đáng có cơ hội trở về.</strong><br />
   <sub>Findora được xây dựng tại Việt Nam bởi <strong>Nguyễn Nhật Thiên (TEE)</strong><br />Top 50 · AI Riser Vietnam 2026</sub>
 </p>
 
