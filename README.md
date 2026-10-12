@@ -18,7 +18,7 @@
 
 <p align="center">
   <a href="#demo">▶ Xem demo</a> ·
-  <a href="#tính-năng">Tính năng</a> ·
+  <a href="#journey">Hành trình tìm lại</a> ·
   <a href="#bắt-đầu">Cài đặt</a> ·
   <a href="https://gdg.community.dev/events/details/google-gdg-live-vietnam-presents-su-kien-kick-off-ai-riser-vietnam-2026-bien-y-tuong-thanh-san-pham/">AI Riser Vietnam</a>
 </p>
@@ -27,9 +27,14 @@
 
 ## 🏆 Top 50 — AI Riser Vietnam 2026
 
-Findora là dự án của **Nguyễn Nhật Thiên**, builder được chứng nhận **Top 50** tại AI Riser Vietnam 2026 — chương trình xây dựng sản phẩm với Google AI, cùng cộng đồng Google Developer Groups tại Việt Nam.
+Findora bắt đầu từ một câu hỏi rất đời thường: *nếu nhặt được một món đồ, làm sao chủ nhân biết để tìm lại?* **Nguyễn Nhật Thiên** muốn lời nhắn ấy không bị trôi giữa hàng loạt nhóm chat, nên xây Findora để kết nối người mất và người nhặt bằng hình ảnh, vị trí và một cuộc hẹn trao trả.
 
-AI Riser Vietnam 2026 thu hút hơn **10.000 lượt tham gia** và ghi nhận **750 dự án** phát triển trên Google AI Studio; 10 dự án được chọn trình bày tại Demo Day. [Sở Khoa học và Công nghệ TP.HCM](https://dost.hochiminhcity.gov.vn/chuyen-doi-so/cong-bo-ket-qua-ai-riser-viet-nam-2026-ton-vinh-cac-giai-phap-ai-thuc-tien/)
+Năm 2026, Findora được gọi tên trong **Top 50** của AI Riser Vietnam — một cột mốc đáng nhớ trên hành trình biến ý tưởng ấy thành sản phẩm hữu ích. Bạn có thể tự đối chiếu **Findora (Nguyễn Nhật Thiên)** trong [danh sách builder chính thức của chương trình](https://rsvp.withgoogle.com/events/airiservietnam/home_vietnam); chứng nhận được lưu lại ngay bên dưới.
+
+<p align="center">
+  <strong>10.000+ lượt tham gia · 750 dự án · 10 dự án Demo Day</strong><br />
+  <sub>Quy mô AI Riser Vietnam 2026 theo <a href="https://dost.hochiminhcity.gov.vn/chuyen-doi-so/cong-bo-ket-qua-ai-riser-viet-nam-2026-ton-vinh-cac-giai-phap-ai-thuc-tien/">Sở Khoa học và Công nghệ TP.HCM</a>.</sub>
+</p>
 
 <p align="center">
   <a href="assets/readme/ai-riser-top50-certificate.png">
@@ -45,34 +50,58 @@ AI Riser Vietnam 2026 thu hút hơn **10.000 lượt tham gia** và ghi nhận *
 
 Gemini hỗ trợ phân tích ảnh và soạn thông tin bài đăng. Bản đồ giúp tìm quanh khu vực, còn hệ thống ghép đôi xếp hạng các bài có khả năng liên quan dựa trên mô tả, loại đồ, thời gian và khoảng cách.
 
-## Demo
+<a id="demo"></a>
+
+## Demo: từ thất lạc đến ngày đoàn tụ
+
+Một món đồ thất lạc thường bắt đầu bằng câu hỏi “mình nên đăng ở đâu?”. Findora gom hành trình tìm lại vào một nơi: chia sẻ thông tin, nhìn quanh khu vực, rồi liên hệ để trao món đồ về đúng chủ.
+
+<p align="center">
+  <a href="assets/readme/findora-post-demo.mp4">
+    <img src="assets/readme/findora-post-demo.gif" alt="Findora demo: đăng tin nhặt được một chiếc bình giữ nhiệt" width="300" />
+  </a><br />
+  <sub>Đăng tin nhặt được — bấm vào ảnh động để xem video.</sub>
+</p>
+
+<a id="journey"></a>
+
+### Một hành trình, bốn khoảnh khắc
 
 <table>
   <tr>
-    <td width="38%" align="center">
-      <a href="assets/readme/findora-post-demo.mp4">
-        <img src="assets/readme/findora-post-demo.gif" alt="Demo Findora: tạo bài báo nhặt được và xác nhận đăng thành công" width="280" />
-      </a>
+    <td align="center" width="50%">
+      <a href="assets/readme/findora-ui-post.png"><img src="assets/readme/findora-ui-post.png" alt="Màn hình tạo bài báo nhặt được trên Findora" width="230" /></a><br />
+      <strong>1. Kể lại điều đã xảy ra</strong><br />
+      <sub>AI gợi ý tiêu đề và mô tả từ ảnh; bạn xem lại trước khi chia sẻ.</sub>
     </td>
-    <td>
-      <h3>Đăng một món đồ nhặt được</h3>
-      <p>Video ngắn cho thấy luồng tạo bài đăng trên Findora. Bấm vào ảnh động để mở video MP4.</p>
-      <p><a href="assets/readme/findora-post-demo.mp4">▶ Xem video demo (MP4)</a></p>
+    <td align="center" width="50%">
+      <a href="assets/readme/findora-ui-map.png"><img src="assets/readme/findora-ui-map.png" alt="Bản đồ các tin báo mất và báo nhặt gần nhau" width="230" /></a><br />
+      <strong>2. Tìm quanh mình</strong><br />
+      <sub>Nhìn các tin báo mất và báo nhặt trên bản đồ, gần nơi món đồ được thấy.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <a href="assets/readme/findora-ui-return.png"><img src="assets/readme/findora-ui-return.png" alt="Màn hình chụp ảnh xác nhận trao trả" width="230" /></a><br />
+      <strong>3. Gặp nhau và trao trả</strong><br />
+      <sub>Chụp ảnh lúc trao trả để hai bên cùng xác nhận món đồ đã về đúng người.</sub>
+    </td>
+    <td align="center" width="50%">
+      <a href="assets/readme/findora-ui-rewards.png"><img src="assets/readme/findora-ui-rewards.png" alt="Cửa hàng voucher đổi bằng điểm Findora" width="230" /></a><br />
+      <strong>4. Lan tỏa lòng tốt</strong><br />
+      <sub>Người hỗ trợ trao trả nhận điểm cảm ơn và có thể đổi ưu đãi trong cửa hàng.</sub>
     </td>
   </tr>
 </table>
 
-## Tính năng
+## Findora giúp người dùng
 
-| | Findora giúp bạn |
-|:--|:--|
-| 📸 **Đăng tin có AI hỗ trợ** | Phân tích ảnh bằng Google Gemini để gợi ý tiêu đề, mô tả và danh mục; người đăng xem lại trước khi gửi. |
-| 📍 **Tìm quanh bạn** | Xem bài báo mất và báo nhặt trên bản đồ, lọc theo vị trí và khoảng cách. |
-| 🧩 **Gợi ý bài trùng khớp** | Xếp hạng dựa trên thông tin đồ vật, từ khóa, thời gian và vị trí; hiển thị tín hiệu giải thích vì sao hai bài có thể liên quan. |
-| 🤝 **Trao trả có kết nối** | Nhắn tin, hẹn thời gian gặp, gọi thoại/video và xác minh ảnh bàn giao. |
-| 🌱 **Cộng đồng cùng đóng góp** | Tích điểm khi hỗ trợ trao trả, đổi voucher và xem bảng xếp hạng người dùng tích cực. |
+- **Đỡ phải tìm trong nhiều nhóm:** bài báo mất và báo nhặt được tập hợp trong cùng một ứng dụng.
+- **Thu hẹp nơi cần tìm:** bản đồ giúp xem những tin gần khu vực liên quan.
+- **Trao đổi rõ ràng hơn:** người mất và người nhặt có thể nhắn tin, hẹn gặp và xác nhận trao trả.
+- **Ghi nhận người giúp đỡ:** điểm cảm ơn có thể đổi thành voucher ưu đãi.
 
-## Công nghệ
+## Công nghệ phía sau sản phẩm
 
 | Lớp | Công nghệ |
 |:--|:--|
@@ -128,11 +157,22 @@ src/
 ├── models/       # Kiểu dữ liệu TypeScript
 ├── services/     # Gemini, ghép đôi, Firebase, chat và WebRTC
 └── utils/        # Hàm tiện ích
-assets/readme/    # Banner, chứng nhận Top 50 và demo README
+assets/readme/    # Banner, chứng nhận, video demo và ảnh UI cho README
 ```
 
-## Tác giả
+---
 
-**Nguyễn Nhật Thiên (TEE)** · [GitHub](https://github.com/teehihi) · [Portfolio](https://nteelab.vercel.app/) · [Linktree](https://linktr.ee/nkqt.tee)
+<p align="center">
+  <img src="assets/images/icon.png" alt="Findora" width="76" /><br />
+  <strong>Đồ thất lạc vẫn có đường về.</strong><br />
+  <sub>Findora được xây dựng tại Việt Nam bởi <strong>Nguyễn Nhật Thiên (TEE)</strong><br />Top 50 · AI Riser Vietnam 2026</sub>
+</p>
 
-<p align="center"><strong>Made with care in Vietnam 🇻🇳 — giúp những món đồ thất lạc tìm lại đúng người.</strong></p>
+<p align="center">
+  <a href="https://github.com/teehihi"><img src="https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub" /></a>
+  <a href="https://www.linkedin.com/in/tee21"><img src="https://img.shields.io/badge/LinkedIn-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white" alt="LinkedIn" /></a>
+  <a href="https://nteelab.vercel.app/"><img src="https://img.shields.io/badge/Portfolio-111827?style=for-the-badge&logo=vercel&logoColor=white" alt="Portfolio" /></a>
+  <a href="https://linktr.ee/nkqt.tee"><img src="https://img.shields.io/badge/Linktree-43E55E?style=for-the-badge&logo=linktree&logoColor=white" alt="Linktree" /></a>
+</p>
+
+<p align="center"><sub>Made with care in Vietnam 🇻🇳</sub></p>
